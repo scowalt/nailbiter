@@ -1,0 +1,631 @@
+{
+  "synthetic": true,
+  "pagination": {
+    "pages": 1
+  },
+  "requestedSeason": {
+    "year": 2026
+  },
+  "currentValues": {
+    "season": 2026
+  },
+  "categories": [
+    {
+      "name": "fpi",
+      "names": [
+        "fpi",
+        "fpirank"
+      ]
+    }
+  ],
+  "teams": [
+    {
+      "team": {
+        "id": "1",
+        "abbreviation": "ARI",
+        "displayName": "Synthetic ARI"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            16,
+            1
+          ],
+          "ranks": [
+            "1"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "2",
+        "abbreviation": "ATL",
+        "displayName": "Synthetic ATL"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            15,
+            2
+          ],
+          "ranks": [
+            "2"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "3",
+        "abbreviation": "BAL",
+        "displayName": "Synthetic BAL"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            14,
+            3
+          ],
+          "ranks": [
+            "3"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "4",
+        "abbreviation": "BUF",
+        "displayName": "Synthetic BUF"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            13,
+            4
+          ],
+          "ranks": [
+            "4"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "5",
+        "abbreviation": "CAR",
+        "displayName": "Synthetic CAR"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            12,
+            5
+          ],
+          "ranks": [
+            "5"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "6",
+        "abbreviation": "CHI",
+        "displayName": "Synthetic CHI"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            11,
+            6
+          ],
+          "ranks": [
+            "6"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "7",
+        "abbreviation": "CIN",
+        "displayName": "Synthetic CIN"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            10,
+            7
+          ],
+          "ranks": [
+            "7"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "8",
+        "abbreviation": "CLE",
+        "displayName": "Synthetic CLE"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            9,
+            8
+          ],
+          "ranks": [
+            "8"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "9",
+        "abbreviation": "DAL",
+        "displayName": "Synthetic DAL"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            8,
+            9
+          ],
+          "ranks": [
+            "9"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "10",
+        "abbreviation": "DEN",
+        "displayName": "Synthetic DEN"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            7,
+            10
+          ],
+          "ranks": [
+            "10"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "11",
+        "abbreviation": "DET",
+        "displayName": "Synthetic DET"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            6,
+            11
+          ],
+          "ranks": [
+            "11"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "12",
+        "abbreviation": "GB",
+        "displayName": "Synthetic GB"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            5,
+            12
+          ],
+          "ranks": [
+            "12"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "13",
+        "abbreviation": "HOU",
+        "displayName": "Synthetic HOU"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            4,
+            13
+          ],
+          "ranks": [
+            "13"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "14",
+        "abbreviation": "IND",
+        "displayName": "Synthetic IND"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            3,
+            14
+          ],
+          "ranks": [
+            "14"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "15",
+        "abbreviation": "JAX",
+        "displayName": "Synthetic JAX"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            2,
+            15
+          ],
+          "ranks": [
+            "15"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "16",
+        "abbreviation": "KC",
+        "displayName": "Synthetic KC"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            1,
+            16
+          ],
+          "ranks": [
+            "16"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "17",
+        "abbreviation": "LAC",
+        "displayName": "Synthetic LAC"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            0,
+            17
+          ],
+          "ranks": [
+            "17"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "18",
+        "abbreviation": "LAR",
+        "displayName": "Synthetic LAR"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            -1,
+            18
+          ],
+          "ranks": [
+            "18"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "19",
+        "abbreviation": "LV",
+        "displayName": "Synthetic LV"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            -2,
+            19
+          ],
+          "ranks": [
+            "19"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "20",
+        "abbreviation": "MIA",
+        "displayName": "Synthetic MIA"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            -3,
+            20
+          ],
+          "ranks": [
+            "20"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "21",
+        "abbreviation": "MIN",
+        "displayName": "Synthetic MIN"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            -4,
+            21
+          ],
+          "ranks": [
+            "21"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "22",
+        "abbreviation": "NE",
+        "displayName": "Synthetic NE"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            -5,
+            22
+          ],
+          "ranks": [
+            "22"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "23",
+        "abbreviation": "NO",
+        "displayName": "Synthetic NO"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            -6,
+            23
+          ],
+          "ranks": [
+            "23"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "24",
+        "abbreviation": "NYG",
+        "displayName": "Synthetic NYG"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            -7,
+            24
+          ],
+          "ranks": [
+            "24"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "25",
+        "abbreviation": "NYJ",
+        "displayName": "Synthetic NYJ"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            -8,
+            25
+          ],
+          "ranks": [
+            "25"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "26",
+        "abbreviation": "PHI",
+        "displayName": "Synthetic PHI"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            -9,
+            26
+          ],
+          "ranks": [
+            "26"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "27",
+        "abbreviation": "PIT",
+        "displayName": "Synthetic PIT"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            -10,
+            27
+          ],
+          "ranks": [
+            "27"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "28",
+        "abbreviation": "SEA",
+        "displayName": "Synthetic SEA"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            -11,
+            28
+          ],
+          "ranks": [
+            "28"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "29",
+        "abbreviation": "SF",
+        "displayName": "Synthetic SF"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            -12,
+            29
+          ],
+          "ranks": [
+            "29"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "30",
+        "abbreviation": "TB",
+        "displayName": "Synthetic TB"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            -13,
+            30
+          ],
+          "ranks": [
+            "30"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "31",
+        "abbreviation": "TEN",
+        "displayName": "Synthetic TEN"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            -14,
+            31
+          ],
+          "ranks": [
+            "31"
+          ]
+        }
+      ]
+    },
+    {
+      "team": {
+        "id": "32",
+        "abbreviation": "WSH",
+        "displayName": "Synthetic WSH"
+      },
+      "categories": [
+        {
+          "name": "fpi",
+          "values": [
+            -15,
+            32
+          ],
+          "ranks": [
+            "32"
+          ]
+        }
+      ]
+    }
+  ]
+}

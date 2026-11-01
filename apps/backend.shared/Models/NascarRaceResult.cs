@@ -1,0 +1,15 @@
+namespace backend.Models;
+
+public class NascarRaceResult
+{
+    public int Id { get; set; }
+    public required string RaceId { get; set; }
+    public required string EspnAthleteId { get; set; }
+    public required string DisplayName { get; set; }
+    public required string ShortName { get; set; }
+    public int? FinishPosition { get; set; }
+    public bool Winner { get; set; }
+    public string? CountryFlagHref { get; set; }
+    public string? CarNumber { get; set; }
+    public int? StartingPosition { get; set; }
+}

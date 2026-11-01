@@ -1,0 +1,142 @@
+{
+  "synthetic": true,
+  "scoreboard": {
+    "synthetic": true,
+    "events": [
+      {
+        "id": "401908031",
+        "name": "LAD at MIL synthetic scenario",
+        "shortName": "LAD @ MIL",
+        "date": "2026-10-12T21:00:00Z",
+        "season": {
+          "year": 2026,
+          "type": 2
+        },
+        "seasonType": {
+          "type": 2
+        },
+        "week": {
+          "number": 6
+        },
+        "status": {
+          "type": {
+            "name": "STATUS_IN_PROGRESS",
+            "state": "in",
+            "completed": false
+          },
+          "period": 3,
+          "displayClock": "0:00"
+        },
+        "competitions": [
+          {
+            "id": "401908031",
+            "date": "2026-10-12T21:00:00Z",
+            "status": {
+              "type": {
+                "name": "STATUS_IN_PROGRESS",
+                "state": "in",
+                "completed": false
+              },
+              "period": 3,
+              "displayClock": "0:00"
+            },
+            "competitors": [
+              {
+                "id": "8",
+                "homeAway": "home",
+                "score": "2",
+                "winner": false,
+                "team": {
+                  "id": "8",
+                  "abbreviation": "MIL",
+                  "displayName": "Synthetic MIL",
+                  "name": "MIL"
+                }
+              },
+              {
+                "id": "19",
+                "homeAway": "away",
+                "score": "1",
+                "winner": false,
+                "team": {
+                  "id": "19",
+                  "abbreviation": "LAD",
+                  "displayName": "Synthetic LAD",
+                  "name": "LAD"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "catalog": {
+    "markets": [
+      {
+        "ticker": "KXMLBGAME-26OCT122000LADMIL-MIL",
+        "event_ticker": "KXMLBGAME-26OCT122000LADMIL",
+        "status": "active",
+        "result": "",
+        "market_type": "binary",
+        "notional_value_dollars": "1.0000",
+        "close_time": "2026-10-14T23:00:00Z",
+        "yes_bid_dollars": "0.8200",
+        "yes_ask_dollars": "0.8300",
+        "yes_bid_size_fp": "10.00",
+        "yes_ask_size_fp": "10.00",
+        "yes_sub_title": "Synthetic MIL",
+        "custom_strike": {
+          "baseball_team": "fixture-MIL"
+        },
+        "occurrence_datetime": "2026-10-12T21:00:00Z",
+        "expected_expiration_time": "2026-10-12T21:00:00Z",
+        "rules_primary": "If Synthetic MIL wins the Synthetic LAD vs Synthetic MIL professional baseball game originally scheduled for Oct 12, 2026, then the market resolves to Yes.",
+        "rules_secondary": "The following market refers to the Synthetic LAD vs Synthetic MIL professional baseball game originally scheduled for Oct 12, 2026. If this game is postponed or delayed, the market will remain open and close after the rescheduled game has finished (within two days). If the game is cancelled or rescheduled to over two days away, the market will resolve to a fair price in accordance with the rules. Kalshi is not affiliated, associated, authorized, endorsed by, or in any way officially connected with the Governing League. All trademarks, logos, and brand names are the property of their respective owners."
+      },
+      {
+        "ticker": "KXMLBGAME-26OCT122000LADMIL-LAD",
+        "event_ticker": "KXMLBGAME-26OCT122000LADMIL",
+        "status": "active",
+        "result": "",
+        "market_type": "binary",
+        "notional_value_dollars": "1.0000",
+        "close_time": "2026-10-14T23:00:00Z",
+        "yes_bid_dollars": "0.1700",
+        "yes_ask_dollars": "0.1800",
+        "yes_bid_size_fp": "10.00",
+        "yes_ask_size_fp": "10.00",
+        "yes_sub_title": "Synthetic LAD",
+        "custom_strike": {
+          "baseball_team": "fixture-LAD"
+        },
+        "occurrence_datetime": "2026-10-12T21:00:00Z",
+        "expected_expiration_time": "2026-10-12T21:00:00Z",
+        "rules_primary": "If Synthetic LAD wins the Synthetic LAD vs Synthetic MIL professional baseball game originally scheduled for Oct 12, 2026, then the market resolves to Yes.",
+        "rules_secondary": "The following market refers to the Synthetic LAD vs Synthetic MIL professional baseball game originally scheduled for Oct 12, 2026. If this game is postponed or delayed, the market will remain open and close after the rescheduled game has finished (within two days). If the game is cancelled or rescheduled to over two days away, the market will resolve to a fair price in accordance with the rules. Kalshi is not affiliated, associated, authorized, endorsed by, or in any way officially connected with the Governing League. All trademarks, logos, and brand names are the property of their respective owners."
+      }
+    ],
+    "cursor": ""
+  },
+  "schedule": {
+    "cursor": "",
+    "milestones": [
+      {
+        "id": "synthetic-401908031",
+        "category": "Sports",
+        "type": "baseball_game",
+        "start_date": "2026-10-12T21:00:00Z",
+        "primary_event_tickers": [
+          "KXMLBGAME-26OCT122000LADMIL"
+        ],
+        "details": {
+          "league": "MLB",
+          "status": "inprogress",
+          "main_game_event_ticker": "KXMLBGAME-26OCT122000LADMIL",
+          "home_team_id": "fixture-MIL",
+          "away_team_id": "fixture-LAD"
+        }
+      }
+    ]
+  }
+}

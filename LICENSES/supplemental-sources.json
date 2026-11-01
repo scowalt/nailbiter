@@ -1,0 +1,11 @@
+{
+  "xunit.abstractions@2.0.3": {
+    "package_metadata_license_url": "https://raw.githubusercontent.com/xunit/xunit/master/license.txt",
+    "owning_repository": "https://github.com/xunit/abstractions.xunit",
+    "reviewed_blob_url": "https://api.github.com/repos/xunit/abstractions.xunit/git/blobs/29eb1ae6cd4227bc6e72e06f3d4a4ce20f5e441c",
+    "reviewed_blob_sha": "29eb1ae6cd4227bc6e72e06f3d4a4ce20f5e441c",
+    "declared_license_in_owning_source": "Apache-2.0",
+    "notice_path": "LICENSES/nuget/xunit.abstractions@2.0.3/license.txt",
+    "limit": "Supplementary primary-source evidence; the legacy package metadata did not pin this source blob or provide a structured expression. Not a complete historical or distribution-compliance certification."
+  }
+}

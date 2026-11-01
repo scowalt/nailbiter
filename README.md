@@ -1,13 +1,80 @@
 # Nailbiter
 
-Private review base for the clean-source migration to `scowalt/nailbiter`.
+Nailbiter helps viewers choose sports events to watch, using pregame hype and live excitement scores. The live service is at [nailbiter.app](https://nailbiter.app).
 
-Application source will arrive through a migration pull request. Production
-releases are explicitly disabled; this bootstrap provisions no production
-credentials or release controller. The existing application and its current
-controller remain unchanged until a separately approved handoff.
+This is a clean-source migration candidate for `scowalt/nailbiter`. Its intended end state is one canonical public repository for development, issues/PRs, CI and production delivery on GitHub Actions. **The repository/controller handoff is not activated by this source snapshot.** See [deployment and cutover](docs/deployment.md).
 
-The intended final state is one public repository for all development,
-issues/pull requests, CI and CD using GitHub Actions, with the original
-repository retained privately as inactive historical evidence. This initial
-commit does not authorize publication, deployment or archival.
+## Components
+
+- `apps/backend`: .NET 10 host, server-rendered HTML, SSE and static assets.
+- `apps/backend.fsharp`: service and rendering logic; `apps/backend.shared`: shared models/policies.
+- `apps/web-components`: independently built browser components, including Chart.js.
+- `apps/www`: independently built Astro marketing site, deployed to Cloudflare Workers.
+- `apps/analysis`: offline Python analysis code.
+- `scripts/ci` and `.github/workflows`: validation, artifact publication and single-controller release contracts.
+
+Runtime versions live in `.mise.toml`; the .NET SDK pin must agree with `apps/backend/global.json`. Install the pinned tools with Mise. Keep locked Bun installs; no production credentials are needed to compile or run the offline tests.
+
+## Build and test independently
+
+```sh
+bun install --frozen-lockfile --ignore-scripts
+bun run lint
+python scripts/test-fixtures/generate.py --check
+
+bun install --cwd apps/web-components --frozen-lockfile --ignore-scripts
+bun run --cwd apps/web-components build --outDir ../../.ci/web-components
+
+bun install --cwd apps/www --frozen-lockfile --ignore-scripts
+bun run --cwd apps/www build
+
+dotnet restore apps/backend/backend.csproj
+dotnet build apps/backend/backend.csproj --configuration Release
+dotnet test apps/backend.fsharp.tests/backend.fsharp.tests.fsproj --configuration Release
+dotnet test apps/backend.tests/backend.tests.csproj --configuration Release
+```
+
+Backend integration tests use disposable PostgreSQL Testcontainers, not the live database. Docker must be available. Recovery tests use isolated TimescaleDB containers with no host-published ports. All provider fixtures are synthetic and all provider HTTP is replaced by local handlers in the tested paths; never populate fixtures from production or provider endpoints. [Fixture provenance and coverage](tests/fixtures/README.md).
+
+Browser regression tests use Playwright request interception rather than an application server:
+
+```sh
+bunx playwright install chromium
+bun run test:live-sync
+bun run test:icons
+```
+
+The optional [TesterArmy pilot](docs/operations/testerarmy-pilot-local.md) remains separate from normal CI and requires its own explicit provider/budget authorization. It is not necessary to build, test or deploy the application.
+
+## Development
+
+The marketing site runs independently from the backend. On a shared headless development machine, start browser-accessible development servers through Portless with private Tailscale sharing:
+
+```sh
+cd apps/www
+PORTLESS_TAILSCALE=1 portless
+```
+
+For backend development, set `ConnectionStrings__DefaultConnection` to your isolated development database. Do not start the production Compose stack against existing production-named volumes just to run tests. Explicitly disable collection and telemetry (the preserved application defaults are not an offline-development profile). From the repository root:
+
+```sh
+: "${ConnectionStrings__DefaultConnection:?Set an isolated development database first}"
+DOTNET_ENVIRONMENT=Development ASPNETCORE_ENVIRONMENT=Development \
+EnableScraper=false Sentry__Dsn= OpenTelemetry__Enabled=false \
+Highlights__Worker__Enabled=false Highlights__YouTube__Enabled=false \
+portless run --tailscale sh -c 'dotnet run --project apps/backend --no-launch-profile -- --urls "http://0.0.0.0:$PORT"'
+```
+
+Use `portless list` to discover/verify URLs; do not force or replace another project's route. Development configuration must not inject production telemetry or data credentials. [Domain vocabulary](GLOSSARY.md) and [agent/development rules](AGENTS.md) describe contribution conventions.
+
+## Licensing and data
+
+Original code, original documentation and newly constructed test fixtures are [MIT licensed](LICENSE). Dependencies, league artwork and provider material are separate: read [third-party scope/notices](THIRD_PARTY.md). The fixture generator does not read captured responses. Reference protocols, fixture IDs and team names do not assert historical observations or grant data-access rights.
+
+League logos are retained for referential identification, not endorsement or ownership claims. Existing provider-use conditions and default-off activation gates remain intact. Publishing this code does not enable new collection or authorize bypassing denied access.
+
+## Delivery boundary
+
+GitHub Actions validates PRs on hosted runners without production credentials. CD is initially inert: the canonical repository must have `PRODUCTION_RELEASES_ENABLED=true`, protected `main` and an appropriately restricted `production` environment before it can release. That switch is set only during an approved handoff after old publishers are stopped. The release promotes the scanned image and tested marketing artifact for the same source revision, never a rebuild of moving `main`.
+
+No production, DNS, database, backup, provider activation or migration action should be inferred from a source/documentation edit. [The deployment runbook](docs/deployment.md) is authoritative for release approval and rollback boundaries.

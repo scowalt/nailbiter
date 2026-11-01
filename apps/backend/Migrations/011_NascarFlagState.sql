@@ -1,0 +1,1 @@
+ALTER TABLE nascar_races ADD COLUMN IF NOT EXISTS flag_state INTEGER;

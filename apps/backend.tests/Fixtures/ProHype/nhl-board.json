@@ -1,0 +1,91 @@
+{
+  "synthetic": true,
+  "events": [
+    {
+      "id": "401777460",
+      "name": "EDM at FLA synthetic scenario",
+      "shortName": "EDM @ FLA",
+      "date": "2026-06-01T20:00:00Z",
+      "season": {
+        "year": 2026,
+        "type": 3
+      },
+      "seasonType": {
+        "type": 3
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_FINAL",
+          "state": "post",
+          "completed": true
+        },
+        "period": 3,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "401777460",
+          "date": "2026-06-01T20:00:00Z",
+          "status": {
+            "type": {
+              "name": "STATUS_FINAL",
+              "state": "post",
+              "completed": true
+            },
+            "period": 3,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "112",
+              "homeAway": "home",
+              "score": "4",
+              "winner": true,
+              "team": {
+                "id": "112",
+                "abbreviation": "FLA",
+                "displayName": "Synthetic FLA",
+                "name": "FLA"
+              }
+            },
+            {
+              "id": "111",
+              "homeAway": "away",
+              "score": "2",
+              "winner": false,
+              "team": {
+                "id": "111",
+                "abbreviation": "EDM",
+                "displayName": "Synthetic EDM",
+                "name": "EDM"
+              }
+            }
+          ],
+          "notes": [
+            {
+              "headline": "Stanley Cup Final - Game 6"
+            }
+          ],
+          "series": {
+            "type": "playoff",
+            "completed": true,
+            "totalCompetitions": 7,
+            "competitors": [
+              {
+                "id": "112",
+                "wins": 4
+              },
+              {
+                "id": "111",
+                "wins": 2
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

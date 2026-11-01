@@ -1,0 +1,9 @@
+pre-commit:
+  commands:
+    biome:
+      glob: '*.{js,ts,tsx,json}'
+      run: bunx biome check --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+    secrets:
+      run: gitleaks protect --staged --redact --verbose
+    no-comments:
+      run: uv run --no-project --python 3.14 --with-requirements .comment-policy/requirements.txt python .comment-policy/check.py --staged

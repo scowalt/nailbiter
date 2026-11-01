@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/.astro/
+**/.wrangler/
+**/.venv/
+**/__pycache__/
+**/.env
+**/.env.*

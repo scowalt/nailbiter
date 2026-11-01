@@ -1,0 +1,1 @@
+ALTER TABLE odds_snapshots ADD COLUMN IF NOT EXISTS source VARCHAR(50);

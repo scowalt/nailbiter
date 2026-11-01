@@ -1,0 +1,13 @@
+api.nailbiter.app {
+    reverse_proxy backend:5093
+}
+
+live.nailbiter.app {
+    reverse_proxy backend:5093
+
+    handle_path /ingest/* {
+        reverse_proxy https://us.i.posthog.com {
+            header_up Host us.i.posthog.com
+        }
+    }
+}

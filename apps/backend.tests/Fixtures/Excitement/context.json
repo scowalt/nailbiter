@@ -1,0 +1,49 @@
+{
+  "synthetic": true,
+  "sourceArtifact": "scripts/test-fixtures/generate.py",
+  "sourceSha256": "590d831763b985a75926d4a6c0bf2e61f2d18b4ce0ee867ea1b54d73c60273d5",
+  "contextEvidence": "Deterministic constructed staircase cases, no captured inputs.",
+  "observedFields": [],
+  "notObservedFields": [
+    "IsHistoricalImport",
+    "IsHistorical",
+    "database row IDs",
+    "All fixture fields are constructed"
+  ],
+  "seedingAssumptions": {
+    "isHistoricalImport": false,
+    "isHistorical": false,
+    "explanation": "Explicit synthetic eligibility controls",
+    "scheduledStart": "First constructed timestamp",
+    "moneylines": "Unset placeholders",
+    "otherFields": "Constructed",
+    "labels": "Constructed football clock",
+    "bounds": "Final ten samples of the CFB scenario are constructed bounds"
+  },
+  "games": [
+    {
+      "gameId": "990000001",
+      "sport": "cfb",
+      "homeTeam": "Synthetic Oklahoma State",
+      "awayTeam": "Synthetic UCF",
+      "homeAbbreviation": "OKST",
+      "awayAbbreviation": "UCF",
+      "status": "in_progress",
+      "captureCutoff": "2026-10-10T18:29:30.1234560Z",
+      "sampleCount": 300,
+      "context": "Independently generated staircase fixture. Not a historical game."
+    },
+    {
+      "gameId": "990000002",
+      "sport": "nfl",
+      "homeTeam": "Synthetic Chicago",
+      "awayTeam": "Synthetic Minnesota",
+      "homeAbbreviation": "CHI",
+      "awayAbbreviation": "MIN",
+      "status": "final",
+      "captureCutoff": "2026-09-20T19:39:30.6543210Z",
+      "sampleCount": 320,
+      "context": "Independently generated staircase fixture. Not a historical game."
+    }
+  ]
+}

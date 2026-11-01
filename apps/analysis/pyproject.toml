@@ -1,0 +1,49 @@
+[project]
+name = "hype-score-analysis"
+version = "0.1.0"
+description = "Backtesting framework for hype score algorithm"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.24",
+
+    "psycopg[binary]>=3.1",
+    "sqlalchemy>=2.0",
+
+    "plotly>=5.18",
+    "kaleido>=0.2",
+
+    "jupyterlab>=4.0",
+    "ipywidgets>=8.0",
+
+    "pydantic>=2.0",
+
+    "tqdm>=4.65",
+
+    "scipy>=1.11",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.1",
+    "mypy>=1.5",
+    "pytest>=7.0",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.1",
+    "mypy>=1.5",
+    "pytest>=7.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

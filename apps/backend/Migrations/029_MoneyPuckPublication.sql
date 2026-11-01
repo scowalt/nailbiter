@@ -1,0 +1,1 @@
+ALTER TABLE team_ratings ADD COLUMN IF NOT EXISTS rank_published_at TIMESTAMPTZ;

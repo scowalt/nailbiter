@@ -1,0 +1,76 @@
+{
+  "synthetic": true,
+  "events": [
+    {
+      "id": "synthetic-nfl-final",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-01-18T18:00:00Z",
+      "season": {
+        "year": 2025,
+        "type": 3
+      },
+      "seasonType": {
+        "type": 3
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_FINAL",
+          "state": "post",
+          "completed": true
+        },
+        "period": 4,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-nfl-final",
+          "date": "2026-01-18T18:00:00Z",
+          "status": {
+            "type": {
+              "name": "STATUS_FINAL",
+              "state": "post",
+              "completed": true
+            },
+            "period": 4,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "21",
+              "winner": true,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "14",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ],
+          "notes": [
+            {
+              "headline": "AFC Divisional Playoffs"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

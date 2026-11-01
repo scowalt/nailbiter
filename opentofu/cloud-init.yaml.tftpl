@@ -1,0 +1,27 @@
+package_update: true
+package_upgrade: true
+
+swap:
+  filename: /swapfile
+  size: 2147483648
+  maxsize: 2147483648
+
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - git
+  - unattended-upgrades
+
+runcmd:
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl enable docker
+  - systemctl start docker
+
+  - curl -fsSL https://tailscale.com/install.sh | sh
+  - tailscale up --auth-key=${tailscale_auth_key} --ssh
+
+  - chage -d today root
+
+  - mkdir -p /opt/nailbiter-app

@@ -1,0 +1,187 @@
+---
+const title = "Nailbiter - Never Miss an Exciting Game";
+const description =
+  "Track the most exciting games in sports. Know which games are worth watching.";
+const iconVersion = "swing-1";
+const brandIcon = `/favicon.svg?v=${iconVersion}`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48" href={`/favicon.ico?v=${iconVersion}`} />
+    <link rel="icon" type="image/svg+xml" sizes="any" href={brandIcon} />
+    <link rel="apple-touch-icon" type="image/png" sizes="180x180" href={`/apple-touch-icon.png?v=${iconVersion}`} />
+    <link rel="manifest" href={`/site.webmanifest?v=${iconVersion}`} />
+    <title>{title}</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html, body {
+        height: 100%;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: #09090b;
+        color: #fafafa;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+
+      body::before {
+        content: '';
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 400px;
+        background: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59, 130, 246, 0.08), transparent);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      .container {
+        text-align: center;
+        padding: 2rem;
+        max-width: 600px;
+        position: relative;
+        z-index: 1;
+      }
+
+      .logo {
+        display: block;
+        width: 4rem;
+        height: 4rem;
+        margin: 0 auto 1rem;
+      }
+
+      h1 {
+        font-size: 3rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
+        background: linear-gradient(90deg, #3b82f6, #60a5fa);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+
+      .tagline {
+        font-size: 1.25rem;
+        color: #71717a;
+        margin-bottom: 2rem;
+      }
+
+      .cta-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .cta-btn {
+        display: inline-block;
+        padding: 0.875rem 2rem;
+        border-radius: 50px;
+        font-size: 1rem;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.2s;
+      }
+
+      .cta-btn.primary {
+        background: #3b82f6;
+        color: #fff;
+      }
+
+      .cta-btn.primary:hover {
+        transform: translateY(-2px);
+        background: #60a5fa;
+        box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+      }
+
+      .cta-btn.secondary {
+        background: #18181b;
+        border: 1px solid #27272a;
+        color: #fafafa;
+      }
+
+      .cta-btn.secondary:hover {
+        border-color: #3f3f46;
+        background: #1f1f23;
+      }
+
+      .features {
+        margin-top: 3rem;
+        display: grid;
+        gap: 1.5rem;
+      }
+
+      .feature {
+        padding: 1rem;
+        background: #18181b;
+        border-radius: 12px;
+        border: 1px solid #27272a;
+      }
+
+      .feature h3 {
+        font-size: 1.1rem;
+        margin-bottom: 0.5rem;
+        color: #60a5fa;
+      }
+
+      .feature p {
+        font-size: 0.95rem;
+        color: #71717a;
+        line-height: 1.5;
+      }
+
+      @media (max-width: 480px) {
+        h1 {
+          font-size: 2rem;
+        }
+        .tagline {
+          font-size: 1rem;
+        }
+        .logo {
+          width: 3rem;
+          height: 3rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <img class="logo" src={brandIcon} width="64" height="64" alt="" />
+      <h1>Nailbiter</h1>
+      <p class="tagline">Never miss an exciting game again</p>
+      <div class="cta-buttons">
+        <a href="https://live.nailbiter.app" class="cta-btn primary">View Live Games</a>
+      </div>
+
+      <div class="features">
+        <div class="feature">
+          <h3>Live Excitement Scores</h3>
+          <p>Real-time tracking of game excitement based on win probability swings</p>
+        </div>
+        <div class="feature">
+          <h3>Multi-Sport Coverage</h3>
+          <p>NFL, NBA, MLB, NHL, and FBS college football games with market coverage</p>
+        </div>
+        <div class="feature">
+          <h3>Know What to Watch</h3>
+          <p>Find the most exciting games happening right now</p>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

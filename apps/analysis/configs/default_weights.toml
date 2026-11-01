@@ -1,0 +1,37 @@
+
+[sport_weights.nfl]
+stakes = 0.45     
+quality = 0.35
+closeness = 0.20
+
+[sport_weights.nba]
+stakes = 0.30     
+quality = 0.40
+closeness = 0.30
+
+[sport_weights.mlb]
+stakes = 0.35     
+quality = 0.30
+closeness = 0.35
+
+[sport_weights.nhl]
+stakes = 0.35     
+quality = 0.35
+closeness = 0.30
+
+[normalization]
+elo_min = 1300
+elo_max = 1700
+
+bpi_min = -20
+bpi_max = 20
+
+nhl_points_min = 60
+nhl_points_max = 130
+
+[stakes]
+bubble_factor_max = 60
+
+champ_bonus_weight = 0.2
+
+season_progress_max = 20

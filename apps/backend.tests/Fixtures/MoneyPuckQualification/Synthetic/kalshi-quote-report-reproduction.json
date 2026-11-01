@@ -1,0 +1,36 @@
+{
+  "synthetic": true,
+  "event": {
+    "event_ticker": "KXNHLPLAYOFF-27",
+    "series_ticker": "KXNHLPLAYOFF",
+    "sub_title": "2026-27",
+    "markets": [
+      {
+        "ticker": "KXNHLPLAYOFF-27-NSH",
+        "event_ticker": "KXNHLPLAYOFF-27",
+        "status": "active",
+        "result": "",
+        "market_type": "binary",
+        "notional_value_dollars": "1.0000",
+        "close_time": "2027-06-01T00:00:00Z",
+        "yes_bid_dollars": "0.2500",
+        "yes_ask_dollars": "0.7500",
+        "yes_bid_size_fp": "10.00",
+        "yes_ask_size_fp": "10.00"
+      },
+      {
+        "ticker": "KXNHLPLAYOFF-27-OTT",
+        "event_ticker": "KXNHLPLAYOFF-27",
+        "status": "active",
+        "result": "",
+        "market_type": "binary",
+        "notional_value_dollars": "1.0000",
+        "close_time": "2027-06-01T00:00:00Z",
+        "yes_bid_dollars": "0.5500",
+        "yes_ask_dollars": "0.6000",
+        "yes_bid_size_fp": "10.00",
+        "yes_ask_size_fp": "10.00"
+      }
+    ]
+  }
+}

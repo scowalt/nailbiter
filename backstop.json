@@ -1,0 +1,80 @@
+{
+  "id": "nailbiter",
+  "viewports": [
+    { "label": "desktop", "width": 1440, "height": 900 },
+    { "label": "mobile", "width": 375, "height": 812 }
+  ],
+  "scenarios": [
+    {
+      "label": "Home Page",
+      "url": "http://localhost:5093/",
+      "readySelector": "[data-testid='game-card'], .text-text-muted",
+      "delay": 500,
+      "misMatchThreshold": 0.5
+    },
+    {
+      "label": "NBA League Page",
+      "url": "http://localhost:5093/nba",
+      "readySelector": "[data-testid='game-card'], .text-text-muted",
+      "delay": 500,
+      "misMatchThreshold": 0.5
+    },
+    {
+      "label": "NFL League Page",
+      "url": "http://localhost:5093/nfl",
+      "readySelector": "[data-testid='game-card'], .text-text-muted",
+      "delay": 500,
+      "misMatchThreshold": 0.5
+    },
+    {
+      "label": "NHL League Page",
+      "url": "http://localhost:5093/nhl",
+      "readySelector": "[data-testid='game-card'], .text-text-muted",
+      "delay": 500,
+      "misMatchThreshold": 0.5
+    },
+    {
+      "label": "MLB League Page",
+      "url": "http://localhost:5093/mlb",
+      "readySelector": "[data-testid='game-card'], .text-text-muted",
+      "delay": 500,
+      "misMatchThreshold": 0.5
+    },
+    {
+      "label": "F1 Calendar Page",
+      "url": "http://localhost:5093/f1",
+      "readySelector": ".bg-bg-card",
+      "delay": 500,
+      "misMatchThreshold": 0.5
+    },
+    {
+      "label": "NASCAR Calendar Page",
+      "url": "http://localhost:5093/nascar",
+      "readySelector": ".bg-bg-card",
+      "delay": 500,
+      "misMatchThreshold": 0.5
+    },
+    {
+      "label": "IndyCar Calendar Page",
+      "url": "http://localhost:5093/indycar",
+      "readySelector": ".bg-bg-card",
+      "delay": 500,
+      "misMatchThreshold": 0.5
+    }
+  ],
+  "paths": {
+    "bitmaps_reference": "backstop_data/bitmaps_reference",
+    "bitmaps_test": "backstop_data/bitmaps_test",
+    "engine_scripts": "backstop_data/engine_scripts",
+    "html_report": "backstop_data/html_report",
+    "ci_report": "backstop_data/ci_report"
+  },
+  "engine": "puppeteer",
+  "engineOptions": {
+    "args": ["--no-sandbox"]
+  },
+  "asyncCaptureLimit": 5,
+  "asyncCompareLimit": 50,
+  "debug": false,
+  "debugWindow": false
+}
