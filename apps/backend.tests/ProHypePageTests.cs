@@ -1,4 +1,7 @@
 using System.Collections.Concurrent;
+using System.Globalization;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using System.Text.Json;
 using System.Threading.Channels;
 using AngleSharp.Dom;
@@ -193,12 +196,34 @@ public sealed class ProHypePageTests
         finally { await host.DisposeAsync(); }
     }
 
-    [Fact]
-    public async Task Retained_model_hype_credit_is_independent_of_new_current_team_selection()
+    private sealed class PercentCultureFilter(int pattern) : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use(async (_, continuation) =>
+            {
+                var original = CultureInfo.CurrentCulture;
+                var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+                culture.NumberFormat.PercentPositivePattern = pattern;
+                CultureInfo.CurrentCulture = culture;
+                try { await continuation(); }
+                finally { CultureInfo.CurrentCulture = original; }
+            });
+            next(app);
+        };
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task Retained_model_hype_credit_is_independent_of_new_current_team_selection(int percentPattern)
     {
         await using var harness = new MoneyPuckQualificationHarness();
         await harness.StartAsync(configureServices: services =>
-            services.ConfigureHttpClientDefaults(builder => builder.ConfigurePrimaryHttpMessageHandler(() => harness.Handler)));
+        {
+            services.ConfigureHttpClientDefaults(builder => builder.ConfigurePrimaryHttpMessageHandler(() => harness.Handler));
+            services.AddSingleton<IStartupFilter>(new PercentCultureFilter(percentPattern));
+        });
         using (var scope = harness.App.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
@@ -271,7 +296,9 @@ public sealed class ProHypePageTests
             Assert.Contains("Stakes and hype use model estimates for NSH / OTT from MoneyPuck.", detail.QuerySelector("#detail-hype")!.TextContent);
             Assert.Contains("OTT", detail.QuerySelector("#detail-qualification-credit")!.TextContent);
             Assert.DoesNotContain("NSH", detail.QuerySelector("#detail-qualification-credit")!.TextContent);
-            Assert.Contains("50%", detail.QuerySelector("#detail-comparison")!.TextContent);
+            var outlook = detail.QuerySelector("#detail-comparison")!.Children.Single(row =>
+                row.Children.Length == 3 && row.Children[1].TextContent == "Playoff outlook");
+            Assert.Matches(@"^50\s*%$", outlook.Children[0].TextContent);
         }
         Assert.Equal(requests, harness.Handler.Requests.Count);
     }
@@ -298,7 +325,7 @@ public sealed class ProHypePageTests
                 var detail = await Page(host.Client, "/game/" + game.Id, snapshot);
                 Breakdown(detail, captured);
                 Assert.DoesNotContain("Pregame Odds", detail.Body!.TextContent);
-                Assert.DoesNotContain("50%", detail.Body.TextContent);
+                Assert.DoesNotMatch(@"(?<!\d)50\s*%", detail.Body.TextContent);
             }
             await Change(host, async db =>
             {
