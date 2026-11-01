@@ -142,7 +142,8 @@ module SseFragmentRenderer =
                         | _ -> ()
                     ]
             else renderGameCardScores update.GameId awayAbbr homeAbbr awayScore homeScore awayLogoStr homeLogoStr
-            if (not preserveTeamContext && sport <> Sport.CFB) || isLive || isFinal then
+            if ((not preserveTeamContext && sport <> Sport.CFB) || isLive || isFinal)
+               && not (update.Status = GameStatus.SCHEDULED && backend.Scoring.ProHypePolicy.Supports(sport.ToDbValue())) then
                 if sport = Sport.CFB && not excitementScore.HasValue then
                     Elem.div [ Attr.id $"excitement-{update.GameId}"; cls "text-xs text-text-muted" ] [ Text.raw "Excitement unavailable" ]
                 else renderGameCardExcitement update.GameId excitementScore isLive isFinal

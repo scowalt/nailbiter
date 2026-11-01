@@ -224,7 +224,7 @@ public sealed partial class NflPlayoffPageTests
     }
 
     [Fact]
-    public async Task Stored_model_expires_at_publication_plus_36_hours_without_hiding_quality_or_closeness()
+    public async Task Stored_model_selection_expires_at_36_hours_while_captured_hype_and_its_credit_remain()
     {
         var game = await SeedQualificationWiring(publication: ProHypeTests.Now.AddHours(-36).AddSeconds(1));
         await using var enabled = CreateAppWithSettings(MoneyPuckSettings());
@@ -246,9 +246,16 @@ public sealed partial class NflPlayoffPageTests
             {
                 using var doc = await new AngleSharp.Html.Parser.HtmlParser().ParseDocumentAsync(await http.GetStringAsync(path), CancellationToken.None);
                 var region = path.StartsWith("/game/") ? doc.Body! : doc.QuerySelector($"a[href='/game/{game.Id}']")!.ParentElement!;
-                Assert.Equal(eligible, region.QuerySelector("a[href='https://moneypuck.com/predictions.htm']") is not null);
-                Assert.Equal(!eligible, region.TextContent.Contains("Hype unavailable", StringComparison.Ordinal));
-                if (!eligible) Assert.DoesNotContain("25%", region.TextContent);
+                Assert.NotNull(region.QuerySelector("a[href='https://moneypuck.com/predictions.htm']"));
+                Assert.DoesNotContain("Hype unavailable", region.TextContent);
+                var score = path.StartsWith("/game/") ? doc.QuerySelector("#detail-hype")! : doc.QuerySelector($"#excitement-{game.Id}")!;
+                Assert.Equal("64", score.QuerySelector(path.StartsWith("/game/") ? ".text-3xl" : ".text-xl")!.TextContent);
+                if (!eligible)
+                {
+                    Assert.DoesNotContain("25%", region.TextContent);
+                    var currentCredit = path.StartsWith("/game/") ? "#detail-qualification-credit" : $"#qualification-credit-{game.Id}";
+                    Assert.Null(region.QuerySelector(currentCredit));
+                }
             }
         }
     }
@@ -289,7 +296,12 @@ public sealed partial class NflPlayoffPageTests
             }
             else
             {
-                Assert.Contains("Hype uses", credit.TextContent);
+                Assert.DoesNotContain("Hype uses", credit.TextContent);
+                var derivedCredit = region.ParentElement!.QuerySelector($"#hype-credit-{game.Id}")!;
+                Assert.NotNull(derivedCredit);
+                Assert.Equal("Stakes and hype use a model estimate for NSH from MoneyPuck.", derivedCredit.TextContent);
+                Assert.Equal(region.ParentElement, derivedCredit.ParentElement);
+                Assert.Null(derivedCredit.Closest("a"));
                 Assert.Equal("Hype64", region.QuerySelector($"#excitement-{game.Id}")!.TextContent.Replace(" ", ""));
                 Assert.Empty(region.QuerySelectorAll("a"));
                 Assert.Equal(region.ParentElement, credit.ParentElement);
@@ -315,7 +327,12 @@ public sealed partial class NflPlayoffPageTests
             Assert.Contains("NSH / OTT playoff probabilities", credit.TextContent);
             Assert.Contains("model estimates", credit.TextContent);
             Assert.NotNull(credit.QuerySelector("a[href='https://moneypuck.com/predictions.htm']"));
-            if (!path.StartsWith("/game/")) Assert.Contains("Hype uses these estimates", credit.TextContent);
+            if (!path.StartsWith("/game/"))
+            {
+                Assert.DoesNotContain("Hype uses", credit.TextContent);
+                Assert.Equal("Stakes and hype use model estimates for NSH / OTT from MoneyPuck.",
+                    region.QuerySelector($"#hype-credit-{game.Id}")!.TextContent);
+            }
         }
     }
 

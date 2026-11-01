@@ -86,6 +86,8 @@ internal sealed class FixtureHost : WebApplicationFactory<global::Program>
             using var scope = host.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
             db.Database.EnsureCreated();
+            foreach (var migration in new[] { "034_PlayoffSeriesObservation.sql", "035_ProHypeLifecycle.sql" })
+                db.Database.ExecuteSqlRaw(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Migrations", migration)));
             var eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
             ListingDate = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, eastern).Date;
             var localNoon = DateTime.SpecifyKind(ListingDate.AddHours(12), DateTimeKind.Unspecified);

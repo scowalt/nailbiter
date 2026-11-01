@@ -2,6 +2,7 @@ using System.Data.Common;
 using System.Net;
 using backend.Data;
 using backend.Models;
+using backend.Scoring;
 using backend.Services;
 using backend.Services.Kalshi;
 using backend.Services.PlayoffStatus;
@@ -48,6 +49,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
         await db.Database.EnsureCreatedAsync();
+        await db.Database.ExecuteSqlRawAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", "035_ProHypeLifecycle.sql")));
         db.Games.Add(new Game
         {
             Id = "nfl-current", Sport = "nfl", HomeTeam = "Kansas City Chiefs", AwayTeam = "Buffalo Bills",
@@ -205,7 +207,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Same_request_selection_cache_keeps_model_fallback_consistent_across_refresh_race()
+    public async Task Current_request_selection_cache_remains_consistent_independently_of_resolved_page_hype()
     {
         clock.Now = new DateTimeOffset(ProHypeTests.Now);
         var race = new RefreshRaceInterceptor(database.GetConnectionString());
@@ -230,10 +232,20 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
 
         using var enabledClient = enabledApp.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         race.Arm();
-        var text = await BodyText(await enabledClient.GetAsync("/game/nhl-same-request-cache"));
-        AssertContainsPercent(51, text);
-        AssertContainsPercent(72, text);
-        Assert.DoesNotContain("Unavailable", text);
+        using (var requestScope = enabledApp.Services.CreateScope())
+        {
+            var db = requestScope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+            var game = await db.Games.SingleAsync(g => g.Id == "nhl-same-request-cache");
+            var hype = await requestScope.ServiceProvider.GetRequiredService<HypeScoreService>().GetHypeComponentsAsync(game, null);
+            Assert.True(hype.HomePlayoffOdds.HasValue);
+            Assert.True(hype.AwayPlayoffOdds.HasValue);
+            Assert.Equal(.51, hype.HomePlayoffOdds.GetValueOrDefault(), 6);
+            Assert.Equal(.72, hype.AwayPlayoffOdds.GetValueOrDefault(), 6);
+            Assert.True(hype.IsComplete);
+            var data = requestScope.ServiceProvider.GetRequiredService<GameDataService>();
+            Assert.Equal(.51, (await data.GetTeamRankInfoAsync("nhl", "PHI", 2027, 2, default)).Value.PlayoffOdds.Value, 6);
+            Assert.Equal(.72, (await data.GetTeamRankInfoAsync("nhl", "PIT", 2027, 2, default)).Value.PlayoffOdds.Value, 6);
+        }
 
         using (var verifyScope = enabledApp.Services.CreateScope())
         {
@@ -242,7 +254,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
             Assert.Null(home.PlayoffProbability);
         }
 
-        text = await BodyText(await enabledClient.GetAsync("/game/nhl-same-request-cache"));
+        var text = await BodyText(await enabledClient.GetAsync("/game/nhl-same-request-cache"));
         Assert.DoesNotMatch(@"(?<!\d)51\s*%", text);
         Assert.Contains("Unavailable", text);
     }
@@ -1559,7 +1571,20 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
         Assert.Equal(32, await importer.RefreshNhlRatingsAsync(default));
         clock.Now = new DateTimeOffset(new DateTime(2026, 10, 5, 18, 49, 0, DateTimeKind.Utc).AddDays(7));
         Assert.Equal(0, await importer.RefreshNhlRatingsAsync(default));
-        Assert.All(await db.TeamRatings.AsNoTracking().Where(r => r.Source == "moneypuck").ToListAsync(), r => Assert.Null(r.PowerRank));
+        rows = await db.TeamRatings.AsNoTracking().Where(r => r.Source == "moneypuck").ToListAsync();
+        Assert.All(rows, r =>
+        {
+            Assert.NotNull(r.PowerRank);
+            Assert.Equal(2027, r.SourceSeason);
+            Assert.Equal(new DateTime(2026, 10, 5, 18, 49, 0, DateTimeKind.Utc), r.RankPublishedAt);
+            Assert.Equal(clock.Now.UtcDateTime, r.FetchedAt);
+            Assert.False(ProHypePolicy.EligibleRank(r, "nhl", 2027, clock.Now.UtcDateTime));
+        });
+        Assert.Null(MoneyPuckRankings.Parse(body, updated, clock.Now.UtcDateTime));
+        Assert.Null(ProHypePolicy.Quality(game, rows, clock.Now.UtcDateTime).Value);
+        db.ChangeTracker.Clear();
+        rankInfo = await scope.ServiceProvider.GetRequiredService<GameDataService>().GetTeamRankInfoAsync("nhl", "TB", 2027, 2, default);
+        Assert.Null(rankInfo.Value.PowerRank);
     }
 
     [Fact]

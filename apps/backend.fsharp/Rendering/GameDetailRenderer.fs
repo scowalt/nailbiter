@@ -124,8 +124,8 @@ module GameDetailRenderer =
         let pregameOdds =
             if game.Sport = "cfb" && isScheduled then
                 pregameOdds |> Option.filter (fun odds -> CollegeFootballPolicy.UsablePregameOdds(game, odds, now))
-            elif backend.Scoring.ProHypePolicy.Supports(game.Sport) && isScheduled
-                 && (isNull (box hypeComponents) || not hypeComponents.ClosenessAvailable) then None
+            elif backend.Scoring.ProHypePolicy.Supports(game.Sport) && isScheduled && not game.IsHistoricalImport then
+                pregameOdds |> Option.filter (fun odds -> backend.Scoring.ProHypePolicy.EligibleOdds(game, odds, now))
             else pregameOdds
 
         let colors = TeamColors.forGame game
@@ -376,7 +376,7 @@ module GameDetailRenderer =
                                     Text.raw ". Stakes considers the larger swing and seeding consequences."
                                 ]
                             ]
-                        if game.SeasonType = Nullable 2 && hypeComponents.StakesAvailable then
+                        if backend.Scoring.ProHypePolicy.Supports game.Sport && hypeComponents.StakesAvailable then
                             let modelTeams =
                                 [ game.AwayTeamAbbreviation, hypeComponents.AwayQualificationEvidenceKind
                                   game.HomeTeamAbbreviation, hypeComponents.HomeQualificationEvidenceKind ]
@@ -417,7 +417,7 @@ module GameDetailRenderer =
                                     if rank |> Option.exists (fun r -> r.PlayoffOdds.IsSome && r.PlayoffSource = PlayoffRatingPolicy.moneyPuckQualificationSource
                                                                        && r.PlayoffEvidenceKind = backend.Scoring.ProQualificationEvidenceKind.MoneyPuckModel) then Some team else None)
                             if not modelTeams.IsEmpty then
-                                QualificationCredit.render "detail-qualification-credit" modelTeams false
+                                QualificationCredit.render "detail-qualification-credit" modelTeams
                         if showQualification && game.Sport <> "nhl" then
                             let sources =
                                 [ game.AwayTeamAbbreviation, awayTeamRank; game.HomeTeamAbbreviation, homeTeamRank ]

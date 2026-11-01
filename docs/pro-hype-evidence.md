@@ -6,6 +6,18 @@ Hype describes pregame watch-worthiness through independent Stakes, Quality and 
 
 Require verified sport/season/team/start identity, eligible unstarted game state, consistent competition context and fresh evidence. MLB alone permits a scheduled scoreless first inning. A successful invalid observation revokes eligibility; transport failure preserves previous values and their original clocks. Fetching old publication content does not renew its publication age.
 
+## Last-known-good display
+
+For NFL/NBA/NHL/MLB, `IProHypeLifecycle` separates strict current calculation from a complete saved preview. Permitted age, transport and completed-result coverage gaps neither expire an applicable whole snapshot nor renew its original observations. New complete valid evidence replaces it; changed identity/schedule/phase/status, rejected supporting evidence or revoked source selection prevents reuse. Pregame stops at scheduled kickoff or confirmed play, including canonical `in_progress`, whichever comes first. Without a valid saved snapshot, existing unavailable/partial-component behavior remains unchanged.
+
+Home, league and detail consumers resolve the same whole result and authoritative game identity. Current ordinary odds and team information remain independent. Required derived-score credit follows the evidence that actually produced the saved estimate, not a newer selected source. No stale badge, timestamp, hidden diagnostic payload or new public endpoint is introduced. See the [canonical specification](https://github.com/scowalt/nailbiter/issues/17) and [offline verification](testing/pro-hype-continuity.md).
+
+## Durable lifecycle
+
+The proposed additive `035_ProHypeLifecycle.sql` installs snapshots and evidence-writer journal/fence triggers after the existing series migration 034. It does not populate scores, rewrite input rows or backfill history. Isolated fixtures replay both migrations; `EnsureCreated` alone does not install the journal. Production application remains separately gated.
+
+Registered background capture runs at startup and every 30 seconds against already committed evidence in the existing exclusive seven-day horizon. It makes no provider requests, owns no collection budget and does not change source flags or denial handling. Current numeric calculations still apply all original eligibility rules. Complete snapshots preserve their original component tuple, source provenance and evaluation time across restarts and concurrent work.
+
 ## Components
 
 - **Quality:** current-season complete same-source ranks, converted to relative strengths and combined harmonically. NHL uses MoneyPuck rolling ranks, not an unapproved substitute or its forecast values. Rank comes from row order, with explicit publication-season/freshness policy.

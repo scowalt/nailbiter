@@ -34,6 +34,13 @@ type HypeComponents() =
     member val HomeQualificationIsFinal = false with get, set
     member val AwayQualificationIsFinal = false with get, set
 
+type DerivedHypeCredit =
+    { MoneyPuckTeams: string list }
+
+type ProCurrentHypeEvaluation(components: HypeComponents, assessment: backend.Scoring.ProHypeAssessment) =
+    member _.Components = components
+    member _.Assessment = assessment
+
 type GameWithScores =
     { Game: backend.Models.Game
       ExcitementScore: Nullable<float>

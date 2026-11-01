@@ -179,7 +179,7 @@ let ``cards detail history pregame and SSE agree on matchup colors`` sport home 
     let detailPatch = HtmlParser().ParseDocument(SseFragmentRenderer.renderDetailFragments (update g))
     g.SeasonYear <- Nullable(CollegeFootballPolicy.SeasonAt g.ScheduledStart)
     let pregame = PregameOdds(GameId = g.Id, HomeWinProbability = 0.53, AwayWinProbability = 0.47,
-                             Source = "Kalshi", FetchedAt = DateTime.UtcNow, SourceSeason = g.SeasonYear,
+                             Source = (if sport = "cfb" then "Kalshi" else "kalshi"), FetchedAt = DateTime.UtcNow, SourceSeason = g.SeasonYear,
                              ApplicableStart = Nullable g.ScheduledStart,
                              HomeTeamAbbreviation = home, AwayTeamAbbreviation = away)
     g.Status <- "scheduled"

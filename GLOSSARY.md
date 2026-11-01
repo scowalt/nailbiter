@@ -159,8 +159,11 @@ Changes in a game's outcome prospects that matter because the result is uncertai
 **Excitement score**:
 A game-so-far rating of competitive drama, reflecting both meaningful probability movement and outcome suspense. It describes the whole game once completed, not its entertainment quality or excitement at a particular instant.
 
+**Last-known-good hype score**:
+The most recent complete, valid hype estimate and its original Stakes, Quality, and Closeness breakdown that still applies to the same upcoming game. Elapsed input freshness or a collection gap does not make that estimate inapplicable.
+
 **Unavailable hype score**:
-An overall hype score that cannot be established because a required input is missing. This does not mean low excitement, and individual metrics may still be available.
+The absence of both a complete current hype estimate and an applicable last-known-good estimate. Unavailable is distinct from a legitimate zero, and individual metrics may still be available.
 
 **Power ranking**:
 A team's relative strength compared with other teams in its league. A power ranking does not measure playoff qualification probability.

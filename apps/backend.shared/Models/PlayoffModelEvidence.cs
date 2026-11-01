@@ -23,6 +23,7 @@ public sealed class PlayoffModelEvidence
     public string RefreshId { get; set; } = "";
     public int AcceptedTeamCount { get; set; }
     public int TotalTeamCount { get; set; }
+    public double? MoneyPuckExpiredProbability { get; set; }
     public MoneyPuckSeasonProof? MoneyPuckSeasonProof { get; set; }
 
     public static PlayoffModelEvidence? Parse(string? json)

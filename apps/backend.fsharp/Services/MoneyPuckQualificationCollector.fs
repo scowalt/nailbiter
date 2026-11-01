@@ -175,7 +175,7 @@ type internal MoneyPuckQualificationCollector(source: MoneyPuckHttpClient, logge
             if pageAt > fetched || games |> Seq.exists (fun game -> game.ObservedAt.Value > fetched) then reason <- "future_observation"
             elif published.IsNone || afterPublication.IsNone then reason <- "invalid_publication"
             elif published.Value > fetched then reason <- "future_publication"
-            elif fetched - published.Value >= PlayoffRatingPolicy.moneyPuckQualificationMaxAge then reason <- "expired"
+            elif reason = "accepted" && fetched - published.Value >= PlayoffRatingPolicy.moneyPuckQualificationMaxAge then reason <- "expired"
             let batch: MoneyPuckQualification.Batch =
                 { PublishedAt = published
                   ClockValidated = published.IsSome && published = afterPublication && published.Value <= fetched
@@ -225,7 +225,7 @@ type internal MoneyPuckQualificationCollector(source: MoneyPuckHttpClient, logge
                     Seq.append
                         (if e.Version = PlayoffRatingPolicy.moneyPuckQualificationEvidenceVersion && not (isNull e.MoneyPuckRejectedPublications)
                          then e.MoneyPuckRejectedPublications :> seq<DateTime> else Seq.empty)
-                        (if e.State = "unavailable" then Option.ofNullable e.PublishedAt |> Option.toList else []))
+                        (if e.State = "unavailable" && e.ReasonCode <> "expired" then Option.ofNullable e.PublishedAt |> Option.toList else []))
             |> Seq.filter (fun at -> at.Kind = DateTimeKind.Utc && at <> DateTime.MinValue)
             |> Set.ofSeq
         let knownRejected = batch.PublishedAt |> Option.exists rejectedPublications.Contains
@@ -236,30 +236,33 @@ type internal MoneyPuckQualificationCollector(source: MoneyPuckHttpClient, logge
             |> Seq.sortDescending |> Seq.tryHead
         let batch = if regressed then { batch with Reason = "publication_regression" } else batch
         let blockedPublication =
-            batch.Reason = "accepted" && batch.PublishedAt.IsSome
+            (batch.Reason = "accepted" || batch.Reason = "expired") && batch.PublishedAt.IsSome
             && (knownRejected || (highWater.IsSome && highWater = batch.PublishedAt
                 && existing |> Seq.exists (fun row ->
                     let e = PlayoffModelEvidence.Parse(row.PlayoffEvidenceJson)
-                    not (isNull e) && e.State = "unavailable")))
+                    not (isNull e) && e.State = "unavailable" && e.ReasonCode <> "expired")))
         let batch = if blockedPublication then { batch with Reason = "rejected_publication" } else batch
         let unchanged =
-            batch.Reason = "accepted" && existing.Count = 32 && existing |> Seq.forall (fun row ->
+            (batch.Reason = "accepted" || batch.Reason = "expired") && existing.Count = 32 && existing |> Seq.forall (fun row ->
                 let e = PlayoffModelEvidence.Parse(row.PlayoffEvidenceJson)
-                not (isNull e) && e.State = "estimate" && e.ReasonCode = "accepted" && Option.ofNullable e.PublishedAt = batch.PublishedAt)
+                not (isNull e) && ((e.State = "estimate" && e.ReasonCode = "accepted")
+                    || (e.State = "unavailable" && e.ReasonCode = "expired" && e.MoneyPuckExpiredProbability.HasValue))
+                && Option.ofNullable e.PublishedAt = batch.PublishedAt)
         let changedPublication =
             unchanged && existing |> Seq.exists (fun row ->
                 let observation = batch.Rows |> Array.tryFind (fun obs -> obs.Team = row.TeamAbbreviation)
                 let e = PlayoffModelEvidence.Parse(row.PlayoffEvidenceJson)
                 match observation with
                 | None -> true
-                | Some obs -> row.PlayoffProbability <> Nullable obs.Probability || isNull e.MoneyPuckSeasonProof || e.MoneyPuckSeasonProof.FirstSimulatedId <> obs.SimulatedId)
+                | Some obs -> (if e.State = "estimate" then row.PlayoffProbability else e.MoneyPuckExpiredProbability) <> Nullable obs.Probability
+                              || isNull e.MoneyPuckSeasonProof || e.MoneyPuckSeasonProof.FirstSimulatedId <> obs.SimulatedId)
         let batch = if changedPublication then { batch with Reason = "inconsistent_publication" } else batch
         let rejectedPublications =
-            Set.union rejectedPublications (if batch.Reason <> "accepted" then Set.ofList (Option.toList batch.PublishedAt) else Set.empty)
+            Set.union rejectedPublications (if batch.Reason <> "accepted" && batch.Reason <> "expired" then Set.ofList (Option.toList batch.PublishedAt) else Set.empty)
             |> Set.filter (fun at -> boundary |> Option.forall (fun trusted -> at > trusted))
             |> Set.toArray
         let refreshId = Guid.NewGuid().ToString("N")
-        for team in (if unchanged && not changedPublication then [||] else MoneyPuckQualification.teams) do
+        for team in (if batch.Reason = "accepted" && unchanged && not changedPublication then [||] else MoneyPuckQualification.teams) do
             let row =
                 match existing |> Seq.tryFind (fun r -> r.TeamAbbreviation = team) with
                 | Some r -> r
@@ -280,7 +283,9 @@ type internal MoneyPuckQualificationCollector(source: MoneyPuckHttpClient, logge
                                                PublishedAt = Option.toNullable batch.PublishedAt, PublicationBoundary = Option.toNullable boundary,
                                                MoneyPuckRejectedPublications = rejectedPublications, FetchedAt = Nullable batch.FetchedAt,
                                                RefreshId = refreshId, AcceptedTeamCount = (if batch.Reason = "accepted" then 32 else 0), TotalTeamCount = 32)
-            if batch.Reason = "accepted" then
+            if batch.Reason = "expired" then
+                evidence.MoneyPuckExpiredProbability <- Nullable((batch.Rows |> Array.find (fun r -> r.Team = team)).Probability)
+            if batch.Reason = "accepted" || batch.Reason = "expired" then
                 evidence.MoneyPuckSeasonProof <- MoneyPuckSeasonProof(PageSeasonLabel = batch.Label, PageSeasonStartYear = 2026, PageSeasonEndYear = 2027,
                                                                     PageReference = MoneyPuckQualification.pageUrl, PageObservedAt = Nullable batch.PageObservedAt,
                                                                     FirstSimulatedId = (batch.Rows |> Array.find (fun r -> r.Team = team)).SimulatedId, VerifiedGames = batch.Games)

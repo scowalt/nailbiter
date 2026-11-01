@@ -83,12 +83,12 @@ NBA link name includes its logo alt text as well as its text label.
 
 `apps/backend.browser-fixture` is a test-only executable using the existing
 `backend.tests/AppFactory` techniques: `WebApplicationFactory<Program>`, worker
-removal, replacement EF options, `EnsureCreated` and Testcontainers PostgreSQL
+removal, replacement EF options, `EnsureCreated`, additive migration replay and Testcontainers PostgreSQL
 (`postgres:16-alpine`). It never accepts a connection string. It requires a local
 Unix Docker endpoint and sets **process-local**
 `TestcontainersSettings.DockerSocketOverride` to that resolved endpoint's socket
 path. This avoids the rootless provider's rootful Ryuk-mount default on this host;
-Ryuk remains enabled. No Docker daemon or global configuration is changed.
+Ryuk remains enabled. No Docker daemon or global configuration is changed. After `EnsureCreated` and before seeding/host startup, the integrated fixture applies both `034_PlayoffSeriesObservation.sql` and `035_ProHypeLifecycle.sql`, installing the real writer journal/fence triggers for scheduled hype reads. Lifecycle 035 is the renamed undeployed script; the incoming series 034 remains unchanged. This uses only the fixture's newly created disposable database and does not invoke a production migration runner.
 
 Rootless dockerd's port allocator cannot see host-side listeners. The fixture
 therefore asks the **host OS** for one free dual-stack TCP ephemeral port for each

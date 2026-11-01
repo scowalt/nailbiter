@@ -2,6 +2,8 @@ using System.Text.Json;
 
 namespace backend.Models;
 
+public enum ProCompetitionRejection { None, MalformedObservation, IdentityMismatch, ConflictingSchedule }
+
 public sealed class ProGameEvidence
 {
     public string GameId { get; set; } = "";
@@ -23,6 +25,7 @@ public sealed class ProGameEvidence
     public NflPlayoffLeverageEvidence? NflPlayoffLeverage { get; set; }
     public string[] CompletedGameIds { get; set; } = [];
     public string Reason { get; set; } = "Competition context unavailable";
+    public ProCompetitionRejection Rejection { get; set; }
 
     public static ProGameEvidence? Parse(string? json)
     {

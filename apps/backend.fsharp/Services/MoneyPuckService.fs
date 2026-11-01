@@ -27,7 +27,7 @@ type MoneyPuckService(httpClient: HttpClient, logger: ILogger<MoneyPuckService>,
     let now () = timeProvider.GetUtcNow().UtcDateTime
 
     member private _.RefreshRankingsAsync(ct: CancellationToken) = task {
-        let! snapshot = task {
+        let! observation = task {
             try
                 let! before = source.ReadAsync(MoneyPuckRankings.UpdatedUrl, 4096, ct)
                 let! csv = task {
@@ -38,26 +38,27 @@ type MoneyPuckService(httpClient: HttpClient, logger: ILogger<MoneyPuckService>,
                 }
                 let! after = source.ReadAsync(MoneyPuckRankings.UpdatedUrl, 4096, ct)
                 if before.Trim() <> after.Trim() then return None
-                else return Some (MoneyPuckRankings.Parse(csv, after, now ()))
+                else return Some (MoneyPuckRankings.Observe(csv, after, now ()))
             with
-            | MoneyPuckInvalidSource _ -> return Some null
-            | :? DecoderFallbackException -> return Some null
+            | MoneyPuckInvalidSource _ -> return Some (MoneyPuckRankingObservation(MoneyPuckRankingState.Rejected, null))
+            | :? DecoderFallbackException -> return Some (MoneyPuckRankingObservation(MoneyPuckRankingState.Rejected, null))
         }
-        match snapshot with
+        match observation with
         | None -> return 0
-        | Some snapshot ->
+        | Some observation ->
             use scope = serviceProvider.CreateScope()
             let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
             let! previous = db.TeamRatings.Where(fun r -> r.Sport = "nhl" && r.Source = MoneyPuckRankings.Source).ToListAsync(ct)
             let fetched = now ()
-            if isNull (box snapshot) then
+            let snapshot = observation.Snapshot
+            if observation.State = MoneyPuckRankingState.Rejected then
                 for row in previous do
                     row.PowerRank <- Nullable()
                     row.SourceSeason <- Nullable()
                     row.RankPublishedAt <- Nullable()
                     row.FetchedAt <- fetched
                 let! _ = db.SaveChangesAsync(ct)
-                logger.LogWarning("Rejected MoneyPuck ranking: incomplete/invalid CSV or missing, expired, future or unsupported publication date")
+                logger.LogWarning("Rejected MoneyPuck ranking: incomplete/invalid CSV or missing, future or unsupported publication date")
                 return 0
             else
                 for team in snapshot.Teams do
@@ -73,8 +74,8 @@ type MoneyPuckService(httpClient: HttpClient, logger: ILogger<MoneyPuckService>,
                     row.RankPublishedAt <- Nullable snapshot.PublishedAt
                     row.FetchedAt <- fetched
                 let! _ = db.SaveChangesAsync(ct)
-                logger.LogInformation("Refreshed {Count} MoneyPuck ranks, published {PublishedAt}, applicable season {Season}", snapshot.Teams.Count, snapshot.PublishedAt, snapshot.Season)
-                return snapshot.Teams.Count
+                logger.LogInformation("Observed {Count} MoneyPuck ranks, published {PublishedAt}, applicable season {Season}, state {State}", snapshot.Teams.Count, snapshot.PublishedAt, snapshot.Season, observation.State)
+                return if observation.State = MoneyPuckRankingState.Accepted then snapshot.Teams.Count else 0
     }
 
     member internal this.RefreshForSeasonAsync(season: int, ct: CancellationToken) = task {

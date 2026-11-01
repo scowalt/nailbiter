@@ -1,5 +1,6 @@
 using backend.GraphQL.Types;
 using backend.Models;
+using backend.Scoring;
 using backend.Services;
 using backend.Services.Highlights;
 using Backend.Rendering;
@@ -13,11 +14,11 @@ public static class PageRoutes
     public static void MapPageRoutes(this WebApplication app)
     {
         app.MapGet("/", HandleHomePage);
-        app.MapGet("/nba", (HttpContext ctx, GameDataService svc, HypeScoreService hypeSvc, CancellationToken ct) => HandleLeaguePage(Sport.NBA, svc, hypeSvc, ctx, ct));
-        app.MapGet("/nfl", (HttpContext ctx, GameDataService svc, HypeScoreService hypeSvc, CancellationToken ct) => HandleLeaguePage(Sport.NFL, svc, hypeSvc, ctx, ct));
-        app.MapGet("/nhl", (HttpContext ctx, GameDataService svc, HypeScoreService hypeSvc, CancellationToken ct) => HandleLeaguePage(Sport.NHL, svc, hypeSvc, ctx, ct));
-        app.MapGet("/mlb", (HttpContext ctx, GameDataService svc, HypeScoreService hypeSvc, CancellationToken ct) => HandleLeaguePage(Sport.MLB, svc, hypeSvc, ctx, ct));
-        app.MapGet("/cfb", (HttpContext ctx, GameDataService svc, HypeScoreService hypeSvc, CancellationToken ct) => HandleLeaguePage(Sport.CFB, svc, hypeSvc, ctx, ct));
+        app.MapGet("/nba", (HttpContext ctx, GameDataService svc, HypeScoreService hypeSvc, IProHypeLifecycle lifecycle, CancellationToken ct) => HandleLeaguePage(Sport.NBA, svc, hypeSvc, lifecycle, ctx, ct));
+        app.MapGet("/nfl", (HttpContext ctx, GameDataService svc, HypeScoreService hypeSvc, IProHypeLifecycle lifecycle, CancellationToken ct) => HandleLeaguePage(Sport.NFL, svc, hypeSvc, lifecycle, ctx, ct));
+        app.MapGet("/nhl", (HttpContext ctx, GameDataService svc, HypeScoreService hypeSvc, IProHypeLifecycle lifecycle, CancellationToken ct) => HandleLeaguePage(Sport.NHL, svc, hypeSvc, lifecycle, ctx, ct));
+        app.MapGet("/mlb", (HttpContext ctx, GameDataService svc, HypeScoreService hypeSvc, IProHypeLifecycle lifecycle, CancellationToken ct) => HandleLeaguePage(Sport.MLB, svc, hypeSvc, lifecycle, ctx, ct));
+        app.MapGet("/cfb", (HttpContext ctx, GameDataService svc, HypeScoreService hypeSvc, IProHypeLifecycle lifecycle, CancellationToken ct) => HandleLeaguePage(Sport.CFB, svc, hypeSvc, lifecycle, ctx, ct));
         app.MapGet("/world-cup", HandleWorldCupPage);
         app.MapGet("/world-cup/match/{id}", HandleWorldCupMatchPage);
         app.MapGet("/game/{id}", HandleGameDetailPage);
@@ -40,7 +41,37 @@ public static class PageRoutes
         return result;
     }
 
-    private static async Task<IResult> HandleHomePage(GameDataService svc, HypeScoreService hypeSvc, CancellationToken ct)
+    private static async Task<(Dictionary<string, double?> Scores, Dictionary<string, DerivedHypeCredit> Credits)> GetGameHypeAsync(
+        List<Game> games, HypeScoreService scorer, IProHypeLifecycle lifecycle, CancellationToken ct)
+    {
+        var scores = new Dictionary<string, double?>();
+        var credits = new Dictionary<string, DerivedHypeCredit>();
+        for (var index = 0; index < games.Count; index++)
+        {
+            var game = games[index];
+            if (game.Status != "scheduled") continue;
+            if (!ProHypePolicy.Supports(game.Sport))
+            {
+                scores[game.Id] = await scorer.CalculateHypeScoreAsync(game, ct);
+                continue;
+            }
+            var resolution = await lifecycle.ResolveAsync(game.Id, ct);
+            if (resolution.Game is null) { games.RemoveAt(index--); continue; }
+            game = games[index] = resolution.Game;
+            scores[game.Id] = resolution.Total;
+            if (!resolution.Total.HasValue) continue;
+            var components = resolution.Components;
+            var teams = new List<string>();
+            if (components.AwayQualificationEvidenceKind == ProQualificationEvidenceKind.MoneyPuckModel)
+                teams.Add(game.AwayTeamAbbreviation);
+            if (components.HomeQualificationEvidenceKind == ProQualificationEvidenceKind.MoneyPuckModel)
+                teams.Add(game.HomeTeamAbbreviation);
+            if (teams.Count > 0) credits[game.Id] = new DerivedHypeCredit(teams.ToFSharpList());
+        }
+        return (scores, credits);
+    }
+
+    private static async Task<IResult> HandleHomePage(GameDataService svc, HypeScoreService hypeSvc, IProHypeLifecycle lifecycle, CancellationToken ct)
     {
         var todaysGames = await svc.GetTodaysGamesAsync(ct);
         var liveGames = await svc.GetLiveGamesAsync(ct);
@@ -62,15 +93,11 @@ public static class PageRoutes
             ? await svc.GetExcitementScoresForGamesAsync(excitementGameIds.ToFSharpList(), ct)
             : new Dictionary<string, double?>();
 
-        var hypeScores = new Dictionary<string, double?>();
-        foreach (var game in allGames.Where(g => g.Status == "scheduled"))
-        {
-            hypeScores[game.Id] = await hypeSvc.CalculateHypeScoreAsync(game, ct);
-        }
+        var (hypeScores, hypeCredits) = await GetGameHypeAsync(allGames, hypeSvc, lifecycle, ct);
 
         var teamRanks = await GetGameTeamRanksAsync(allGames, svc, ct);
 
-        var content = HomePageRenderer.Render(allGames, latestOdds, excitementScores, hypeScores, teamRanks);
+        var content = HomePageRenderer.RenderWithHypeCredits(allGames, latestOdds, excitementScores, hypeScores, teamRanks, hypeCredits);
         var html = Layout.renderPage(
             "Nailbiter — Live Sports Excitement Tracker",
             "Track live sports excitement scores, win probabilities, and more",
@@ -115,7 +142,7 @@ public static class PageRoutes
 
     private static bool UsesWeekDisplay(Sport sport) => sport is Sport.NFL or Sport.CFB;
 
-    private static async Task<IResult> HandleLeaguePage(Sport sport, GameDataService svc, HypeScoreService hypeSvc, HttpContext ctx, CancellationToken ct)
+    private static async Task<IResult> HandleLeaguePage(Sport sport, GameDataService svc, HypeScoreService hypeSvc, IProHypeLifecycle lifecycle, HttpContext ctx, CancellationToken ct)
     {
         var config = LeagueConfig.getLeagueConfig(sport);
         var sportDb = sport.ToDbValue();
@@ -247,11 +274,7 @@ public static class PageRoutes
             ? await svc.GetExcitementScoresForGamesAsync(excitementGameIds.ToFSharpList(), ct)
             : new Dictionary<string, double?>();
 
-        var hypeScores = new Dictionary<string, double?>();
-        foreach (var game in games.Where(g => g.Status == "scheduled"))
-        {
-            hypeScores[game.Id] = await hypeSvc.CalculateHypeScoreAsync(game, ct);
-        }
+        var (hypeScores, hypeCredits) = await GetGameHypeAsync(games, hypeSvc, lifecycle, ct);
 
         var teamRanks = await GetGameTeamRanksAsync(games, svc, ct);
 
@@ -268,7 +291,7 @@ public static class PageRoutes
         var prevWeekOpt = prevWeekUrl != null ? FSharpOption<string>.Some(prevWeekUrl) : FSharpOption<string>.None;
         var nextWeekOpt = nextWeekUrl != null ? FSharpOption<string>.Some(nextWeekUrl) : FSharpOption<string>.None;
 
-        var content = LeaguePageRenderer.Render(sport, config, games, latestOdds, excitementScores, hypeScores, displayWeekInfo, teamRanks, bracketFSharpOpt, prevWeekOpt, nextWeekOpt);
+        var content = LeaguePageRenderer.RenderWithHypeCredits(sport, config, games, latestOdds, excitementScores, hypeScores, displayWeekInfo, teamRanks, bracketFSharpOpt, prevWeekOpt, nextWeekOpt, hypeCredits);
         var html = Layout.renderPage(
             $"{config.Name} | Nailbiter",
             config.Meta.Description,
@@ -278,7 +301,7 @@ public static class PageRoutes
         return Results.Content("<!DOCTYPE html>" + html, "text/html");
     }
 
-    private static async Task<IResult> HandleGameDetailPage(string id, GameDataService svc, HypeScoreService hypeSvc, HighlightsApplicationService highlightsSvc, TimeProvider time, CancellationToken ct)
+    private static async Task<IResult> HandleGameDetailPage(string id, GameDataService svc, HypeScoreService hypeSvc, IProHypeLifecycle lifecycle, HighlightsApplicationService highlightsSvc, TimeProvider time, CancellationToken ct)
     {
         var gameOpt = await svc.GetGameAsync(id, ct);
         if (FSharpOption<Game>.get_IsNone(gameOpt)) return Results.NotFound();
@@ -300,9 +323,21 @@ public static class PageRoutes
 
         if (game.Status == "scheduled" && !game.IsHistoricalImport)
         {
-            hypeComponents = await hypeSvc.GetHypeComponentsAsync(game, ct);
-            if (hypeComponents is not null && hypeComponents.IsComplete)
-                hypeScore = hypeSvc.CalculateFinalScore(game.Sport, hypeComponents);
+            if (ProHypePolicy.Supports(game.Sport))
+            {
+                var resolution = await lifecycle.ResolveAsync(game.Id, ct);
+                if (resolution.Game is null) return Results.NotFound();
+                game = resolution.Game;
+                sportEnum = SportExtensions.FromDbValue(game.Sport);
+                hypeComponents = resolution.Components;
+                hypeScore = resolution.Total;
+            }
+            else
+            {
+                hypeComponents = await hypeSvc.GetHypeComponentsAsync(game, ct);
+                if (hypeComponents is not null && hypeComponents.IsComplete)
+                    hypeScore = hypeSvc.CalculateFinalScore(game.Sport, hypeComponents);
+            }
 
             var seasonType = game.SeasonType;
             var homeRankInfoOpt = await svc.GetTeamRankInfoAsync(game.Sport, game.HomeTeamAbbreviation, PlayoffRatingPolicy.gameSeason(game), seasonType, ct);

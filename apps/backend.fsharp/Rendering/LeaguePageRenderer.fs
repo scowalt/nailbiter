@@ -11,7 +11,7 @@ module LeaguePageRenderer =
 
     let private cls = Layout.cls
 
-    let private gameRow (game: Game) (sport: Sport) (odds: IDictionary<string, OddsSnapshot>) (scores: IDictionary<string, Nullable<float>>) (hypeScores: IDictionary<string, Nullable<float>>) (teamRanks: IDictionary<string, TeamRankInfo>) =
+    let private gameRow (game: Game) (sport: Sport) (odds: IDictionary<string, OddsSnapshot>) (scores: IDictionary<string, Nullable<float>>) (hypeScores: IDictionary<string, Nullable<float>>) (teamRanks: IDictionary<string, TeamRankInfo>) (hypeCredits: IDictionary<string, DerivedHypeCredit>) =
         let status = GameStatusExtensions.FromDbValue(game.Status)
         let excitementScore =
             match scores.TryGetValue(game.Id) with
@@ -152,11 +152,11 @@ module LeaguePageRenderer =
                     ] []
                 ]
         ]
-        let creditedTeams = QualificationCredit.selectedTeams game teamRanks
-        if creditedTeams.IsEmpty then card
-        else Elem.div [] [ card; QualificationCredit.render $"qualification-credit-{game.Id}" creditedTeams (game.Status = "scheduled" && game.SeasonType = Nullable 2 && hypeScore.HasValue) ]
+        let credits = QualificationCredit.renderForGame game teamRanks hypeCredits
+        if credits.IsEmpty then card
+        else Elem.div [] [ card; yield! credits ]
 
-    let Render (sport: Sport) (config: LeagueConfig.LeagueConfig) (games: Collections.Generic.List<Game>) (odds: IDictionary<string, OddsSnapshot>) (scores: IDictionary<string, Nullable<float>>) (hypeScores: IDictionary<string, Nullable<float>>) (weekInfo: CurrentWeekData option) (teamRanks: IDictionary<string, TeamRankInfo>) (bracket: PlayoffBracketData option) (prevWeekUrl: string option) (nextWeekUrl: string option) =
+    let RenderWithHypeCredits (sport: Sport) (config: LeagueConfig.LeagueConfig) (games: Collections.Generic.List<Game>) (odds: IDictionary<string, OddsSnapshot>) (scores: IDictionary<string, Nullable<float>>) (hypeScores: IDictionary<string, Nullable<float>>) (weekInfo: CurrentWeekData option) (teamRanks: IDictionary<string, TeamRankInfo>) (bracket: PlayoffBracketData option) (prevWeekUrl: string option) (nextWeekUrl: string option) (hypeCredits: IDictionary<string, DerivedHypeCredit>) =
         let usesWeeks = sport = Sport.NFL || sport = Sport.CFB
         let navPrevLabel = if usesWeeks then "← Previous Week" else "← Previous Day"
         let navNextLabel = if usesWeeks then "Next Week →" else "Next Day →"
@@ -206,7 +206,10 @@ module LeaguePageRenderer =
                     let sportStr = sport.ToString().ToLowerInvariant()
                     Elem.div [ cls "space-y-2"; Attr.create "data-init" $"@get('/sse/live/{sportStr}', {{requestCancellation: 'cleanup'}})" ] [
                         for game in games do
-                            gameRow game sport odds scores hypeScores teamRanks
+                            gameRow game sport odds scores hypeScores teamRanks hypeCredits
                     ]
             ]
         ]
+
+    let Render sport config games odds scores hypeScores weekInfo teamRanks bracket prevWeekUrl nextWeekUrl =
+        RenderWithHypeCredits sport config games odds scores hypeScores weekInfo teamRanks bracket prevWeekUrl nextWeekUrl (dict [])

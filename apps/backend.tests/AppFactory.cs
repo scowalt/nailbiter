@@ -13,6 +13,7 @@ internal sealed class AppFactory : WebApplicationFactory<Program>
     {
         builder.UseEnvironment("Development");
         builder.UseSetting("EnableScraper", "false");
+        builder.UseSetting("EnableProHypeCapture", "false");
         builder.UseSetting("Sentry:Dsn", "");
         builder.UseSetting("OpenTelemetry:Enabled", "false");
         builder.ConfigureServices(services =>
@@ -27,6 +28,7 @@ internal sealed class AppFactory : WebApplicationFactory<Program>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["EnableScraper"] = "false",
+                ["EnableProHypeCapture"] = "false",
                 ["Sentry:Dsn"] = "",
                 ["OpenTelemetry:Enabled"] = "false"
             }));

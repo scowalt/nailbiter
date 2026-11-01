@@ -18,13 +18,30 @@ module internal QualificationCredit =
                                 && rank.PlayoffEvidenceKind = backend.Scoring.ProQualificationEvidenceKind.MoneyPuckModel
                 | _ -> false)
 
-    let render id (teams: string list) derivedHype =
+    let render id (teams: string list) =
         let plural = teams.Length > 1
         Elem.p [ Layout.cls "text-xs text-text-muted mt-2 px-4"; Attr.id id ] [
             Text.enc (String.concat " / " teams + (if plural then " playoff probabilities: " else " playoff probability: "))
             Elem.a [ Attr.href "https://moneypuck.com/predictions.htm"; Layout.cls "underline hover:text-text-primary" ] [ Text.raw "MoneyPuck" ]
             Text.raw (if plural then " model estimates." else " model estimate.")
-            if derivedHype then Text.raw (if plural then " Hype uses these estimates." else " Hype uses this estimate.")
+        ]
+
+    let renderForGame (game: Game) (ranks: IDictionary<string, TeamRankInfo>) (hypeCredits: IDictionary<string, DerivedHypeCredit>) =
+        let currentTeams = selectedTeams game ranks
+        let derivedTeams =
+            match hypeCredits.TryGetValue game.Id with
+            | true, credit -> credit.MoneyPuckTeams
+            | _ -> []
+        [
+            if not currentTeams.IsEmpty then
+                render $"qualification-credit-{game.Id}" currentTeams
+            if not derivedTeams.IsEmpty then
+                Elem.p [ Layout.cls "text-xs text-text-muted mt-2 px-4"; Attr.id $"hype-credit-{game.Id}" ] [
+                    Text.raw (if derivedTeams.Length > 1 then "Stakes and hype use model estimates for " else "Stakes and hype use a model estimate for ")
+                    Text.enc (String.concat " / " derivedTeams + " from ")
+                    Elem.a [ Attr.href "https://moneypuck.com/predictions.htm"; Layout.cls "underline hover:text-text-primary" ] [ Text.raw "MoneyPuck" ]
+                    Text.raw "."
+                ]
         ]
 
 module HomePageRenderer =
@@ -67,7 +84,7 @@ module HomePageRenderer =
             else "more"
         | _ -> "other"
 
-    let private gameCard (game: Game) (odds: IDictionary<string, OddsSnapshot>) (scores: IDictionary<string, Nullable<float>>) (hypeScores: IDictionary<string, Nullable<float>>) (teamRanks: IDictionary<string, TeamRankInfo>) =
+    let private gameCard (game: Game) (odds: IDictionary<string, OddsSnapshot>) (scores: IDictionary<string, Nullable<float>>) (hypeScores: IDictionary<string, Nullable<float>>) (teamRanks: IDictionary<string, TeamRankInfo>) (hypeCredits: IDictionary<string, DerivedHypeCredit>) =
         let sport = SportExtensions.FromDbValue(game.Sport)
         let status = GameStatusExtensions.FromDbValue(game.Status)
         let excitementScore =
@@ -226,14 +243,10 @@ module HomePageRenderer =
                     ]
                 ]
         ]
-        let creditedTeams = QualificationCredit.selectedTeams game teamRanks
-        Elem.div [ cls "home-game-item" ] [
-            card
-            if not creditedTeams.IsEmpty then
-                QualificationCredit.render $"qualification-credit-{game.Id}" creditedTeams (isPregame && game.SeasonType = Nullable 2 && hypeScore.HasValue)
-        ]
+        let credits = QualificationCredit.renderForGame game teamRanks hypeCredits
+        Elem.div [ cls "home-game-item" ] [ card; yield! credits ]
 
-    let Render (games: Collections.Generic.List<Game>) (odds: IDictionary<string, OddsSnapshot>) (scores: IDictionary<string, Nullable<float>>) (hypeScores: IDictionary<string, Nullable<float>>) (teamRanks: IDictionary<string, TeamRankInfo>) =
+    let RenderWithHypeCredits (games: Collections.Generic.List<Game>) (odds: IDictionary<string, OddsSnapshot>) (scores: IDictionary<string, Nullable<float>>) (hypeScores: IDictionary<string, Nullable<float>>) (teamRanks: IDictionary<string, TeamRankInfo>) (hypeCredits: IDictionary<string, DerivedHypeCredit>) =
         [
             Elem.div [ cls "home-schedule max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" ] [
                 Elem.h1 [ cls "text-2xl font-semibold mb-6" ] [ Text.raw "Today's Games" ]
@@ -251,9 +264,12 @@ module HomePageRenderer =
                                     Elem.h2 [ cls "text-base font-semibold mb-3"; Attr.id $"home-heading-{key}" ] [ Text.raw label ]
                                     Elem.div [ cls "home-game-grid" ] [
                                         for game in cards do
-                                            gameCard game odds scores hypeScores teamRanks
+                                            gameCard game odds scores hypeScores teamRanks hypeCredits
                                     ]
                                 ]
                     ]
             ]
         ]
+
+    let Render games odds scores hypeScores teamRanks =
+        RenderWithHypeCredits games odds scores hypeScores teamRanks (dict [])
