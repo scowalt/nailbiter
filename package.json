@@ -1,0 +1,35 @@
+{
+  "name": "excitement-score",
+  "private": true,
+  "scripts": {
+    "prepare": "lefthook install",
+    "lint": "biome check",
+    "lint:fix": "biome check --write",
+    "format": "biome format --write",
+    "typecheck": "echo 'No frontend typecheck needed — web components are vanilla JS'",
+    "test:live-sync": "bun tests/live-sync/browser-regression.js",
+    "icons:generate": "bun scripts/generate-icons.js",
+    "test:icons": "bun scripts/generate-icons.js --check && bun run --cwd apps/www build && bun tests/branding/icons.js",
+    "typecheck:pilot": "tsc -p tests/testerarmy/tsconfig.json",
+    "test:pilot:oracle": "bun tests/testerarmy/smoke.js",
+    "test:pilot:transport": "bun tests/testerarmy/smoke.js --transport",
+    "test:pilot:config": "bun tests/testerarmy/config-smoke.js",
+    "test:pilot:reporting": "bun tests/testerarmy/reporting-smoke.js",
+    "pilot:evaluate": "bun tests/testerarmy/evaluate.js"
+  },
+  "devDependencies": {
+    "@ai-sdk/openai": "4.0.83",
+    "@biomejs/biome": "^2.3.10",
+    "@e2e-dev/web": "0.12.0",
+    "@types/node": "24.10.0",
+    "ai": "7.0.127",
+    "backstopjs": "^6.3.25",
+    "e2e": "0.17.0",
+    "lefthook": "^2.0.12",
+    "playwright": "1.63.0",
+    "typescript": "5.9.3"
+  },
+  "patchedDependencies": {
+    "e2e@0.17.0": "patches/e2e@0.17.0.patch"
+  }
+}

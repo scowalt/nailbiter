@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "scripts": {
+    "css:build": "tailwindcss -i Styles/global.css -o wwwroot/css/global.css --minify",
+    "css:watch": "tailwindcss -i Styles/global.css -o wwwroot/css/global.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.2.4",
+    "tailwindcss": "^4.1.18"
+  }
+}

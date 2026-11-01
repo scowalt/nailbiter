@@ -1,0 +1,6 @@
+
+ALTER TABLE games ALTER COLUMN status TYPE VARCHAR(30);
+
+ALTER TABLE team_ratings ALTER COLUMN sport TYPE VARCHAR(20);
+
+ALTER TABLE team_standings ALTER COLUMN ranking_poll TYPE VARCHAR(50);

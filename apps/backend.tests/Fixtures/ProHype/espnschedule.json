@@ -1,0 +1,1136 @@
+{
+  "status": "success",
+  "season": {
+    "year": 2026,
+    "type": 2
+  },
+  "timestamp": "2026-09-30T18:55:00Z",
+  "team": {
+    "id": "103",
+    "abbreviation": "BUF"
+  },
+  "events": [
+    {
+      "id": "synthetic-buf-0",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-09-01T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_FINAL",
+          "state": "post",
+          "completed": true
+        },
+        "period": 4,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-0",
+          "date": "2026-09-01T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_FINAL",
+              "state": "post",
+              "completed": true
+            },
+            "period": 4,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "21",
+              "winner": true,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "14",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-1",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-09-08T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_FINAL",
+          "state": "post",
+          "completed": true
+        },
+        "period": 4,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-1",
+          "date": "2026-09-08T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_FINAL",
+              "state": "post",
+              "completed": true
+            },
+            "period": 4,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "21",
+              "winner": true,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "14",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-2",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-09-15T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_FINAL",
+          "state": "post",
+          "completed": true
+        },
+        "period": 4,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-2",
+          "date": "2026-09-15T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_FINAL",
+              "state": "post",
+              "completed": true
+            },
+            "period": 4,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "21",
+              "winner": true,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "14",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-3",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-09-22T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-3",
+          "date": "2026-09-22T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-4",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-09-29T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-4",
+          "date": "2026-09-29T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-5",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-10-06T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-5",
+          "date": "2026-10-06T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-6",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-10-13T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-6",
+          "date": "2026-10-13T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-7",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-10-20T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-7",
+          "date": "2026-10-20T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-8",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-10-27T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-8",
+          "date": "2026-10-27T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-9",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-11-03T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-9",
+          "date": "2026-11-03T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-10",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-11-10T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-10",
+          "date": "2026-11-10T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-11",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-11-17T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-11",
+          "date": "2026-11-17T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-12",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-11-24T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-12",
+          "date": "2026-11-24T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-13",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-12-01T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-13",
+          "date": "2026-12-01T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-14",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-12-08T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-14",
+          "date": "2026-12-08T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-15",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-12-15T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-15",
+          "date": "2026-12-15T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-buf-16",
+      "name": "NYJ at BUF synthetic scenario",
+      "shortName": "NYJ @ BUF",
+      "date": "2026-12-22T18:00:00.0000000Z",
+      "season": {
+        "year": 2026,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-buf-16",
+          "date": "2026-12-22T18:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "103",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "103",
+                "abbreviation": "BUF",
+                "displayName": "Synthetic BUF",
+                "name": "BUF"
+              }
+            },
+            {
+              "id": "302",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "302",
+                "abbreviation": "NYJ",
+                "displayName": "Synthetic NYJ",
+                "name": "NYJ"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

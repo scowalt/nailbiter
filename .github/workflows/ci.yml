@@ -1,0 +1,196 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    outputs:
+      marketing: ${{ steps.marketing.outputs.changed }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+      - name: Verify event checkout and synthetic fixture provenance
+        run: |
+          sh scripts/ci/verify-checkout.sh
+          python scripts/test-fixtures/generate.py --check
+      - name: Source policy and secret scan
+        run: |
+          uv run --no-project --with-requirements .comment-policy/requirements.txt python .comment-policy/check.py
+          uv run --no-project --with-requirements .comment-policy/requirements.txt python -m unittest discover -s .comment-policy -v
+          gitleaks git --config .gitleaks.toml --redact=100 --log-opts=--all
+      - name: Lint and browser regressions
+        run: |
+          bun install --frozen-lockfile --ignore-scripts
+          bun run lint
+          bunx playwright install --with-deps chromium
+          bun run test:live-sync
+          bash -n scripts/ensure-swap.sh scripts/ci/*.sh
+      - name: Deployment and fixture contracts
+        run: |
+          python -m unittest discover -s tests/deployment -p 'test_*.py' -v
+          uv run --no-project --with pyyaml==6.0.3 python -m unittest discover -s tests/ci -p 'test_*.py' -v
+          python -m unittest discover -s tests/fixtures -p 'test_*.py' -v
+      - name: Analysis and isolated database recovery
+        run: |
+          cd apps/analysis
+          PYTHONPATH=src uv run --no-project --with 'pandas>=2.0' --with 'sqlalchemy>=2.0' --with 'pydantic>=2.0' python -m unittest discover -s tests -v
+          cd ../..
+          RUN_RECOVERY_DB_TESTS=1 python -m unittest discover -s scripts/backfills -p 'test_*.py' -v
+      - name: Build web components independently
+        run: |
+          bun install --cwd apps/web-components --frozen-lockfile --ignore-scripts
+          bun run --cwd apps/web-components build --outDir ../../.ci/web-components
+      - name: Backend build and integration suites
+        env:
+          DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+          DOTNET_NOLOGO: '1'
+        run: |
+          dotnet restore apps/backend/backend.csproj
+          dotnet restore apps/backend.fsharp.tests/backend.fsharp.tests.fsproj
+          dotnet restore apps/backend.tests/backend.tests.csproj
+          dotnet build apps/backend/backend.csproj --no-restore --configuration Release
+          dotnet test apps/backend.fsharp.tests/backend.fsharp.tests.fsproj --no-restore --configuration Release
+          dotnet test apps/backend.tests/backend.tests.csproj --no-restore --configuration Release
+      - name: Build and package marketing once
+        run: |
+          bun install --cwd apps/www --frozen-lockfile --ignore-scripts
+          bun run --cwd apps/www build
+          bun run test:icons
+          (cd apps/www && bunx wrangler --version)
+          mkdir -p .ci
+          tar -C apps/www -cf .ci/marketing.tar dist
+          sha256sum .ci/marketing.tar > .ci/marketing.sha256
+          printf '%s\n' "$GITHUB_SHA" > .ci/marketing.commit
+      - name: Select marketing release paths
+        id: marketing
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: python scripts/ci/marketing-changed.py >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: marketing-${{ github.sha }}
+          path: |
+            .ci/marketing.tar
+            .ci/marketing.sha256
+            .ci/marketing.commit
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  image:
+    name: Build and scan backend image
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Build image without publishing
+        run: |
+          sh scripts/ci/verify-checkout.sh
+          sh scripts/ci/build-image.sh
+      - name: Scan the exact image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
+        with:
+          image-ref: nailbiter-backend:scan
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          vuln-type: os,library
+          exit-code: '1'
+      - name: Bind the scanned image to this revision
+        run: |
+          sha256sum .ci/backend.tar > .ci/backend.sha256
+          printf '%s\n' "$GITHUB_SHA" > .ci/backend.commit
+          docker image inspect --format '{{.Id}}' nailbiter-backend:scan > .ci/backend.image-id
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: backend-${{ github.sha }}
+          path: |
+            .ci/backend.tar
+            .ci/backend.sha256
+            .ci/backend.commit
+            .ci/backend.image-id
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Release production
+    needs: [validate, image]
+    if: >-
+      github.repository == 'scowalt/nailbiter' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch') &&
+      vars.PRODUCTION_RELEASES_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: production-release
+      cancel-in-progress: false
+    env:
+      PRODUCTION_RELEASES_ENABLED: ${{ vars.PRODUCTION_RELEASES_ENABLED }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.2
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: backend-${{ github.sha }}
+          path: .ci
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: marketing-${{ github.sha }}
+          path: .ci
+      - name: Verify trusted main and publish the scanned image
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GHCR_TOKEN: ${{ github.token }}
+        run: sh scripts/ci/publish-image.sh
+      - name: Install pinned Tailscale binaries
+        run: sh scripts/ci/install-tailscale.sh
+      - name: Deploy the tested backend revision and immutable image
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAILSCALE_OAUTH_SECRET: ${{ secrets.TAILSCALE_CI_OAUTH_SECRET }}
+        run: bash scripts/ci/send-release.sh
+      - name: Deploy the tested marketing artifact
+        if: needs.validate.outputs.marketing == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          sh scripts/ci/require-release.sh
+          test "$(tr -d '\n' < .ci/marketing.commit)" = "$GITHUB_SHA"
+          sha256sum --check .ci/marketing.sha256
+          tar -C apps/www -xf .ci/marketing.tar
+          bun install --cwd apps/www --frozen-lockfile --ignore-scripts
+          cd apps/www
+          bunx wrangler deploy

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.15.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../backend/Migrations/030_MlbHighlights.sql" Link="Migrations/030_MlbHighlights.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../backend/Migrations/031_HighlightsLifecycle.sql" Link="Migrations/031_HighlightsLifecycle.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../backend/Migrations/032_CollegePregameProbabilities.sql" Link="Migrations/032_CollegePregameProbabilities.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../backend/Migrations/033_MoneyPuckDailyRefresh.sql" Link="Migrations/033_MoneyPuckDailyRefresh.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../backend/Migrations/034_PlayoffSeriesObservation.sql" Link="Migrations/034_PlayoffSeriesObservation.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../backend/Migrations/002_TeamRatings.sql" Link="Migrations/002_TeamRatings.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../backend/Migrations/025_TeamRatingSourceSeason.sql" Link="Migrations/025_TeamRatingSourceSeason.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../backend/Migrations/026_PlayoffFinalOutcome.sql" Link="Migrations/026_PlayoffFinalOutcome.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../backend/Migrations/027_CollegeFootball.sql" Link="Migrations/027_CollegeFootball.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../backend/Migrations/029_PlayoffQuoteEvidence.sql" Link="Migrations/029_PlayoffQuoteEvidence.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../backend/Migrations/028_ProHypeEvidence.sql" Link="Migrations/028_ProHypeEvidence.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../backend/Migrations/029_MoneyPuckPublication.sql" Link="Migrations/029_MoneyPuckPublication.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/Excitement/*.json;Fixtures/Excitement/*.csv" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/ProHype/*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/MoneyPuck/*.csv;Fixtures/MoneyPuck/*.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/MoneyPuckQualification/Synthetic/*" CopyToOutputDirectory="PreserveNewest" />
+    <ProjectReference Include="../backend/backend.csproj" />
+    <None Include="../../docker-compose.yml" Link="docker-compose.yml" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

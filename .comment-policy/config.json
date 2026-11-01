@@ -1,0 +1,7 @@
+{
+  "generated": [
+    "apps/backend/wwwroot/js/nailbiter-components.js",
+    "apps/backend/wwwroot/css/*"
+  ],
+  "license_notices": []
+}

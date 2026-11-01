@@ -1,0 +1,64 @@
+# MLB highlights lifecycle
+
+This feature remains disabled by default. These changes do not authorize production credentials, deployment, migrations, launch catch-up, or API calls. Apply additive migrations through the existing reviewed deployment process only after separate authorization.
+
+## Application and hosting
+
+`HighlightsLifecycleService.RunAsync(CancellationToken)` is a scoped application operation, registered by the real entry point. It returns `HighlightsLifecycleResult(Selected, Revalidated, Expired, Reason)`, with safe counts/reasons only. It calls the existing adapter and application boundary; it does not import games, match video content itself, or change renderer/routes.
+
+`HighlightsBackgroundService` calls the operation on startup and then every minute using the injected `TimeProvider`. It owns its scope and cancellation. PostgreSQL session advisory locking permits only one worker operation across hosts; overlapping operations return `Busy`, not queued provider work. The lock is released on cancellation/disconnection. No ingestion worker or rendering request awaits this worker. The persisted-only detail boundary hides an optional highlights-storage failure rather than failing the scoreboard page, while still honoring request cancellation.
+
+The hosted service remains registered while discovery is disabled: local metadata deletion still runs, without any upstream request. Optional failures are contained and reported without exceptions, URLs, credentials, provider payloads, or game titles in worker logs. Operational reasons and changed counts are logged; repeated unchanged idle/disabled reasons are not flooded.
+
+## Configuration
+
+All settings are server-side. There is no public mutation route.
+
+| Setting | Default | Bounds / meaning |
+| --- | --- | --- |
+| `Highlights:Worker:Enabled` | `false` | Explicit discovery/revalidation switch; not a retention switch |
+| `Highlights:Worker:AuthorizeLaunchCatchup` | `false` | Separate authorization for one persisted launch snapshot; not a boot backfill switch |
+| `Highlights:Worker:MaxGamesPerCycle` | `100` | 1–100 ordinary/catch-up games per application batch |
+| `Highlights:Worker:MaxCatchupPages` | `16` | 1–16 pages per fixed catch-up game batch, at least `MaxUploadPages`; conservative whole-operation accounting |
+| `Highlights:YouTube:Enabled` | `false` | Adapter/operator gate, independently of worker enablement |
+| `Highlights:YouTube:ApiKey` | absent | Server-side credential required; do not put it in source or browser configuration |
+| `Highlights:YouTube:DailyUnitLimit` | `1000` | 0–1000 non-search units; honor a lower actual allocation |
+| `Highlights:YouTube:MaxUploadPages` | `2` | 1–4 pages per adapter operation, at most 200 videos |
+
+The application, worker and adapter consume the same typed `YouTubeHighlightsOptions.ValidateConfiguration` policy. Worker-only bounds and runtime quota/backoff remain separate. Both enabled switches, a valid key, and valid bounds are necessary for automatic discovery. Zero budget makes discovery inactive. `GetDetailAsync` independently honors explicit worker disablement/invalid worker bounds: persisted completed games without a playable selection do not claim active search. Operator validation remains independently available when its existing provider configuration permits it. Disabling discovery does not immediately delete still-fresh, valid selections. A durable `ProviderConfigurationRejected` flag also makes pending state unavailable after provider credential/channel rejection, including across restart or a subsequent budget/backoff reason. Only successful provider verification clears that rejection; merely changing configuration cannot falsely promise active search. Operator and worker transactions apply the same `YouTubeHighlightsResult.ProviderConfigurationRejectedAfter` transition.
+
+## Scheduling and ownership
+
+Shared uploads polling occurs every 15 minutes, delayed by durable backoff or quota limits. The attempt and next due time are persisted before the provider operation. Up to 200 due selected video IDs are validated together; successful provider evidence passes through application identity/content/source/playability/region/Made-for-Kids checks. Due means no successful validation or at least one day since validation. Attempts are spaced at least 15 minutes and that spacing survives interruption/restart. Transient provider failure is never passed as deletion evidence.
+
+The uploads playlist also contains scheduled/live broadcasts and unfinished uploads. Known `live`/`upcoming` broadcasts and non-`processed` uploads are nonselectable `NotProcessed` evidence, not malformed responses that abort unrelated recaps in the batch. A valid zero ISO duration such as `P0D` is accepted only for those known not-ready states. Unknown broadcast/upload states, malformed or negative durations, and zero-duration processed non-broadcast videos still fail closed. This does not relax game identity, recap content, publisher, regional or Made-for-Kids requirements.
+
+Only persisted original ordinary deadlines permit ordinary automatic selection/recovery; the boundary is exclusive (`now < deadline`). Worker operations always use the existing application completion observation with ordinary window initialization disabled. Manual ownership and suppression are protected by the application even during in-flight work. Definitively invalid manual choices remain owned and unavailable; they are not automatically replaced.
+
+## Durable quota and backoff
+
+Worker calls pre-reserve the adapter's conservative maximum under a PostgreSQL lock of the existing quota singleton: `2 + 2 * MaxUploadPages` for discovery; `2 + ceil(ids / 50)` for validation. Returned results refund only unused units belonging to the reservation's original Pacific quota day. Cancellation/crash retains the reservation. There are no worker-internal provider retries.
+
+`WorkerReservedUnits` carries an in-flight worker reservation into Pacific rollover before a concurrent operator can allocate those units. A straddling operation is conservatively accounted in both days; only its original day can receive a refund. After acquiring exclusive worker ownership on restart, an unfinished reservation is retained as spent (including conservative rollover accounting) and its in-flight marker is cleared. Operator validation pre-reserves three units on its starting day. Each request after Pacific rollover is separately charged atomically under the same quota-row lock before HTTP; rollover carries any worker reservation before allocating an operator request. Authorization returns its sampled Pacific day. After the asynchronous transaction has completed and disposed, the adapter rechecks that day before dispatch, with no further asynchronous gap. A changed day requires new-day authorization and retains the previous conservative charge. At most three authorization attempts are allowed per request, with caller cancellation propagated; continuing rollover or a backward day change returns `Backoff` without dispatch. Quota denial also dispatches nothing. Starting-day unused units refund only if both the persisted quota day and return day still equal the reservation day. Cancellation/crash retains every attempted charge and the original reservation. No outstanding operator marker survives to block future days: unfinished operators cannot send another request without a new atomic day charge. This needs no additional schema or local-counter-based recovery. Worker code does not charge operator requests a second time.
+
+Returned provider retry times persist in shared backoff. Repeated worker provider failures also use 15-minute exponential backoff capped at six hours; provider quota-day/Retry-After boundaries may require longer waits. Failure returns expose only safe enum reasons. Quota exhaustion delays work, never erases a valid selection or extends a deadline.
+
+## One launch cohort, resumable bounded progress
+
+Authorization initializes `LaunchBoundaryAt`, its fixed preceding-seven-day start, and `CatchupRemainingGameIds` atomically in a repeatable-read transaction. The snapshot contains only already-existing stored final MLB games with scheduled starts inside that fixed interval. Authoritative actual completion/identity is still required before selecting anything. The cohort snapshot has a defensive maximum of 10,000 IDs; exceeding it fails closed without authorizing a launch.
+
+Remaining IDs are decision/progress data, not provider payload. Later imports of old games cannot join the snapshot, even after a crash before the first API response. Catch-up application calls additionally require cohort membership. Its deadline exception permits only an initial selection with no prior decision. Replacing an invalid automatic choice still requires the original unexpired deadline, including after stale provider payload deletion. Manual ownership and suppression remain protected. No import, fresh ordinary window, new launch boundary, or repeated backfill is allowed.
+
+Each fixed game batch processes one bounded uploads operation per poll, reusing the ordinary root-page result where possible and making at most one additional continuation operation. Its cursor and conservative scanned-page count are persisted only after application processing. A partial application operation is safe to replay: existing valid/manual/suppressed choices remain protected. Reaching the provider end or exhausting the page budget advances/removes that game batch. A remaining budget smaller than one complete adapter page operation is not spent; the scan rounds down rather than overshooting its cap. Thus a five-page catch-up cap with four-page adapter operations scans at most four pages for that batch; an empty remaining cohort persists completion. Restart resumes the original cohort/page position, not a new seven-day set. Missing legacy cohort state on an already-initialized boundary is closed with `LegacyCohortUnknown`, never reconstructed from newly imported games. Once authorized/persisted, the original unfinished cohort can resume without leaving the initialization authorization flag on; disabling the worker pauses it.
+
+A stale provider cursor is deleted; continuation may resume from the root but the existing scanned-page budget remains, so expiry cannot enlarge the scan. The worker does not cache video payloads or an uploads playlist ID. Cohort/progress, original deadlines, and launch completion remain after provider data expiry.
+
+## Non-authorized API data retention
+
+On every local lifecycle operation, including disabled/missing/invalid credentials and prolonged outages, provider payload at its explicit expiry or 30 days after its refresh is deleted. Missing freshness timestamps fail closed. Deletion covers selected video IDs, selection evidence JSON, title, channel, publication date, Made-for-Kids designation, regional arrays, validation/freshness timestamps, uploads playlist ID, and page token. Metadata-only malformed/legacy rows are included, not just rows with a video ID.
+
+Only permitted non-provider decisions remain: ownership, selected-decision time, suppression/time, safe unavailability reason, authoritative ESPN/MLB completion/identity, fixed launch cohort/progress, deadlines, quota and backoff. A manual choice may thus remain owned/unavailable without an expired video identifier. An operator must validate/attach or replace fresh metadata deliberately to restore it. Temporary-failure preservation does not waive deletion. The normal one-minute maintenance cadence is best effort while the application is running; a stopped/offline application deletes overdue payload before any resumed provider work.
+
+## Verification surface
+
+`HighlightsLifecycleTests` uses the real entry point/DI, `IsolatedPostgreSql` with Ryuk enabled, fake supported HTTP, and controlled `TimeProvider` including real hosted-service timers (`Microsoft.Extensions.TimeProvider.Testing` 10.0.0, test-only). It observes public inspection/application/detail HTTP output and meaningful provider boundaries. It covers cadence, daily validation/retry spacing, original deadline, fixed launch snapshot/cohort/progress and inside/outside bounds, interruption/restart, conservative quota and Pacific rollover concurrency, cancellation, durable backoff, malformed responses, large shared batches, disabled retention, exact freshness boundary, optional page failure isolation, and actual additive SQL/reapplication. Existing application tests retain identity/ownership/concurrent correction safeguards. No live YouTube, production database, new credential, browser-accessible test host, or rollout is used.

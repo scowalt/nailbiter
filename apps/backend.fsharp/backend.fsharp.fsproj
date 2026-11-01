@@ -1,0 +1,95 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Interop.fs" />
+    <Compile Include="HttpHelpers.fs" />
+    <Compile Include="OddsConverter.fs" />
+    <Compile Include="Services/ExcitementScore.fs" />
+    <Compile Include="Rendering/FormatHelpers.fs" />
+    <Compile Include="Rendering/TeamColors.fs" />
+    <Compile Include="Rendering/Logos.fs" />
+    <Compile Include="Rendering/LeagueConfig.fs" />
+    <Compile Include="Rendering/SseBroadcaster.fs" />
+    <Compile Include="Rendering/Layout.fs" />
+    <Compile Include="Rendering/DataTypes.fs" />
+    <Compile Include="Services/QualificationQuotePolicy.fs" />
+    <Compile Include="Services/NhlQualificationRoster.fs" />
+    <Compile Include="Services/PlayoffRatingPolicy.fs" />
+    <Compile Include="Rendering/PlayoffBracketRenderer.fs" />
+    <Compile Include="Rendering/ProbabilityBar.fs" />
+    <Compile Include="Rendering/SseFragmentRenderer.fs" />
+    <Compile Include="Rendering/WorldCupRenderer.fs" />
+    <Compile Include="Rendering/HomePageRenderer.fs" />
+    <Compile Include="Rendering/LeaguePageRenderer.fs" />
+    <Compile Include="Rendering/GameDetailRenderer.fs" />
+    <Compile Include="Rendering/F1CalendarRenderer.fs" />
+    <Compile Include="Rendering/F1RaceDetailRenderer.fs" />
+    <Compile Include="Rendering/NascarCalendarRenderer.fs" />
+    <Compile Include="Rendering/NascarRaceDetailRenderer.fs" />
+    <Compile Include="Rendering/IndyCarCalendarRenderer.fs" />
+    <Compile Include="Rendering/IndyCarRaceDetailRenderer.fs" />
+    <Compile Include="Models/EspnModels.fs" />
+    <Compile Include="Models/EspnPowerIndexModels.fs" />
+    <Compile Include="Models/EspnStandingsModels.fs" />
+    <Compile Include="Models/EspnNascarModels.fs" />
+    <Compile Include="Models/KalshiModels.fs" />
+    <Compile Include="Models/OpenF1Models.fs" />
+    <Compile Include="Services/EspnHttp.fs" />
+    <Compile Include="Services/NascarLiveFeedService.fs" />
+    <Compile Include="Services/PlayoffStatusTeamMappings.fs" />
+    <Compile Include="Services/TeamDivisionMappings.fs" />
+    <Compile Include="Services/BackfillOptions.fs" />
+    <Compile Include="Services/NflRatingPolicy.fs" />
+    <Compile Include="Services/OpenF1Service.fs" />
+    <Compile Include="Services/EspnNascarService.fs" />
+    <Compile Include="Services/EspnIndyCarService.fs" />
+    <Compile Include="Services/EspnF1Service.fs" />
+    <Compile Include="Services/KalshiMlbSchedule.fs" />
+    <Compile Include="Services/KalshiOddsService.fs" />
+    <Compile Include="Services/KalshiNascarOddsService.fs" />
+    <Compile Include="Services/KalshiF1OddsService.fs" />
+    <Compile Include="Services/EspnPowerIndexService.fs" />
+    <Compile Include="Services/EspnStandingsService.fs" />
+    <Compile Include="Services/PowerRankingsGuruService.fs" />
+    <Compile Include="Services/MoneyPuckRefreshGate.fs" />
+    <Compile Include="Services/MoneyPuckHttpClient.fs" />
+    <Compile Include="Services/MoneyPuckQualificationCollector.fs" />
+    <Compile Include="Services/MoneyPuckService.fs" />
+    <Compile Include="Services/PlayoffStatusService.fs" />
+    <Compile Include="Services/KalshiPlayoffRatingsService.fs" />
+    <Compile Include="Services/HypeScoreService.fs" />
+    <Compile Include="Services/GameDataService.fs" />
+    <Compile Include="Services/PlayoffSeriesCollector.fs" />
+    <Compile Include="Services/EspnOddsService.fs" />
+    <Compile Include="Services/PregameOddsService.fs" />
+    <Compile Include="Services/F1DataService.fs" />
+    <Compile Include="Services/F1LiveDataService.fs" />
+    <Compile Include="Services/NascarDataService.fs" />
+    <Compile Include="Services/NascarLiveDataService.fs" />
+    <Compile Include="Services/IndyCarDataService.fs" />
+    <Compile Include="Services/IndyCarLiveDataService.fs" />
+    <Compile Include="Services/RetrospectiveEloService.fs" />
+    <Compile Include="Services/NflBackfillService.fs" />
+    <Compile Include="Services/OddsScrapeBackgroundService.fs" />
+    <Compile Include="Services/RatingsRefreshBackgroundService.fs" />
+    <Compile Include="Services/KalshiPlayoffRefreshBackgroundService.fs" />
+    <Compile Include="Services/NascarBackgroundService.fs" />
+    <Compile Include="Services/IndyCarBackgroundService.fs" />
+    <Compile Include="Services/F1BackgroundService.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AngleSharp" Version="1.8.2" />
+    <PackageReference Include="Falco.Markup" Version="1.4.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../backend.shared/backend.shared.csproj" />
+  </ItemGroup>
+
+</Project>

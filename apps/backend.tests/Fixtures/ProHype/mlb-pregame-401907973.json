@@ -1,0 +1,640 @@
+{
+  "synthetic": true,
+  "board": {
+    "synthetic": true,
+    "url": "https://site.web.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates=20261001&limit=1000",
+    "body": {
+      "synthetic": true,
+      "events": [
+        {
+          "id": "401907973",
+          "name": "PHI at ATL synthetic scenario",
+          "shortName": "PHI @ ATL",
+          "date": "2026-10-02T00:00:00Z",
+          "season": {
+            "year": 2026,
+            "type": 3
+          },
+          "seasonType": {
+            "type": 3
+          },
+          "week": {
+            "number": 6
+          },
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 1,
+            "displayClock": "0:00"
+          },
+          "competitions": [
+            {
+              "id": "401907973",
+              "date": "2026-10-02T00:00:00Z",
+              "status": {
+                "type": {
+                  "name": "STATUS_SCHEDULED",
+                  "state": "pre",
+                  "completed": false
+                },
+                "period": 1,
+                "displayClock": "0:00"
+              },
+              "competitors": [
+                {
+                  "id": "15",
+                  "homeAway": "home",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "15",
+                    "abbreviation": "ATL",
+                    "displayName": "Synthetic ATL",
+                    "name": "ATL"
+                  }
+                },
+                {
+                  "id": "22",
+                  "homeAway": "away",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "22",
+                    "abbreviation": "PHI",
+                    "displayName": "Synthetic PHI",
+                    "name": "PHI"
+                  }
+                }
+              ],
+              "notes": [
+                {
+                  "headline": "NLWC - Game 3"
+                }
+              ],
+              "series": {
+                "type": "playoff",
+                "completed": false,
+                "totalCompetitions": 3,
+                "competitors": [
+                  {
+                    "id": "15",
+                    "wins": 1
+                  },
+                  {
+                    "id": "22",
+                    "wins": 1
+                  }
+                ]
+              },
+              "odds": [
+                {
+                  "moneyline": {
+                    "home": {
+                      "close": {
+                        "odds": "-120"
+                      }
+                    },
+                    "away": {
+                      "close": {
+                        "odds": "+110"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "schedules": [
+    {
+      "synthetic": true,
+      "url": "https://site.web.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/15/schedule?season=2026&seasontype=3",
+      "body": {
+        "status": "success",
+        "season": {
+          "year": 2026,
+          "type": 3
+        },
+        "timestamp": "2026-10-01T19:14:00Z",
+        "team": {
+          "id": "15",
+          "abbreviation": "ATL"
+        },
+        "events": [
+          {
+            "id": "401907965",
+            "name": "PHI at ATL synthetic scenario",
+            "shortName": "PHI @ ATL",
+            "date": "2026-09-29T20:00:00Z",
+            "season": {
+              "year": 2026,
+              "type": 3
+            },
+            "seasonType": {
+              "type": 3
+            },
+            "week": {
+              "number": 6
+            },
+            "status": {
+              "type": {
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true
+              },
+              "period": 9,
+              "displayClock": "0:00"
+            },
+            "competitions": [
+              {
+                "id": "401907965",
+                "date": "2026-09-29T20:00:00Z",
+                "status": {
+                  "type": {
+                    "name": "STATUS_FINAL",
+                    "state": "post",
+                    "completed": true
+                  },
+                  "period": 9,
+                  "displayClock": "0:00"
+                },
+                "competitors": [
+                  {
+                    "id": "15",
+                    "homeAway": "home",
+                    "score": "3",
+                    "winner": true,
+                    "team": {
+                      "id": "15",
+                      "abbreviation": "ATL",
+                      "displayName": "Synthetic ATL",
+                      "name": "ATL"
+                    }
+                  },
+                  {
+                    "id": "22",
+                    "homeAway": "away",
+                    "score": "1",
+                    "winner": false,
+                    "team": {
+                      "id": "22",
+                      "abbreviation": "PHI",
+                      "displayName": "Synthetic PHI",
+                      "name": "PHI"
+                    }
+                  }
+                ],
+                "notes": [
+                  {
+                    "headline": "NLWC - Game 1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "401907972",
+            "name": "PHI at ATL synthetic scenario",
+            "shortName": "PHI @ ATL",
+            "date": "2026-09-30T20:00:00Z",
+            "season": {
+              "year": 2026,
+              "type": 3
+            },
+            "seasonType": {
+              "type": 3
+            },
+            "week": {
+              "number": 6
+            },
+            "status": {
+              "type": {
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true
+              },
+              "period": 9,
+              "displayClock": "0:00"
+            },
+            "competitions": [
+              {
+                "id": "401907972",
+                "date": "2026-09-30T20:00:00Z",
+                "status": {
+                  "type": {
+                    "name": "STATUS_FINAL",
+                    "state": "post",
+                    "completed": true
+                  },
+                  "period": 9,
+                  "displayClock": "0:00"
+                },
+                "competitors": [
+                  {
+                    "id": "15",
+                    "homeAway": "home",
+                    "score": "1",
+                    "winner": false,
+                    "team": {
+                      "id": "15",
+                      "abbreviation": "ATL",
+                      "displayName": "Synthetic ATL",
+                      "name": "ATL"
+                    }
+                  },
+                  {
+                    "id": "22",
+                    "homeAway": "away",
+                    "score": "3",
+                    "winner": true,
+                    "team": {
+                      "id": "22",
+                      "abbreviation": "PHI",
+                      "displayName": "Synthetic PHI",
+                      "name": "PHI"
+                    }
+                  }
+                ],
+                "notes": [
+                  {
+                    "headline": "NLWC - Game 2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "401907973",
+            "name": "PHI at ATL synthetic scenario",
+            "shortName": "PHI @ ATL",
+            "date": "2026-10-02T00:00:00Z",
+            "season": {
+              "year": 2026,
+              "type": 3
+            },
+            "seasonType": {
+              "type": 3
+            },
+            "week": {
+              "number": 6
+            },
+            "status": {
+              "type": {
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false
+              },
+              "period": 1,
+              "displayClock": "0:00"
+            },
+            "competitions": [
+              {
+                "id": "401907973",
+                "date": "2026-10-02T00:00:00Z",
+                "status": {
+                  "type": {
+                    "name": "STATUS_SCHEDULED",
+                    "state": "pre",
+                    "completed": false
+                  },
+                  "period": 1,
+                  "displayClock": "0:00"
+                },
+                "competitors": [
+                  {
+                    "id": "15",
+                    "homeAway": "home",
+                    "score": "0",
+                    "winner": false,
+                    "team": {
+                      "id": "15",
+                      "abbreviation": "ATL",
+                      "displayName": "Synthetic ATL",
+                      "name": "ATL"
+                    }
+                  },
+                  {
+                    "id": "22",
+                    "homeAway": "away",
+                    "score": "0",
+                    "winner": false,
+                    "team": {
+                      "id": "22",
+                      "abbreviation": "PHI",
+                      "displayName": "Synthetic PHI",
+                      "name": "PHI"
+                    }
+                  }
+                ],
+                "notes": [
+                  {
+                    "headline": "NLWC - Game 3"
+                  }
+                ],
+                "series": {
+                  "type": "playoff",
+                  "completed": false,
+                  "totalCompetitions": 3,
+                  "competitors": [
+                    {
+                      "id": "15",
+                      "wins": 1
+                    },
+                    {
+                      "id": "22",
+                      "wins": 1
+                    }
+                  ]
+                },
+                "odds": [
+                  {
+                    "moneyline": {
+                      "home": {
+                        "close": {
+                          "odds": "-120"
+                        }
+                      },
+                      "away": {
+                        "close": {
+                          "odds": "+110"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "synthetic": true,
+      "url": "https://site.web.api.espn.com/apis/site/v2/sports/baseball/mlb/teams/22/schedule?season=2026&seasontype=3",
+      "body": {
+        "status": "success",
+        "season": {
+          "year": 2026,
+          "type": 3
+        },
+        "timestamp": "2026-10-01T19:14:00Z",
+        "team": {
+          "id": "22",
+          "abbreviation": "PHI"
+        },
+        "events": [
+          {
+            "id": "401907965",
+            "name": "PHI at ATL synthetic scenario",
+            "shortName": "PHI @ ATL",
+            "date": "2026-09-29T20:00:00Z",
+            "season": {
+              "year": 2026,
+              "type": 3
+            },
+            "seasonType": {
+              "type": 3
+            },
+            "week": {
+              "number": 6
+            },
+            "status": {
+              "type": {
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true
+              },
+              "period": 9,
+              "displayClock": "0:00"
+            },
+            "competitions": [
+              {
+                "id": "401907965",
+                "date": "2026-09-29T20:00:00Z",
+                "status": {
+                  "type": {
+                    "name": "STATUS_FINAL",
+                    "state": "post",
+                    "completed": true
+                  },
+                  "period": 9,
+                  "displayClock": "0:00"
+                },
+                "competitors": [
+                  {
+                    "id": "15",
+                    "homeAway": "home",
+                    "score": "3",
+                    "winner": true,
+                    "team": {
+                      "id": "15",
+                      "abbreviation": "ATL",
+                      "displayName": "Synthetic ATL",
+                      "name": "ATL"
+                    }
+                  },
+                  {
+                    "id": "22",
+                    "homeAway": "away",
+                    "score": "1",
+                    "winner": false,
+                    "team": {
+                      "id": "22",
+                      "abbreviation": "PHI",
+                      "displayName": "Synthetic PHI",
+                      "name": "PHI"
+                    }
+                  }
+                ],
+                "notes": [
+                  {
+                    "headline": "NLWC - Game 1"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "401907972",
+            "name": "PHI at ATL synthetic scenario",
+            "shortName": "PHI @ ATL",
+            "date": "2026-09-30T20:00:00Z",
+            "season": {
+              "year": 2026,
+              "type": 3
+            },
+            "seasonType": {
+              "type": 3
+            },
+            "week": {
+              "number": 6
+            },
+            "status": {
+              "type": {
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": true
+              },
+              "period": 9,
+              "displayClock": "0:00"
+            },
+            "competitions": [
+              {
+                "id": "401907972",
+                "date": "2026-09-30T20:00:00Z",
+                "status": {
+                  "type": {
+                    "name": "STATUS_FINAL",
+                    "state": "post",
+                    "completed": true
+                  },
+                  "period": 9,
+                  "displayClock": "0:00"
+                },
+                "competitors": [
+                  {
+                    "id": "15",
+                    "homeAway": "home",
+                    "score": "1",
+                    "winner": false,
+                    "team": {
+                      "id": "15",
+                      "abbreviation": "ATL",
+                      "displayName": "Synthetic ATL",
+                      "name": "ATL"
+                    }
+                  },
+                  {
+                    "id": "22",
+                    "homeAway": "away",
+                    "score": "3",
+                    "winner": true,
+                    "team": {
+                      "id": "22",
+                      "abbreviation": "PHI",
+                      "displayName": "Synthetic PHI",
+                      "name": "PHI"
+                    }
+                  }
+                ],
+                "notes": [
+                  {
+                    "headline": "NLWC - Game 2"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "401907973",
+            "name": "PHI at ATL synthetic scenario",
+            "shortName": "PHI @ ATL",
+            "date": "2026-10-02T00:00:00Z",
+            "season": {
+              "year": 2026,
+              "type": 3
+            },
+            "seasonType": {
+              "type": 3
+            },
+            "week": {
+              "number": 6
+            },
+            "status": {
+              "type": {
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": false
+              },
+              "period": 1,
+              "displayClock": "0:00"
+            },
+            "competitions": [
+              {
+                "id": "401907973",
+                "date": "2026-10-02T00:00:00Z",
+                "status": {
+                  "type": {
+                    "name": "STATUS_SCHEDULED",
+                    "state": "pre",
+                    "completed": false
+                  },
+                  "period": 1,
+                  "displayClock": "0:00"
+                },
+                "competitors": [
+                  {
+                    "id": "15",
+                    "homeAway": "home",
+                    "score": "0",
+                    "winner": false,
+                    "team": {
+                      "id": "15",
+                      "abbreviation": "ATL",
+                      "displayName": "Synthetic ATL",
+                      "name": "ATL"
+                    }
+                  },
+                  {
+                    "id": "22",
+                    "homeAway": "away",
+                    "score": "0",
+                    "winner": false,
+                    "team": {
+                      "id": "22",
+                      "abbreviation": "PHI",
+                      "displayName": "Synthetic PHI",
+                      "name": "PHI"
+                    }
+                  }
+                ],
+                "notes": [
+                  {
+                    "headline": "NLWC - Game 3"
+                  }
+                ],
+                "series": {
+                  "type": "playoff",
+                  "completed": false,
+                  "totalCompetitions": 3,
+                  "competitors": [
+                    {
+                      "id": "15",
+                      "wins": 1
+                    },
+                    {
+                      "id": "22",
+                      "wins": 1
+                    }
+                  ]
+                },
+                "odds": [
+                  {
+                    "moneyline": {
+                      "home": {
+                        "close": {
+                          "odds": "-120"
+                        }
+                      },
+                      "away": {
+                        "close": {
+                          "odds": "+110"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

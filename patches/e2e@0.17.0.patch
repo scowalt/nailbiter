@@ -1,0 +1,26 @@
+diff --git a/dist/agent/model/sdk.d.ts b/dist/agent/model/sdk.d.ts
+--- a/dist/agent/model/sdk.d.ts
++++ b/dist/agent/model/sdk.d.ts
+@@ -20,7 +20,8 @@ import { type ModelAdapter } from './adapter.ts';
+  * attempt count — bounds the whole chain. The act loop sends the same count
+  * and the same kind of timeout, so both tiers fail a flaky provider alike.
+  */
+-export declare const TRANSPORT_RETRIES = 5;
++/*! Modified for Nailbiter: transport retries disabled; upstream Apache-2.0 and NOTICE retained. */
++export declare const TRANSPORT_RETRIES = 0;
+ /**
+  * Creates the adapter for one resolved model, or fails with
+  * MODEL_UNAVAILABLE naming `agentName`, the agents entry that holds none.
+diff --git a/dist/agent/model/sdk.js b/dist/agent/model/sdk.js
+--- a/dist/agent/model/sdk.js
++++ b/dist/agent/model/sdk.js
+@@ -27,7 +27,8 @@ import { imageTokenUpperBound, ModelOutputInvalidError, tokenUpperBound, } from
+  * attempt count — bounds the whole chain. The act loop sends the same count
+  * and the same kind of timeout, so both tiers fail a flaky provider alike.
+  */
+-export const TRANSPORT_RETRIES = 5;
++/*! Modified for Nailbiter: transport retries disabled; upstream Apache-2.0 and NOTICE retained. */
++export const TRANSPORT_RETRIES = 0;
+ /**
+  * Creates the adapter for one resolved model, or fails with
+  * MODEL_UNAVAILABLE naming `agentName`, the agents entry that holds none.

@@ -1,0 +1,6 @@
+[tools]
+bun = "1.4.2"
+"asdf:mise-plugins/mise-dotnet-core" = "10.0.401"
+gitleaks = "8.30.1"
+python = "3.14.8"
+uv = "0.11.32"

@@ -1,0 +1,17 @@
+{
+  "name": "nailbiter-www",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "deploy": "bun run build && wrangler deploy"
+  },
+  "dependencies": {
+    "astro": "^6.0.0"
+  },
+  "devDependencies": {
+    "wrangler": "4"
+  }
+}

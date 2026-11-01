@@ -1,0 +1,5574 @@
+{
+  "status": "success",
+  "season": {
+    "year": 2027,
+    "type": 2
+  },
+  "timestamp": "2026-09-30T18:55:00Z",
+  "team": {
+    "id": "22",
+    "abbreviation": "PHI"
+  },
+  "events": [
+    {
+      "id": "401891821",
+      "name": "PIT at PHI synthetic scenario",
+      "shortName": "PIT @ PHI",
+      "date": "2026-09-30T23:30:00Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "401891821",
+          "date": "2026-09-30T23:30:00Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "23",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "23",
+                "abbreviation": "PIT",
+                "displayName": "Synthetic PIT",
+                "name": "PIT"
+              }
+            }
+          ],
+          "odds": [
+            {
+              "moneyline": {
+                "home": {
+                  "close": {
+                    "odds": "-150"
+                  }
+                },
+                "away": {
+                  "close": {
+                    "odds": "+150"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-0",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-01T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-0",
+          "date": "2026-10-01T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-1",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-02T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-1",
+          "date": "2026-10-02T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-2",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-03T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-2",
+          "date": "2026-10-03T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-3",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-04T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-3",
+          "date": "2026-10-04T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-4",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-05T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-4",
+          "date": "2026-10-05T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-5",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-06T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-5",
+          "date": "2026-10-06T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-6",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-07T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-6",
+          "date": "2026-10-07T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-7",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-08T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-7",
+          "date": "2026-10-08T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-8",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-09T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-8",
+          "date": "2026-10-09T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-9",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-10T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-9",
+          "date": "2026-10-10T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-10",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-11T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-10",
+          "date": "2026-10-11T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-11",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-12T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-11",
+          "date": "2026-10-12T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-12",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-13T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-12",
+          "date": "2026-10-13T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-13",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-14T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-13",
+          "date": "2026-10-14T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-14",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-15T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-14",
+          "date": "2026-10-15T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-15",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-16T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-15",
+          "date": "2026-10-16T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-16",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-17T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-16",
+          "date": "2026-10-17T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-17",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-18T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-17",
+          "date": "2026-10-18T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-18",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-19T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-18",
+          "date": "2026-10-19T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-19",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-20T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-19",
+          "date": "2026-10-20T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-20",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-21T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-20",
+          "date": "2026-10-21T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-21",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-22T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-21",
+          "date": "2026-10-22T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-22",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-23T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-22",
+          "date": "2026-10-23T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-23",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-24T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-23",
+          "date": "2026-10-24T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-24",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-25T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-24",
+          "date": "2026-10-25T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-25",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-26T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-25",
+          "date": "2026-10-26T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-26",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-27T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-26",
+          "date": "2026-10-27T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-27",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-28T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-27",
+          "date": "2026-10-28T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-28",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-29T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-28",
+          "date": "2026-10-29T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-29",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-30T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-29",
+          "date": "2026-10-30T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-30",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-10-31T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-30",
+          "date": "2026-10-31T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-31",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-01T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-31",
+          "date": "2026-11-01T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-32",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-02T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-32",
+          "date": "2026-11-02T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-33",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-03T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-33",
+          "date": "2026-11-03T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-34",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-04T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-34",
+          "date": "2026-11-04T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-35",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-05T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-35",
+          "date": "2026-11-05T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-36",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-06T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-36",
+          "date": "2026-11-06T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-37",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-07T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-37",
+          "date": "2026-11-07T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-38",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-08T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-38",
+          "date": "2026-11-08T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-39",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-09T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-39",
+          "date": "2026-11-09T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-40",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-10T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-40",
+          "date": "2026-11-10T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-41",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-11T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-41",
+          "date": "2026-11-11T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-42",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-12T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-42",
+          "date": "2026-11-12T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-43",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-13T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-43",
+          "date": "2026-11-13T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-44",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-14T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-44",
+          "date": "2026-11-14T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-45",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-15T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-45",
+          "date": "2026-11-15T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-46",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-16T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-46",
+          "date": "2026-11-16T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-47",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-17T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-47",
+          "date": "2026-11-17T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-48",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-18T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-48",
+          "date": "2026-11-18T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-49",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-19T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-49",
+          "date": "2026-11-19T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-50",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-20T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-50",
+          "date": "2026-11-20T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-51",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-21T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-51",
+          "date": "2026-11-21T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-52",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-22T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-52",
+          "date": "2026-11-22T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-53",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-23T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-53",
+          "date": "2026-11-23T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-54",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-24T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-54",
+          "date": "2026-11-24T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-55",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-25T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-55",
+          "date": "2026-11-25T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-56",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-26T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-56",
+          "date": "2026-11-26T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-57",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-27T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-57",
+          "date": "2026-11-27T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-58",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-28T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-58",
+          "date": "2026-11-28T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-59",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-29T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-59",
+          "date": "2026-11-29T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-60",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-11-30T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-60",
+          "date": "2026-11-30T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-61",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-01T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-61",
+          "date": "2026-12-01T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-62",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-02T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-62",
+          "date": "2026-12-02T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-63",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-03T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-63",
+          "date": "2026-12-03T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-64",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-04T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-64",
+          "date": "2026-12-04T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-65",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-05T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-65",
+          "date": "2026-12-05T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-66",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-06T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-66",
+          "date": "2026-12-06T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-67",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-07T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-67",
+          "date": "2026-12-07T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-68",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-08T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-68",
+          "date": "2026-12-08T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-69",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-09T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-69",
+          "date": "2026-12-09T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-70",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-10T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-70",
+          "date": "2026-12-10T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-71",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-11T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-71",
+          "date": "2026-12-11T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-72",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-12T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-72",
+          "date": "2026-12-12T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-73",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-13T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-73",
+          "date": "2026-12-13T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-74",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-14T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-74",
+          "date": "2026-12-14T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-75",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-15T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-75",
+          "date": "2026-12-15T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-76",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-16T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-76",
+          "date": "2026-12-16T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-77",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-17T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-77",
+          "date": "2026-12-17T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-78",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-18T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-78",
+          "date": "2026-12-18T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-79",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-19T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-79",
+          "date": "2026-12-19T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-80",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-20T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-80",
+          "date": "2026-12-20T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-81",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-21T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-81",
+          "date": "2026-12-21T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "synthetic-phi-82",
+      "name": "BOS at PHI synthetic scenario",
+      "shortName": "BOS @ PHI",
+      "date": "2026-12-22T23:00:00.0000000Z",
+      "season": {
+        "year": 2027,
+        "type": 2
+      },
+      "seasonType": {
+        "type": 2
+      },
+      "week": {
+        "number": 6
+      },
+      "status": {
+        "type": {
+          "name": "STATUS_SCHEDULED",
+          "state": "pre",
+          "completed": false
+        },
+        "period": 0,
+        "displayClock": "0:00"
+      },
+      "competitions": [
+        {
+          "id": "synthetic-phi-82",
+          "date": "2026-12-22T23:00:00.0000000Z",
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitors": [
+            {
+              "id": "22",
+              "homeAway": "home",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "22",
+                "abbreviation": "PHI",
+                "displayName": "Synthetic PHI",
+                "name": "PHI"
+              }
+            },
+            {
+              "id": "102",
+              "homeAway": "away",
+              "score": "0",
+              "winner": false,
+              "team": {
+                "id": "102",
+                "abbreviation": "BOS",
+                "displayName": "Synthetic BOS",
+                "name": "BOS"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

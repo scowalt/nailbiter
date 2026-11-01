@@ -1,0 +1,112 @@
+{
+  "synthetic": true,
+  "board": {
+    "synthetic": true,
+    "url": "https://site.web.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates=20261011&limit=1000",
+    "body": {
+      "synthetic": true,
+      "events": [
+        {
+          "id": "401872985",
+          "name": "IND at PIT synthetic scenario",
+          "shortName": "IND @ PIT",
+          "date": "2026-10-11T17:00:00Z",
+          "season": {
+            "year": 2026,
+            "type": 2
+          },
+          "seasonType": {
+            "type": 2
+          },
+          "week": {
+            "number": 6
+          },
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitions": [
+            {
+              "id": "401872985",
+              "date": "2026-10-11T17:00:00Z",
+              "status": {
+                "type": {
+                  "name": "STATUS_SCHEDULED",
+                  "state": "pre",
+                  "completed": false
+                },
+                "period": 0,
+                "displayClock": "0:00"
+              },
+              "competitors": [
+                {
+                  "id": "23",
+                  "homeAway": "home",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "23",
+                    "abbreviation": "PIT",
+                    "displayName": "Synthetic PIT",
+                    "name": "PIT"
+                  }
+                },
+                {
+                  "id": "11",
+                  "homeAway": "away",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "11",
+                    "abbreviation": "IND",
+                    "displayName": "Synthetic IND",
+                    "name": "IND"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "kalshi": {
+    "synthetic": true,
+    "body": {
+      "markets": [
+        {
+          "ticker": "KXNFLGAME-26OCT11INDPIT-IND",
+          "event_ticker": "KXNFLGAME-26OCT11INDPIT",
+          "status": "active",
+          "result": "",
+          "market_type": "binary",
+          "notional_value_dollars": "1.0000",
+          "close_time": "2027-06-01T00:00:00Z",
+          "yes_bid_dollars": "0.4000",
+          "yes_ask_dollars": "0.4400",
+          "yes_bid_size_fp": "10.00",
+          "yes_ask_size_fp": "10.00"
+        },
+        {
+          "ticker": "KXNFLGAME-26OCT11INDPIT-PIT",
+          "event_ticker": "KXNFLGAME-26OCT11INDPIT",
+          "status": "active",
+          "result": "",
+          "market_type": "binary",
+          "notional_value_dollars": "1.0000",
+          "close_time": "2027-06-01T00:00:00Z",
+          "yes_bid_dollars": "0.5900",
+          "yes_ask_dollars": "0.6300",
+          "yes_bid_size_fp": "10.00",
+          "yes_ask_size_fp": "10.00"
+        }
+      ],
+      "cursor": ""
+    }
+  }
+}

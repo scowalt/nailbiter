@@ -1,0 +1,92 @@
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: excitement-score-caddy
+    labels:
+      logging: "true"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  timescaledb:
+    image: timescale/timescaledb:2.30.1-pg16
+    container_name: excitement-score-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: excitement_score
+    command: ["-c", "max_connections=50"]
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: ghcr.io/scowalt/nailbiter-app/backend:latest
+    container_name: excitement-score-backend
+    labels:
+      logging: "true"
+    ports:
+      - "127.0.0.1:5093:5093"   
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=timescaledb;Database=excitement_score;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres};Maximum Pool Size=15;Options=-c statement_timeout=30000"
+      EnableScraper: "true"
+      ASPNETCORE_ENVIRONMENT: "Production"
+      Highlights__YouTube__Enabled: "${HIGHLIGHTS_YOUTUBE_ENABLED:-false}"
+      Highlights__YouTube__ApiKey: "${HIGHLIGHTS_YOUTUBE_API_KEY:-}"
+      Highlights__YouTube__DailyUnitLimit: "${HIGHLIGHTS_YOUTUBE_DAILY_UNIT_LIMIT:-1000}"
+      Highlights__YouTube__MaxUploadPages: "${HIGHLIGHTS_YOUTUBE_MAX_UPLOAD_PAGES:-2}"
+      Highlights__Worker__Enabled: "${HIGHLIGHTS_WORKER_ENABLED:-false}"
+      Highlights__Worker__MaxGamesPerCycle: "${HIGHLIGHTS_WORKER_MAX_GAMES_PER_CYCLE:-100}"
+      Highlights__Worker__MaxCatchupPages: "${HIGHLIGHTS_WORKER_MAX_CATCHUP_PAGES:-16}"
+      Highlights__Worker__AuthorizeLaunchCatchup: "${HIGHLIGHTS_WORKER_AUTHORIZE_LAUNCH_CATCHUP:-false}"
+      Sentry__Dsn: "https://bc50d7a0a05b46598038392c2e2c88c6@glitchtip.scowalt.com/6"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.20.0
+    container_name: excitement-score-alloy
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    environment:
+      LOKI_URL: ${LOKI_URL}
+      LOKI_USERNAME: ${LOKI_USERNAME}
+      GRAFANA_CLOUD_API_KEY: ${GRAFANA_CLOUD_API_KEY}
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    ports:
+      - "127.0.0.1:12345:12345"   
+    restart: unless-stopped
+
+volumes:
+  timescaledb_data:
+    external: true
+    name: excitement-score_timescaledb_data
+  caddy_data:
+    external: true
+    name: excitement-score_caddy_data
+  caddy_config:
+    external: true
+    name: excitement-score_caddy_config
+  alloy_data:
+    external: true
+    name: excitement-score_alloy_data
