@@ -86,7 +86,7 @@ public static class SseRoutes
         {
             await foreach (var update in reader.ReadAllAsync(ct))
             {
-                var html = RenderFragments(update, isDetailPage);
+                var html = RenderFragments(update, isDetailPage, topic == "live");
                 if (!string.IsNullOrEmpty(html))
                     await datastar.PatchElementsAsync(html, cancellationToken: ct);
             }
@@ -100,7 +100,7 @@ public static class SseRoutes
         }
     }
 
-    private static string RenderFragments(GameUpdate update, bool isDetailPage)
+    private static string RenderFragments(GameUpdate update, bool isDetailPage, bool isHomePage)
     {
         var sport = update.Sport;
 
@@ -121,7 +121,9 @@ public static class SseRoutes
         }
         else
         {
-            return SseFragmentRenderer.renderGameCardFragments(update);
+            return isHomePage
+                ? SseFragmentRenderer.renderHomeGameCardFragments(update)
+                : SseFragmentRenderer.renderLeagueGameCardFragments(update);
         }
     }
 }

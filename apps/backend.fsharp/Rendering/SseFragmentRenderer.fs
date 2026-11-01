@@ -109,7 +109,7 @@ module SseFragmentRenderer =
                 ]
         ]
 
-    let renderGameCardFragments (update: GameUpdate) =
+    let private renderCardFragments (preserveTeamContext: bool) (suppressScheduledScores: bool) (update: GameUpdate) =
         let sport = update.Sport
         let isLive = update.Status = GameStatus.IN_PROGRESS
         let isFinal = update.Status = GameStatus.FINAL
@@ -134,23 +134,24 @@ module SseFragmentRenderer =
         let colors = TeamColors.forUpdate update
 
         let fragments = [
-            if sport = Sport.CFB then
+            if preserveTeamContext || sport = Sport.CFB then
                 for side, score in [ "away", awayScore; "home", homeScore ] do
                     Elem.span [ Attr.id $"{side}-score-{update.GameId}"; cls "text-lg font-semibold tabular-nums text-text-primary" ] [
                         match score with
-                        | Some value -> Text.raw $"{value}"
-                        | None -> ()
+                        | Some value when not suppressScheduledScores || update.Status <> GameStatus.SCHEDULED -> Text.raw $"{value}"
+                        | _ -> ()
                     ]
             else renderGameCardScores update.GameId awayAbbr homeAbbr awayScore homeScore awayLogoStr homeLogoStr
-            if sport <> Sport.CFB || isLive || isFinal then
+            if (not preserveTeamContext && sport <> Sport.CFB) || isLive || isFinal then
                 if sport = Sport.CFB && not excitementScore.HasValue then
                     Elem.div [ Attr.id $"excitement-{update.GameId}"; cls "text-xs text-text-muted" ] [ Text.raw "Excitement unavailable" ]
                 else renderGameCardExcitement update.GameId excitementScore isLive isFinal
-            if sport = Sport.CFB && not update.HomeWinProbability.HasValue then
-                Elem.div [ Attr.id $"probbar-{update.GameId}"; cls "text-xs text-text-muted" ] [
-                    if isLive then Text.raw "Live probability unavailable"
-                ]
-            else renderGameCardProbBar update.GameId homeWinProb homeAbbr awayAbbr colors isFinal
+            if not preserveTeamContext || update.Status <> GameStatus.SCHEDULED then
+                if sport = Sport.CFB && not update.HomeWinProbability.HasValue then
+                    Elem.div [ Attr.id $"probbar-{update.GameId}"; cls "text-xs text-text-muted" ] [
+                        if isLive then Text.raw "Live probability unavailable"
+                    ]
+                else renderGameCardProbBar update.GameId homeWinProb homeAbbr awayAbbr colors isFinal
             renderGameCardClock update.GameId period gameClock sportStr isLive
             renderGameCardStatus update.GameId update.Status statusLabel statusClass
         ]
@@ -158,6 +159,12 @@ module SseFragmentRenderer =
         fragments
         |> List.map XmlNodeRenderer.renderNode
         |> String.concat ""
+
+    let renderGameCardFragments (update: GameUpdate) = renderCardFragments false false update
+
+    let renderHomeGameCardFragments (update: GameUpdate) = renderCardFragments true true update
+
+    let renderLeagueGameCardFragments (update: GameUpdate) = renderCardFragments true false update
 
     let renderDetailAwayScore (awayScore: int option) =
         Elem.span [ cls "text-3xl font-bold tabular-nums text-text-primary"; Attr.id "detail-away-score" ] [

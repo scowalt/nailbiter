@@ -142,7 +142,11 @@ module GameDetailRenderer =
         let statusClass = if status.HasValue then FormatHelpers.getStatusClass status.Value else ""
 
         [
-            Elem.div [ cls "max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8"; Attr.create "data-live-terminal" (if isFinal then "true" else "false") ] [
+            Elem.div [
+                cls "max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+                Attr.create "data-live-terminal" (if isFinal then "true" else "false")
+                if not isFinal then Attr.create "data-init" $"@get('/sse/game/{game.Id}', {{requestCancellation: 'cleanup'}})"
+            ] [
                 Elem.div [ cls "flex items-center justify-between mb-6" ] [
                     Elem.div [ cls "flex items-center gap-2" ] [
                         match sport with

@@ -43,6 +43,232 @@
   --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.4), 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
+.home-schedule {
+  --home-muted: #a1a1aa;
+}
+
+.home-section + .home-section {
+  margin-top: 28px;
+}
+
+.home-game-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.home-game-item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.home-game-card {
+  flex: 1;
+  min-width: 0;
+  padding: 16px;
+  color: var(--color-text-primary);
+  background: #151518;
+  border-color: #303035;
+}
+
+.home-game-card:hover {
+  color: var(--color-text-primary);
+  background: #1a1a1e;
+  border-color: #52525b;
+}
+
+.home-game-card[data-status="in_progress"] {
+  border-color: var(--color-status-live);
+}
+
+.home-schedule a:focus-visible {
+  outline: 2px solid var(--color-accent-hover);
+  outline-offset: 4px;
+}
+
+.home-game-card .text-text-muted,
+.home-game-card [class*="text-text-muted/"],
+.home-game-item > p {
+  color: var(--home-muted);
+}
+
+.home-game-item > p a {
+  text-underline-offset: 3px;
+}
+
+.home-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.home-card-meta {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.home-card-league {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.home-card-league img {
+  width: 14px;
+  height: 14px;
+}
+
+.home-game-card[data-status="scheduled"] [id^="status-"] {
+  display: none;
+}
+
+.home-card-time,
+.home-metric-label {
+  color: var(--home-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.home-card-hype {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-metric-value {
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.home-game-card .text-hype-high {
+  color: #c084fc;
+}
+
+.home-game-card .text-hype-low,
+.home-game-card .text-excitement-low {
+  color: var(--color-text-secondary);
+}
+
+.home-game-card .text-status-final {
+  color: var(--home-muted);
+}
+
+.home-hype-unavailable {
+  color: var(--home-muted);
+}
+
+.home-game-card [id^="scores-"] {
+  display: grid;
+  gap: 12px;
+}
+
+.home-game-card [id^="scores-"] > div {
+  margin: 0;
+  min-width: 0;
+}
+
+.home-game-card [id^="scores-"] .font-medium {
+  font-size: 17px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.home-game-card [id^="scores-"] .text-xs {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.home-game-card [id^="scores-"] img {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.home-game-card [id^="home-score-"]:empty,
+.home-game-card [id^="away-score-"]:empty,
+.home-game-card [id^="probbar-"]:empty,
+.home-game-card [id^="clock-"]:empty {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .home-game-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .home-game-card {
+    padding: 18px;
+  }
+
+  .home-card-top {
+    margin-bottom: 18px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .home-game-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .home-section[data-single-game="true"] .home-game-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-section[data-single-game="true"] .home-game-card {
+    display: grid;
+    grid-template-columns: 140px minmax(0, 1fr) auto;
+    column-gap: 32px;
+    align-items: center;
+  }
+
+  .home-section[data-single-game="true"] .home-card-top {
+    display: contents;
+  }
+
+  .home-section[data-single-game="true"] .home-card-meta {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .home-section[data-single-game="true"] .home-card-hype,
+  .home-section[data-single-game="true"] .home-card-observed-metric {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .home-section[data-single-game="true"] .home-card-observed-metric {
+    border-top: 0;
+    padding-top: 0;
+    gap: 24px;
+  }
+
+  .home-section[data-single-game="true"] [id^="scores-"] {
+    grid-column: 2;
+    grid-row: 1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+  }
+
+  .home-section[data-single-game="true"] .home-card-context,
+  .home-section[data-single-game="true"] [id^="probbar-"],
+  .home-section[data-single-game="true"] [id^="clock-"] {
+    grid-column: 1 / -1;
+  }
+}
+
 @view-transition {
   navigation: auto;
 }

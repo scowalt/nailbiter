@@ -9,7 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const project = "apps/backend.browser-fixture/backend.browser-fixture.csproj";
 const dll = "apps/backend.browser-fixture/bin/Debug/net10.0/backend.browser-fixture.dll";
-const dotnet = ["exec", "dotnet-legacy@10.0.401", "--", "dotnet"];
+const dotnet = ["exec", "asdf:mise-plugins/mise-dotnet-core@10.0.401", "--", "dotnet"];
 
 function cleanEnvironment() {
 	return Object.fromEntries(
@@ -17,8 +17,8 @@ function cleanEnvironment() {
 	);
 }
 
-export async function startFixture({ handleSignals = true, highlights = false, series = false } = {}) {
-	if (highlights && series) throw new Error("Choose only one opt-in fixture supplement.");
+export async function startFixture({ handleSignals = true, highlights = false, groupedHome = false, series = false } = {}) {
+	if ([highlights, groupedHome, series].filter(Boolean).length > 1) throw new Error("Choose one opt-in fixture scenario.");
 	const env = cleanEnvironment();
 	const build = spawnSync("mise", [...dotnet, "build", project, "--nologo", "-v:q"], {
 		cwd: root, env, encoding: "utf8", timeout: 120_000,
@@ -26,7 +26,7 @@ export async function startFixture({ handleSignals = true, highlights = false, s
 	if (build.error || build.status !== 0) throw new Error(`Fixture build failed: ${build.error ?? build.stdout + build.stderr}`);
 	const directory = await mkdtemp(join(tmpdir(), "nailbiter-browser-lifecycle-"));
 	const manifestPath = join(directory, "manifest.json");
-	const child = spawn("portless", ["run", "--name", series ? "series-browser-fixture" : "nba-browser-fixture", "--tailscale", "mise", ...dotnet, dll, manifestPath, ...(highlights ? ["--highlights"] : series ? ["--series"] : [])], {
+	const child = spawn("portless", ["run", "--name", series ? "series-browser-fixture" : "nba-browser-fixture", "--tailscale", "mise", ...dotnet, dll, manifestPath, ...(highlights ? ["--highlights"] : groupedHome ? ["--grouped-home"] : series ? ["--series"] : [])], {
 		cwd: root, env, stdio: ["ignore", "pipe", "pipe"],
 	});
 	let output = "";
@@ -79,10 +79,10 @@ export async function startFixture({ handleSignals = true, highlights = false, s
 		}
 		console.log(listing.stdout.trim());
 		async function control(command) {
-			const supplement = manifest.series ?? manifest.highlights;
-			if (!supplement) throw new Error("Opt-in fixture controls are not enabled.");
+			const scenario = manifest.groupedHome ?? manifest.series ?? manifest.highlights;
+			if (!scenario) throw new Error("Opt-in fixture controls are not enabled.");
 			return new Promise((resolve, reject) => {
-				const socket = createConnection(supplement.controlPath);
+				const socket = createConnection(scenario.controlPath);
 				let response = "";
 				socket.setTimeout(30_000, () => socket.destroy(new Error("Owned fixture IPC timed out.")));
 				socket.on("error", reject);

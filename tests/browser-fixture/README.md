@@ -166,6 +166,16 @@ verified independently; normal private TLS and both endpoint checks remain requi
 See [feature operations](../../docs/operations/mlb-highlights-local.md) and the
 [parent acceptance matrix](../../docs/testing/mlb-highlights-acceptance.md).
 
+## Opt-in grouped-home scenario
+
+Implements the [canonical grouped-home specification](https://github.com/scowalt/nailbiter/issues/10).
+
+Use `startFixture({ groupedHome: true })`,
+`bun tests/browser-fixture/grouped-home-smoke.js`,
+`bun tests/browser-fixture/grouped-home-live.js` and
+`bun tests/browser-fixture/grouped-home-acceptance.js`. See the
+[grouped-home data matrix, Unix controls and acceptance coverage](grouped-home.md).
+Default NBA and MLB highlights scenarios remain unchanged.
 ## Opt-in playoff series footer supplement (#687)
 
 ```sh
@@ -203,8 +213,9 @@ client consumed `datastar-merge-fragments`, while the existing .NET server emitt
 `datastar-patch-elements`. The authorized prerequisite correction pins the official
 stable `v1.0.4/bundles/datastar.js` and replaces the three existing home/league/World
 Cup `data-on-load` initializers with stable `data-init`. `@get` is unchanged; the
-mobile menu is native onclick, and detail pages retain their native page-sync
-client. No SSE event, route or payload contract changes. See the official
+mobile menu is native onclick, and detail pages retain native page-sync plus
+the existing nonfinal game stream. Home/league/World Cup subscriptions use cleanup
+cancellation. No SSE event, route or payload contract changes. See the official
 [installation guide](https://data-star.dev/guide/getting_started),
 [attributes reference](https://data-star.dev/reference/attributes#data-init) and
 [SSE reference](https://data-star.dev/reference/sse_events#datastar-patch-elements).
@@ -215,18 +226,21 @@ snapshot/component/terminal lifecycle regression coverage.
 The script captures one 1440/390/320px desktop/phone batch to the required external
 artifact directory and writes a whitelist `report.json`, including cleanup evidence
 on failure. It checks no-JS initial HTML, Hype/Excitement, seeds and game-score
-preservation, text bounds, no horizontal overflow, sparkline placement, keyboard
-Tab/Enter whole-card navigation and exactly one unchanged standing after a real
-score/probability/Excitement patch. Read the screenshots against the pinned A
-reference; the runner does not claim automated visual similarity. Run at most one
-batched fix and confirmation round, not an open-ended screenshot loop.
+preservation for live/final games and scheduled score omission, text bounds, no
+horizontal overflow, sparkline placement, keyboard Tab/Enter whole-card navigation
+and exactly one unchanged standing after a real score/probability/Excitement patch.
+Series context is preserved inside the approved grouped-home layout, with one
+status-specific metric target per card. Screenshots are visual evidence, not an
+automated similarity oracle. Run at most one batched fix and confirmation round,
+not an open-ended screenshot loop.
 
-Independent `/sse/page-sync` whole-page polling is held in these browser contexts
-so inspection stays on initial server HTML and the patch-only check isolates the
-preapproved Datastar fragment seam. It is not page-sync/reconnect coverage. The
-existing score-block patch can remove seed subtext and individual score element IDs;
-the browser checks patched visible score rows without changing that pre-existing
-contract. The series/footer is outside that patch target.
+Independent `/sse/page-sync` whole-page polling is held for initial layout and
+patch-only checks to isolate the preapproved Datastar fragment seam. Home/league
+patches now retain team/seed rows and use stable scalar score targets; series
+context remains outside those targets. A separate real snapshot-enabled context
+asserts three successful grouped-page refreshes retain scheduled/live/final series
+context without new provider calls. This is not reconnect/failure coverage; use
+the grouped-home live suite for that matrix.
 
 Only the existing pinned Datastar module and ESPN team-logo static CDN assets are
 replayed from their real bytes fetched with curl and normal certificate validation;

@@ -52,6 +52,21 @@ module HomePageRenderer =
             Elem.div [ cls "text-xs text-text-secondary/70 mt-0.5" ] context
         ]
 
+    let private availableHype (game: Game) (hypeScores: IDictionary<string, Nullable<float>>) =
+        match hypeScores.TryGetValue(game.Id) with
+        | true, h when h.HasValue && Double.IsFinite h.Value -> h
+        | _ -> Nullable<float>()
+
+    let private homeSection (game: Game) hypeScores =
+        match game.Status with
+        | "in_progress" -> "live"
+        | "scheduled" ->
+            let hype = availableHype game hypeScores
+            if hype.HasValue && hype.Value >= 70.0 then "best"
+            elif hype.HasValue && hype.Value >= 40.0 then "good"
+            else "more"
+        | _ -> "other"
+
     let private gameCard (game: Game) (odds: IDictionary<string, OddsSnapshot>) (scores: IDictionary<string, Nullable<float>>) (hypeScores: IDictionary<string, Nullable<float>>) (teamRanks: IDictionary<string, TeamRankInfo>) =
         let sport = SportExtensions.FromDbValue(game.Sport)
         let status = GameStatusExtensions.FromDbValue(game.Status)
@@ -59,18 +74,16 @@ module HomePageRenderer =
             match scores.TryGetValue(game.Id) with
             | true, s -> s
             | _ -> Nullable<float>()
-        let hypeScore =
-            match hypeScores.TryGetValue(game.Id) with
-            | true, h -> h
-            | _ -> Nullable<float>()
+        let hypeScore = availableHype game hypeScores
         let latestOdds =
             match odds.TryGetValue(game.Id) with
             | true, o -> Some o
             | _ -> None
 
-        let statusLabel = if status.HasValue then FormatHelpers.getStatusLabel status.Value else ""
+        let statusLabel = if status.HasValue then FormatHelpers.getStatusLabel status.Value else Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(game.Status.Replace("_", " "))
         let statusClass = if status.HasValue then FormatHelpers.getStatusClass status.Value else ""
         let isLive = game.Status = "in_progress"
+        let isPregame = game.Status = "scheduled"
         let series = PlayoffSeriesObservation.TryReadFor(game) |> Option.ofObj
 
         let colors = TeamColors.forGame game
@@ -82,20 +95,32 @@ module HomePageRenderer =
 
         let liveClass = if isLive then " border-status-live/30" else ""
 
-        let card = Elem.a [ Attr.href $"/game/{game.Id}"; cls $"block bg-bg-card border border-border rounded-lg p-4 hover:border-border-hover transition-colors group{liveClass}" ] [
-            Elem.div [ cls "flex items-center justify-between mb-3" ] [
-                Elem.div [ cls "flex items-center gap-2" ] [
-                    match sport with
-                    | s when s.HasValue ->
-                        Elem.img [ Attr.src (Logos.getLeagueLogoUrl s.Value); Attr.alt (s.Value.ToString()); cls "w-4 h-4" ]
-                    | _ -> ()
-                    Elem.span [ cls $"text-xs font-medium px-1.5 py-0.5 rounded {statusClass}"; Attr.id $"status-{game.Id}" ] [
-                        Text.raw statusLabel
+        let card = Elem.a [ Attr.href $"/game/{game.Id}"; Attr.create "data-status" game.Status; cls $"home-game-card block bg-bg-card border border-border rounded-lg hover:border-border-hover transition-colors group{liveClass}" ] [
+            Elem.div [ cls "home-card-top" ] [
+                Elem.div [ cls "home-card-meta" ] [
+                    Elem.div [ cls "home-card-league" ] [
+                        match sport with
+                        | s when s.HasValue ->
+                            Elem.img [ Attr.src (Logos.getLeagueLogoUrl s.Value); Attr.alt ""; cls "w-4 h-4" ]
+                            Elem.span [] [ Text.enc (s.Value.ToString()) ]
+                        | _ -> ()
+                        Elem.span [ cls $"text-xs font-medium px-1.5 py-0.5 rounded {statusClass}"; Attr.id $"status-{game.Id}" ] [
+                            Text.enc statusLabel
+                        ]
                     ]
+                    Elem.div [ cls "home-card-time" ] [ FormatHelpers.scheduledTimeNode game.ScheduledStart ]
                 ]
-                if game.Status = "scheduled" || game.Status = "final" then
-                    Elem.span [ cls "text-sm text-text-muted" ] [
-                        FormatHelpers.scheduledTimeNode game.ScheduledStart
+                if isPregame then
+                    Elem.div [ cls "home-card-hype"; Attr.id $"excitement-{game.Id}" ] [
+                        Elem.span [ cls "home-metric-label" ] [
+                            Text.raw "Hype"
+                            if not hypeScore.HasValue then Elem.span [ cls "sr-only" ] [ Text.raw " unavailable" ]
+                        ]
+                        if hypeScore.HasValue then
+                            let levelClass = FormatHelpers.getHypeLevel hypeScore |> FormatHelpers.hypeLevelClass
+                            Elem.span [ cls $"home-metric-value {levelClass}" ] [ Text.raw $"{Math.Round(hypeScore.Value)}" ]
+                        else
+                            Elem.span [ cls "home-metric-value home-hype-unavailable"; Attr.create "aria-hidden" "true" ] [ Text.raw "—" ]
                     ]
             ]
             Elem.div [ cls "space-y-2"; Attr.id $"scores-{game.Id}" ] [
@@ -117,10 +142,9 @@ module HomePageRenderer =
                             | _ -> ()
                         ]
                     ]
-                    if game.Sport = "cfb" || game.AwayScore.HasValue then
-                        Elem.span [ cls "text-lg font-semibold tabular-nums text-text-primary"; Attr.id $"away-score-{game.Id}" ] [
-                            if game.AwayScore.HasValue then Text.raw $"{game.AwayScore.Value}"
-                        ]
+                    Elem.span [ cls "text-lg font-semibold tabular-nums text-text-primary"; Attr.id $"away-score-{game.Id}" ] [
+                        if not isPregame && game.AwayScore.HasValue then Text.raw $"{game.AwayScore.Value}"
+                    ]
                 ]
                 Elem.div [ cls "flex items-center justify-between" ] [
                     Elem.div [ cls "flex items-center gap-2" ] [
@@ -140,13 +164,13 @@ module HomePageRenderer =
                             | _ -> ()
                         ]
                     ]
-                    if game.Sport = "cfb" || game.HomeScore.HasValue then
-                        Elem.span [ cls "text-lg font-semibold tabular-nums text-text-primary"; Attr.id $"home-score-{game.Id}" ] [
-                            if game.HomeScore.HasValue then Text.raw $"{game.HomeScore.Value}"
-                        ]
+                    Elem.span [ cls "text-lg font-semibold tabular-nums text-text-primary"; Attr.id $"home-score-{game.Id}" ] [
+                        if not isPregame && game.HomeScore.HasValue then Text.raw $"{game.HomeScore.Value}"
+                    ]
                 ]
             ]
-            yield! FormatHelpers.collegeContext game
+            let context = FormatHelpers.collegeContext game
+            if not context.IsEmpty then Elem.div [ cls "home-card-context" ] context
             Elem.div [ Attr.id $"probbar-{game.Id}" ] [
                 if game.Sport = "cfb" && latestOdds.IsNone && isLive then
                     Elem.span [ cls "text-xs text-text-muted" ] [ Text.raw "Live probability unavailable" ]
@@ -168,36 +192,12 @@ module HomePageRenderer =
                             Text.raw clockText
                         ]
             ]
-            if game.Status = "scheduled" && series.IsSome then
-                Elem.div [ cls "flex justify-between items-end gap-3 pt-2 border-t border-border" ] [
+            if isPregame && series.IsSome then
+                Elem.div [ cls "home-card-context pt-2 border-t border-border" ] [
                     seriesSummary game series.Value
-                    Elem.div [ cls "shrink-0 text-right"; Attr.id $"excitement-{game.Id}" ] [
-                        if hypeScore.HasValue then
-                            let level = FormatHelpers.getHypeLevel hypeScore
-                            let levelClass = FormatHelpers.hypeLevelClass level
-                            Elem.span [ cls "block text-xs text-text-muted mb-0.5" ] [ Text.raw "Hype" ]
-                            Elem.span [ cls $"text-xl font-semibold tabular-nums {levelClass}" ] [ Text.raw $"{Math.Round(hypeScore.Value)}" ]
-                        else
-                            Elem.span [ cls "text-xs text-text-muted" ] [ Text.raw "Hype unavailable" ]
-                    ]
-                ]
-            if series.IsNone && (game.Sport = "cfb" || backend.Scoring.ProHypePolicy.Supports(game.Sport)) && game.Status = "scheduled" && not hypeScore.HasValue then
-                Elem.div [ cls "text-xs text-text-muted"; Attr.id $"excitement-{game.Id}" ] [ Text.raw "Hype unavailable" ]
-            if series.IsNone && game.Status = "scheduled" && hypeScore.HasValue then
-                Elem.div [ cls "pt-2 border-t border-border text-right" ] [
-                    Elem.div [ Attr.id $"excitement-{game.Id}" ] [
-                        let level = FormatHelpers.getHypeLevel hypeScore
-                        let levelClass = FormatHelpers.hypeLevelClass level
-                        Elem.div [ cls "text-right" ] [
-                            Elem.span [ cls "block text-xs text-text-muted mb-0.5" ] [ Text.raw "Hype" ]
-                            Elem.span [ cls $"text-xl font-semibold tabular-nums {levelClass}" ] [
-                                Text.raw $"{Math.Round(hypeScore.Value)}"
-                            ]
-                        ]
-                    ]
                 ]
             if isLive || game.Status = "final" then
-                Elem.div [ cls ("flex justify-between items-end pt-2 border-t border-border" + (if series.IsSome then " gap-3" else "")) ] [
+                Elem.div [ cls ("home-card-observed-metric flex justify-between items-end pt-2 border-t border-border" + (if series.IsSome then " gap-3" else "")) ] [
                     Elem.div [ cls (if series.IsSome then "min-w-0 flex-1" else "mt-2") ] [
                         if series.IsSome then seriesSummary game series.Value
                         let sparkline =
@@ -227,26 +227,33 @@ module HomePageRenderer =
                 ]
         ]
         let creditedTeams = QualificationCredit.selectedTeams game teamRanks
-        if creditedTeams.IsEmpty then card
-        else Elem.div [] [ card; QualificationCredit.render $"qualification-credit-{game.Id}" creditedTeams (game.Status = "scheduled" && game.SeasonType = Nullable 2 && hypeScore.HasValue) ]
+        Elem.div [ cls "home-game-item" ] [
+            card
+            if not creditedTeams.IsEmpty then
+                QualificationCredit.render $"qualification-credit-{game.Id}" creditedTeams (isPregame && game.SeasonType = Nullable 2 && hypeScore.HasValue)
+        ]
 
     let Render (games: Collections.Generic.List<Game>) (odds: IDictionary<string, OddsSnapshot>) (scores: IDictionary<string, Nullable<float>>) (hypeScores: IDictionary<string, Nullable<float>>) (teamRanks: IDictionary<string, TeamRankInfo>) =
         [
-            Elem.div [ cls "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" ] [
-                Elem.div [ cls "mb-8" ] [
-                    Elem.h1 [ cls "text-2xl font-semibold mb-1" ] [ Text.raw "Today's Games" ]
-                    Elem.p [ cls "text-text-muted text-sm" ] [ Text.raw "Live scores, win probabilities, and excitement scores" ]
-                ]
+            Elem.div [ cls "home-schedule max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" ] [
+                Elem.h1 [ cls "text-2xl font-semibold mb-6" ] [ Text.raw "Today's Games" ]
                 if games.Count = 0 then
                     Elem.div [ cls "bg-bg-card border border-border rounded-lg p-12 text-center" ] [
                         Elem.p [ cls "text-text-muted" ] [ Text.raw "No games scheduled for today." ]
                     ]
                 else
-                    Elem.section [] [
-                        Elem.div [ cls "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"; Attr.create "data-init" "@get('/sse/live')" ] [
-                            for game in games do
-                                gameCard game odds scores hypeScores teamRanks
-                        ]
+                    Elem.div [ Attr.create "data-init" "@get('/sse/live', {requestCancellation: 'cleanup'})" ] [
+                        for key, label in
+                            [ "live", "Live now"; "best", "Best games"; "good", "Good games"; "more", "More games"; "other", "Other games" ] do
+                            let cards = games |> Seq.filter (fun g -> homeSection g hypeScores = key) |> Seq.toList
+                            if not cards.IsEmpty then
+                                Elem.section [ cls "home-section"; Attr.id $"home-section-{key}"; Attr.create "aria-labelledby" $"home-heading-{key}"; Attr.create "data-single-game" (if cards.Length = 1 then "true" else "false") ] [
+                                    Elem.h2 [ cls "text-base font-semibold mb-3"; Attr.id $"home-heading-{key}" ] [ Text.raw label ]
+                                    Elem.div [ cls "home-game-grid" ] [
+                                        for game in cards do
+                                            gameCard game odds scores hypeScores teamRanks
+                                    ]
+                                ]
                     ]
             ]
         ]

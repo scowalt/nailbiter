@@ -386,7 +386,7 @@ module WorldCupRenderer =
                         Elem.p [ cls "text-text-muted" ] [ Text.raw "No active World Cup matches are available right now." ]
                     ]
                 else
-                    Elem.div [ cls "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"; Attr.create "data-init" "@get('/sse/live/world_cup')" ] [
+                    Elem.div [ cls "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"; Attr.create "data-init" "@get('/sse/live/world_cup', {requestCancellation: 'cleanup'})" ] [
                         for card in cards do
                             RenderCardLink card
                     ]

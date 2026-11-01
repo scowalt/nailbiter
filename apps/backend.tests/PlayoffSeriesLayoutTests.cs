@@ -30,10 +30,10 @@ public sealed class PlayoffSeriesLayoutTests : IAsyncLifetime
         var card = page.QuerySelector($"a[href='/game/{Id}']")!;
         Assert.Equal(standing, card.QuerySelector($"#series-{Id}")!.Children[0].TextContent);
         Assert.Equal(context, card.QuerySelector($"#series-{Id}")!.Children[1].TextContent);
-        Assert.Equal("Hype unavailable", card.QuerySelector($"#excitement-{Id}")!.TextContent);
+        Assert.Equal("Hype unavailable—", card.QuerySelector($"#excitement-{Id}")!.TextContent);
         Assert.Empty(card.QuerySelector($"#probbar-{Id}")!.Children);
-        Assert.Equal("0", card.QuerySelector($"#home-score-{Id}")!.TextContent);
-        Assert.Equal("0", card.QuerySelector($"#away-score-{Id}")!.TextContent);
+        Assert.Equal("", card.QuerySelector($"#home-score-{Id}")!.TextContent);
+        Assert.Equal("", card.QuerySelector($"#away-score-{Id}")!.TextContent);
     }
 
     [Fact]

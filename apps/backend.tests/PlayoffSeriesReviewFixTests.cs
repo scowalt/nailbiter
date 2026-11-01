@@ -160,7 +160,7 @@ public sealed class PlayoffSeriesReviewFixTests : IAsyncLifetime
         using var page = await fixture.HomeAsync();
         var invalid = page.QuerySelector("a[href='/game/401907973']")!;
         Assert.DoesNotContain("Series tied", invalid.TextContent);
-        Assert.Equal("0", invalid.QuerySelector("#home-score-401907973")!.TextContent);
+        Assert.Equal("", invalid.QuerySelector("#home-score-401907973")!.TextContent);
         Assert.Contains("Series tied 1–1", page.QuerySelector("a[href='/game/null-neighbor']")!.TextContent);
         Assert.Equal(requests, fixture.Provider.Requests);
     }
