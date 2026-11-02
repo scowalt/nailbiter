@@ -12,7 +12,9 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 SHA = 'a' * 40
-DIGEST = 'ghcr.io/scowalt/nailbiter-app/backend@sha256:' + 'b' * 64
+IMAGE = 'ghcr.io/scowalt/nailbiter/backend'
+DIGEST = IMAGE + '@sha256:' + 'b' * 64
+LEGACY_DIGEST = 'ghcr.io/scowalt/nailbiter-app/backend@sha256:' + 'b' * 64
 
 
 class PipelineTests(unittest.TestCase):
@@ -96,6 +98,8 @@ class PipelineTests(unittest.TestCase):
 
     def test_release_compose_requires_exact_image_and_preserves_provider_flags(self):
         env = {'PATH': os.environ['PATH'], 'HOME': os.environ.get('HOME', ''), 'DOCKER_CONFIG': os.environ.get('DOCKER_CONFIG', ''), 'LOKI_URL': 'https://example.invalid', 'LOKI_USERNAME': 'fixture', 'GRAFANA_CLOUD_API_KEY': 'fixture'}
+        base = subprocess.run(['docker', 'compose', '--env-file', '/dev/null', '-f', 'docker-compose.yml', 'config', '--format', 'json'], cwd=ROOT, env=env, capture_output=True, text=True, check=True, timeout=30)
+        self.assertEqual(json.loads(base.stdout)['services']['backend']['image'], IMAGE + ':latest')
         command = ['docker', 'compose', '--env-file', '/dev/null', '-f', 'docker-compose.yml', '-f', 'scripts/ci/compose.release.yaml', 'config', '--format', 'json']
         result = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, timeout=30)
         self.assertNotEqual(result.returncode, 0)
@@ -192,7 +196,7 @@ sys.exit(1 if "FAIL" in sql else 0)
         self.assertFalse(any('prune' in command['args'] for command in self.commands()))
 
     def test_wrong_revision_and_mutable_or_missing_images_prevent_all_mutation(self):
-        for sha, image in [('b' * 40, DIGEST), ('main', DIGEST), (SHA + ';exit 0', DIGEST), (SHA, 'ghcr.io/scowalt/nailbiter-app/backend:latest'), (SHA, DIGEST + ';exit 0'), (SHA, 'other/image@sha256:' + 'b' * 64)]:
+        for sha, image in [('b' * 40, DIGEST), ('main', DIGEST), (SHA + ';exit 0', DIGEST), (SHA, IMAGE + ':latest'), (SHA, LEGACY_DIGEST), (SHA, DIGEST.replace('ghcr.io', 'ghcrXio')), (SHA, DIGEST + ';exit 0'), (SHA, 'other/image@sha256:' + 'b' * 64)]:
             self.assertNotEqual(self.run_script('deploy-backend.sh', sha, image).returncode, 0)
         self.assertNotEqual(self.run_script('deploy-backend.sh', SHA).returncode, 0)
         self.assertEqual(self.commands(), [])
@@ -214,8 +218,19 @@ sys.exit(1 if "FAIL" in sql else 0)
         self.assertEqual(commands[0]['args'], ['load', '--input', '.ci/backend.tar'])
         self.assertIn(['login', 'ghcr.io', '--username', 'scowalt', '--password-stdin'], [command['args'] for command in commands])
         self.assertEqual((self.root / '.ci/backend-image.txt').read_text().strip(), DIGEST)
-        self.assertEqual([command['args'][1] for command in commands if command['args'][0] == 'push'], ['ghcr.io/scowalt/nailbiter-app/backend:sha-' + SHA, 'ghcr.io/scowalt/nailbiter-app/backend:latest'])
+        self.assertEqual([command['args'][1] for command in commands if command['args'][0] == 'push'], [IMAGE + ':sha-' + SHA, IMAGE + ':latest'])
         self.assertNotIn('fixture-token', self.log.read_text())
+
+    def test_publisher_rejects_foreign_digest_before_latest_promotion(self):
+        self.prepare_image()
+        for digest in [LEGACY_DIGEST, DIGEST.replace('ghcr.io', 'ghcrXio')]:
+            with self.subTest(digest=digest):
+                self.log.unlink(missing_ok=True)
+                (self.root / '.ci/backend-image.txt').unlink(missing_ok=True)
+                result = self.run_script('publish-image.sh', env={'GHCR_TOKEN': 'fixture-token', 'FIXTURE_DIGEST': digest})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual([command['args'][1] for command in self.commands() if command['args'][0] == 'push'], [IMAGE + ':sha-' + SHA])
+                self.assertFalse((self.root / '.ci/backend-image.txt').exists())
 
     def test_publisher_rejects_wrong_commit_or_corrupted_artifact_before_login(self):
         self.prepare_image()
@@ -227,7 +242,7 @@ sys.exit(1 if "FAIL" in sql else 0)
         self.assertNotEqual(self.run_script('publish-image.sh', env={'GHCR_TOKEN': 'fixture-token'}).returncode, 0)
         self.assertEqual(self.commands(), [])
 
-    def test_bundle_transport_locks_remote_and_cleans_temporary_oauth_file(self):
+    def prepare_transport(self):
         (self.root / '.ci/backend-image.txt').write_text(DIGEST)
         self.executable('git', '#!/bin/sh\nif [ "$1" = bundle ]; then printf fixture-bundle > "$3"; else printf "%s\\n" "$FIXTURE_SHA"; fi\n')
         self.executable('tailscaled', '''#!/usr/bin/env python3
@@ -257,6 +272,19 @@ if "ssh" in sys.argv:
     with open(os.environ["FIXTURE_LOG"], "a") as log:
         log.write(json.dumps({"remote": command[2]}) + "\\n")
 ''')
+
+    def test_transport_rejects_historical_and_foreign_images_before_enrollment(self):
+        self.prepare_transport()
+        for image in [LEGACY_DIGEST, DIGEST.replace('ghcr.io', 'ghcrXio'), IMAGE + ':latest']:
+            with self.subTest(image=image):
+                self.log.unlink(missing_ok=True)
+                (self.root / '.ci/backend-image.txt').write_text(image)
+                result = self.run_script('send-release.sh', env={'TAILSCALE_OAUTH_SECRET': 'fixture-oauth'})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.commands(), [])
+
+    def test_bundle_transport_locks_remote_and_cleans_temporary_oauth_file(self):
+        self.prepare_transport()
         result = self.run_script('send-release.sh', env={'TAILSCALE_OAUTH_SECRET': 'fixture-oauth'})
         self.assertEqual(result.returncode, 0, result.stderr)
         commands = self.commands()

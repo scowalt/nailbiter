@@ -3,7 +3,7 @@ set -euo pipefail
 
 sh scripts/ci/require-release.sh
 image=$(tr -d '\n' < .ci/backend-image.txt)
-printf '%s\n' "$image" | grep -Eq '^ghcr.io/scowalt/nailbiter-app/backend@sha256:[0-9a-f]{64}$'
+printf '%s\n' "$image" | grep -Eq '^ghcr\.io/scowalt/nailbiter/backend@sha256:[0-9a-f]{64}$'
 : "${TAILSCALE_OAUTH_SECRET:?The existing tag:ci OAuth secret is required}"
 umask 077
 scratch=$(mktemp -d)

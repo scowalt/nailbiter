@@ -6,18 +6,28 @@ This clean-source candidate targets `scowalt/nailbiter` as the sole public devel
 
 The existing private repository is historical evidence after cutover, not a continuing release system, required private test suite or source checkout dependency. Keep it private; preserve old refs, captured fixtures and archives. Move all continuing development into reviewed public records/fresh PRs without importing old ancestors or unreviewed attachments. Archival and issue/PR mutations require their own approval.
 
-## Runtime identities remain stable
+## Hosting identities and image boundary
 
-| Component | Existing target |
+| Component | Target / boundary |
 |---|---|
 | Backend/live app | Tailscale SSH `root@nailbiter-app-us`, checkout `/opt/nailbiter-app`, Docker/Caddy |
-| Backend image | `ghcr.io/scowalt/nailbiter-app/backend` |
+| Future clean backend images | `ghcr.io/scowalt/nailbiter/backend`; separately verified and provisioned before release |
+| Historical backend images | `ghcr.io/scowalt/nailbiter-app/backend`; remain private, with no canonical-repository Actions grant |
 | Marketing | Cloudflare Worker `nailbiter`, `nailbiter.app` / `www.nailbiter.app` |
 | Live/API origins | `live.nailbiter.app` / `api.nailbiter.app` |
 | Production environment | Doppler configured on the VPS; no database/Doppler token is passed to PR jobs |
 | Deploy serialization | `/opt/nailbiter-app-deploy.lock` plus non-cancelling Actions production concurrency |
 
-Changing the source repository does not require changing domains, Worker, VPS, image namespace, database or backup volumes. Current runtime/access must be verified only under approved operational-read/deployment scope. Old documented origin IPs are historical, not a verified new routing instruction.
+The hosting targets, database and backup volumes stay unchanged. Release code deliberately targets a separate image namespace so historical image versions are not shared with the future public repository. This source change does not create a package, change access or deploy anything. Current runtime/access must be verified only under approved operational-read/deployment scope. Old documented origin IPs are historical, not a verified new routing instruction.
+
+## Separate clean image history
+
+[GitHub warns](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility#ensuring-workflow-access-to-your-package) that public forks may access private packages granted to the public repository. A private visibility label is therefore not sufficient isolation for historical images once the canonical repository becomes public. Environment secrets restrictions do not by themselves restrict repository-level package-token access.
+
+- Publish only reviewed clean-source builds to `ghcr.io/scowalt/nailbiter/backend`. Before the first approved publish, verify that this namespace has no pre-existing unreviewed versions. If it does, stop and review another clean namespace; do not delete evidence or silently reuse it. Namespace availability/history is not established by these source files.
+- Do not grant the canonical repository Actions access to `ghcr.io/scowalt/nailbiter-app/backend`, change its inheritance, or copy/retag its historical images into the clean package. Preserve its existing versions and the VPS's rollback access privately.
+- Treat every image accessible to the future public repository as potentially readable by public forks, regardless of package visibility. Preserve the clean-source, synthetic-fixture and no-build-secret boundaries for all future versions.
+- Verify the VPS's access to the clean package under separate operational approval before deployment. Do not fall back to the historical package, a long-lived token in PR jobs, or a mutable tag when access fails. Historical-image recovery remains a separately approved operator procedure, not an exception to the new release guards.
 
 ## Validation contract
 
@@ -41,13 +51,13 @@ Configure only these required release bindings after approval:
 
 | Binding | Purpose / boundary |
 |---|---|
-| `GITHUB_TOKEN` (`packages: write` only in release job) | Publish the exact scanned backend image; verify the new repository has Actions write access to the existing package |
+| `GITHUB_TOKEN` (`packages: write` only in release job) | Publish the exact scanned backend image to the verified-clean `nailbiter/backend` package; no access grant to the historical package |
 | `TAILSCALE_CI_OAUTH_SECRET` | Dedicated ephemeral `tag:ci` enrollment and authenticated Tailscale SSH; not an unrelated project's client |
 | `CLOUDFLARE_API_TOKEN` | Existing narrowly scoped Nailbiter Worker deployment access |
 
-No credential values belong in source, comments, outputs or diagnostic screenshots. Preserve the VPS's read-only package-pull credential and production-local secret manager. A newly created repository does not automatically gain the old GHCR package's permissions; review package Actions access independently of source linkage/visibility.
+No credential values belong in source, comments, outputs or diagnostic screenshots. Preserve the VPS's existing package-pull credential and production-local secret manager; separately verify its clean-package access without exposing values. Review the clean package's Actions access independently of source linkage/visibility. Routine publishing needs Write, not Admin. Package grants are repository-level, not an independent main-branch/job boundary: keep write permission confined to the release job in the reviewed workflow and review maintainer/App access and future workflow changes.
 
-The image is built once, scanned, saved, hashed and bound to its source SHA. Release downloads that run's named artifact, checks commit/bytes/image ID, loads it and pushes it without rebuilding. The resulting registry digest is passed to the locked SSH receiver; Compose uses `BACKEND_IMAGE` with an immutable `@sha256` reference. A `latest` tag remains only for compatibility, not deploy selection.
+The image is built once, scanned, saved, hashed and bound to its source SHA. Release downloads that run's named artifact, checks commit/bytes/image ID, loads it and pushes it without rebuilding. The resulting registry digest is passed to the locked SSH receiver; Compose uses `BACKEND_IMAGE` with an immutable `@sha256` reference. Publisher digest selection, transport and backend deployment require the exact `ghcr.io/scowalt/nailbiter/backend` namespace and reject historical/foreign images, including lookalike registry hostnames. A `latest` tag remains only within the clean namespace for compatibility, not deploy selection.
 
 The receiver verifies the exact Git-bundle commit before checkout and deployment, and points the deployed checkout's origin at the canonical repository without fetching old private ancestry. Legacy SQL through `020_*` retains best-effort replay; later migrations use `ON_ERROR_STOP=1` and block restart on error. The receiver lock covers checkout, migrations and restart. Never cancel running migrations or automatically undo schema changes. After restart, compare the running container's image ID with the selected digest and require public `/health` liveness before image pruning. That endpoint is a liveness check, not a database-content or end-to-end traffic proof; controlled release acceptance still needs its separately approved operational verification.
 
@@ -58,10 +68,10 @@ Marketing is built during validation and deployed from that same run's checked a
 1. Review/test the clean source, synthetic coverage, MIT/third-party notices and all public metadata. Obtain exact-name private repository creation and push/build approval before bootstrap.
 2. Bootstrap privately with validation-only Actions. Keep the old controller as the sole temporary release owner. Establish tested `Validate` and `Build and scan backend image` required contexts on the new repository, preserving equivalent branch safeguards.
 3. Review the last source delta and every continuing old issue/PR. Port reviewed work into the new repository without private ancestry; update developer/agent remotes and repo-specific integrations. Do not abandon active work or bulk-copy sensitive discussions.
-4. Review new-repository package access, production environment and credential bindings. Do not apply the old OpenTofu state with a changed repository name: it could rename or modify the old repository. Use a separately reviewed resource/state migration; never run a broad VPS/DNS/auth-key apply for this source migration.
+4. Verify clean-package namespace/history, canonical Actions publishing access and VPS pull access; leave the historical package private and unshared with the canonical repository. Review the production environment and credential bindings. Do not apply the old OpenTofu state with a changed repository name: it could rename or modify the old repository. Use a separately reviewed resource/state migration; never run a broad VPS/DNS/auth-key apply for this source migration.
 5. With explicit controller/deployment approval, drain old jobs, disable old repo-specific Woodpecker scheduling/webhook and any other old publishers, and verify none remain in flight. Only then arm new-repository Actions releases. Do not change shared runner infrastructure or other projects.
 6. Accept a controlled release from the new repository: exact source/image, migration result, backend health and marketing identity. Preserve data/backups/DNS/provider flags. A failure stops publication; rollback needs an approved path with one controller, not simultaneous publishers or automatic SQL undo.
-7. Audit the new repository's reachable commits, issue/PR bodies and all new workflow logs/artifacts. Verify public forks cannot reach production credentials/private runners. Obtain explicit public-visibility approval, publish and read back anonymously/authenticated.
+7. Audit the new repository's reachable commits, issue/PR bodies and all new workflow logs/artifacts. Verify public forks cannot reach production credentials/private runners and the canonical repository has no Actions grant to historical private packages. Obtain explicit public-visibility approval, publish and read back anonymously/authenticated.
 8. After acceptance, apply an approved migration notice/work dispositions, retire residual old automation and archive the old repository privately. Verify external remediator/scheduler targets separately; archiving source does not stop an independent process.
 
 ## Local validation without production
@@ -73,4 +83,4 @@ python -m unittest discover -s tests/deployment -v
 bash -n scripts/ci/*.sh
 ```
 
-Contract tests use fake Git/GitHub/Docker/Doppler/Tailscale executables. They exercise trust guards, immutable image selection, artifact tampering, shell quoting, cleanup, lock ordering and failed migrations without production calls. They are not live rollout evidence. Relevant application suites remain required as described above.
+Contract tests use fake Git/GitHub/Docker/Doppler/Tailscale executables. They exercise trust guards, clean-namespace publishing, immutable image selection, historical/lookalike namespace rejection before enrollment or backend mutation, artifact tampering, shell quoting, cleanup, lock ordering and failed migrations without production calls. A mismatched registry-reported digest stops publishing before the release image pointer and `latest` promotion; the clean namespace's SHA push has already occurred at that boundary. They are not live rollout evidence. Relevant application suites remain required as described above.
