@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace backend.Services;
 
 public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbContext db,
-    TimeProvider clock, ILogger<ProCompetitionEvidenceService> logger)
+    TimeProvider clock, ILogger<ProCompetitionEvidenceService> logger, NflPlayoffLeverageCollector? nflLeverage = null)
 {
     public static string PathFor(string sport) => sport switch
     {
@@ -324,6 +324,7 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
                         if (parsed is not null) schedules.Add(parsed);
                     }
                 }
+                var contexts = new List<(Game Game, ProGameEvidence Evidence)>();
                 foreach (var game in group)
                 {
                     var easternDate = TimeZoneInfo.ConvertTimeFromUtc(game.ScheduledStart, TimeZoneInfo.FindSystemTimeZoneById("America/New_York"));
@@ -331,8 +332,18 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
                     var board = await Fetch(url);
                     var e = Items(board, "events").SingleOrDefault(x => Text(x, "id") == game.Id);
                     var evidence = ParseEvent(game, e, schedules, now, url + "; ESPN season team schedules");
-                    game.ProEvidenceJson = JsonSerializer.Serialize(evidence);
+                    if (game.Sport == "nfl" && evidence.Phase == 2)
+                        evidence.NflPlayoffLeverage = ProGameEvidence.Parse(game.ProEvidenceJson)?.NflPlayoffLeverage;
+                    contexts.Add((game, evidence));
                 }
+                if (group.Key.Sport == "nfl" && nflLeverage is not null)
+                {
+                    var forecasts = await nflLeverage.CollectAsync(contexts.Where(x => x.Evidence.VerifiedUnstarted && x.Evidence.Phase == 2)
+                        .Select(x => x.Game).ToArray(), schedules, ct);
+                    foreach (var (game, evidence) in contexts)
+                        if (forecasts.TryGetValue(game.Id, out var forecast) && forecast is not null) evidence.NflPlayoffLeverage = forecast;
+                }
+                foreach (var (game, evidence) in contexts) game.ProEvidenceJson = JsonSerializer.Serialize(evidence);
                 await db.SaveChangesAsync(ct);
             }
             catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or TaskCanceledException && !ct.IsCancellationRequested)

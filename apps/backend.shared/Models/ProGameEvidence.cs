@@ -20,6 +20,7 @@ public sealed class ProGameEvidence
     public string? PlayIn { get; set; }
     public ProTeamProgress HomeProgress { get; set; } = new();
     public ProTeamProgress AwayProgress { get; set; } = new();
+    public NflPlayoffLeverageEvidence? NflPlayoffLeverage { get; set; }
     public string[] CompletedGameIds { get; set; } = [];
     public string Reason { get; set; } = "Competition context unavailable";
 

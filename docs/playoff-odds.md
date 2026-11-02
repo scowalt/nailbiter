@@ -1,9 +1,9 @@
 # Playoff qualification probabilities
 
-**Current implementation:** [ADR 0003](adr/0003-nhl-moneypuck-qualification-exception.md) narrowly permits the user-approved MoneyPuck NHL model-derived qualification fallback. Collection and selection are implemented but **default off**, with an empty explicit season allowlist; only season **2027** is supported. Live activation remains blocked by unverified ordinary recurring backend access and source contracts. See the [MoneyPuck qualification runbook](nhl-moneypuck-qualification.md) and [bounded primary-source notes](nhl-moneypuck-qualification-source-notes.md). PlayoffStatus remains rejected and disabled.
+**Current implementation:** [ADR 0003](adr/0003-nhl-moneypuck-qualification-exception.md) narrowly permits the user-approved MoneyPuck NHL model-derived qualification fallback. Collection and selection are implemented but **default off**, with an empty explicit season allowlist; only season **2027** is supported. Live activation remains blocked by unverified ordinary recurring backend access and source contracts. See the [MoneyPuck qualification runbook](nhl-moneypuck-qualification.md) and [bounded primary-source notes](nhl-moneypuck-qualification-source-notes.md). NHL PlayoffStatus remains rejected and disabled.
 
 Kalshi supplies market-derived NFL, NBA, NHL, MLB, and college football playoff qualification probabilities. **On 2026-10-10 the user required market-only, free-only NHL qualification evidence and rejected all model-derived qualification forecasts.** No additional gambling-market fallback is integrated; the narrow October 11 MoneyPuck exception is not approval of another source. Current-season FBS teams confirmed to have no CFP market use a separately sourced below-1% assumption, described below.
-Power rankings, championship probabilities, and game-winner odds remain separate inputs with their existing sources.
+Power rankings, championship probabilities, and game-winner odds remain separate inputs with their existing sources. The separately selected [NFL conditional-leverage proposal](nfl-playoff-leverage.md) affects regular-season NFL Stakes only; it is not an unconditional qualification source, NHL approval or a deployment/activation claim.
 
 ## NHL PlayoffStatus model fallback — rejected; disabled legacy implementation
 

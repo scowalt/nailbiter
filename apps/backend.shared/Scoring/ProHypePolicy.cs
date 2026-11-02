@@ -7,7 +7,8 @@ public sealed record ProMetric(double? Value, string Explanation);
 public enum ProQualificationEvidenceKind { Scalar, Kalshi, PlayoffStatusModel, MoneyPuckModel, Unavailable }
 internal sealed record ProQualification(double? Probability, bool IsFinal, DateTime? ObservedAt, DateTime? ExpiresAt = null,
     string Source = "qualification evidence", ProQualificationEvidenceKind EvidenceKind = ProQualificationEvidenceKind.Scalar);
-internal sealed record ProHypeResult(ProMetric Stakes, ProMetric Quality, ProMetric Closeness, double? Total);
+internal sealed record ProHypeResult(ProMetric Stakes, ProMetric Quality, ProMetric Closeness, double? Total,
+    NflPlayoffLeverageEvidence? NflPlayoffLeverage = null);
 
 public static class ProHypePolicy
 {
@@ -117,6 +118,7 @@ public static class ProHypePolicy
         var covered = (evidence?.CompletedGameIds ?? []).ToHashSet(StringComparer.Ordinal);
         var resultsCovered = knownCompletedIds.All(covered.Contains);
         var contextNote = evidence is null ? "No competition observation" : $"{evidence.Source}; season {evidence.Season}; observed {evidence.ObservedAt:O}. {evidence.Reason}";
+        var nflLeverage = contextValid && resultsCovered ? NflPlayoffLeveragePolicy.Select(game, evidence, now, knownCompletedIds) : null;
         ProMetric stakes;
         if (!contextValid) stakes = Missing("Competition identity, schedule or phase missing/expired (one hour). " + contextNote);
         else if (evidence!.Phase == 1) stakes = new(0, "Verified preseason. " + contextNote);
@@ -142,35 +144,48 @@ public static class ProHypePolicy
         }
         else if (evidence.Phase == 2)
         {
-            StakesBounds Team(ProQualification qualification, ProTeamProgress progress, string team)
+            StakesBounds Team(ProQualification qualification, ProTeamProgress progress, string team, NflConditionalPlayoffOdds? conditional)
             {
                 var source = string.IsNullOrWhiteSpace(qualification.Source) ? "qualification evidence" : qualification.Source;
                 var note = $"{team}: {source} observed {qualification.ObservedAt?.ToString("O") ?? "never"}. ";
-                var trustedFinal = qualification.IsFinal && qualification.EvidenceKind == ProQualificationEvidenceKind.Kalshi;
-                var selectedEstimateFresh = qualification.ExpiresAt is DateTime expiresAt && now < expiresAt;
-                if (!qualification.Probability.HasValue || !Probability(qualification.Probability.Value) ||
-                    qualification.ObservedAt is not DateTime observed || observed > now ||
-                    (qualification.IsFinal ? !trustedFinal || qualification.Probability is not (0 or 1) : !selectedEstimateFresh))
-                    return new(null, null, note + "Qualification probability unavailable, invalid, or expired");
+                var trustedFinal = qualification.IsFinal && qualification.EvidenceKind == ProQualificationEvidenceKind.Kalshi &&
+                    qualification.Probability is 0 or 1 && qualification.ObservedAt is DateTime finalAt && finalAt <= now;
                 if (trustedFinal && qualification.Probability == 0) return new(0, 0, note + "Confirmed eliminated");
                 if (trustedFinal && qualification.Probability == 1 && progress.SeedingUnresolved == false)
                     return new(0, 0, note + "Confirmed qualified with fully settled positioning");
+                if (game.Sport == "nfl")
+                {
+                    if (!trustedFinal && conditional is null)
+                        return new(null, null, $"{team}: PlayoffStatus next-game conditional playoff probabilities unavailable, invalid, or expired");
+                    if (!trustedFinal) note = $"{team}: PlayoffStatus model; observed {nflLeverage!.ObservedAt:O}; published {conditional!.PublishedAt:O}. ";
+                }
+                else
+                {
+                    var selectedEstimateFresh = qualification.ExpiresAt is DateTime expiresAt && now < expiresAt;
+                    if (!qualification.Probability.HasValue || !Probability(qualification.Probability.Value) ||
+                        qualification.ObservedAt is not DateTime observed || observed > now ||
+                        (qualification.IsFinal ? !trustedFinal : !selectedEstimateFresh))
+                        return new(null, null, note + "Qualification probability unavailable, invalid, or expired");
+                }
                 if (progress.Scheduled is not int n || progress.Completed is not int g || n <= 0 || g < 0 || g >= n)
                     return new(null, null, note + "Verified season schedule/completed games unavailable or contradictory; " + progress.Reason);
                 if (!progress.SeedingUnresolved.HasValue && !progress.ScheduleVerified)
                     return new(null, null, note + "Consistent team schedule not yet verified for the unknown-seeding bound; awaiting competition refresh");
                 var urgency = (Math.Exp(3.0 * (g + 1) / n) - 1) / (Math.Exp(3) - 1);
-                var qualificationStakes = qualification.IsFinal ? 0 : 80 * urgency * (1 - Math.Abs(2 * qualification.Probability.Value - 1));
+                var (qualificationLower, qualificationUpper) = trustedFinal ? (0.0, 0.0) : game.Sport == "nfl"
+                    ? NflPlayoffLeveragePolicy.Stakes(conditional!)
+                    : (80 * urgency * (1 - Math.Abs(2 * qualification.Probability!.Value - 1)),
+                       80 * urgency * (1 - Math.Abs(2 * qualification.Probability.Value - 1)));
                 var seedingCeiling = 40 * urgency;
                 note += $"{g}/{n} completed; {progress.Reason}";
                 if (!progress.SeedingUnresolved.HasValue)
-                    return new(qualificationStakes, Math.Max(qualificationStakes, seedingCeiling),
-                        note + $"; seeding remains unknown (qualification term {qualificationStakes:G6}, seeding ceiling {seedingCeiling:G6})", true);
-                var value = Math.Max(qualificationStakes, progress.SeedingUnresolved.Value ? seedingCeiling : 0);
-                return new(value, value, note);
+                    return new(qualificationLower, Math.Max(qualificationUpper, seedingCeiling),
+                        note + $"; seeding remains unknown (qualification term {qualificationLower:G6}..{qualificationUpper:G6}, seeding ceiling {seedingCeiling:G6})", true);
+                var seeding = progress.SeedingUnresolved.Value ? seedingCeiling : 0;
+                return new(Math.Max(qualificationLower, seeding), Math.Max(qualificationUpper, seeding), note);
             }
-            var h = Team(home, evidence.HomeProgress, game.HomeTeamAbbreviation);
-            var a = Team(away, evidence.AwayProgress, game.AwayTeamAbbreviation);
+            var h = Team(home, evidence.HomeProgress, game.HomeTeamAbbreviation, nflLeverage?.HomeOdds);
+            var a = Team(away, evidence.AwayProgress, game.AwayTeamAbbreviation, nflLeverage?.AwayOdds);
             double? exact = null;
             if (h.Lower.HasValue && h.Upper.HasValue && a.Lower.HasValue && a.Upper.HasValue)
             {
@@ -183,6 +198,6 @@ public static class ProHypePolicy
             stakes = new(exact, derivation + h.Explanation + "; " + a.Explanation + ". " + contextNote);
         }
         else stakes = Missing("Unsupported or unknown competition phase. " + contextNote);
-        return new(stakes, quality, closeness, Composite(game.Sport, stakes.Value, quality.Value, closeness.Value));
+        return new(stakes, quality, closeness, Composite(game.Sport, stakes.Value, quality.Value, closeness.Value), nflLeverage);
     }
 }

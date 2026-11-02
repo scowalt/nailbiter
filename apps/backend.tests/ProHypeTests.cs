@@ -89,7 +89,6 @@ public sealed class ProHypeTests
     }
 
     [Theory]
-    [InlineData("nfl", 17)]
     [InlineData("nba", 82)]
     [InlineData("nhl", 84)]
     [InlineData("mlb", 162)]

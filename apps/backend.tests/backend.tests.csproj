@@ -34,6 +34,7 @@
     <None Include="../backend/Migrations/029_MoneyPuckPublication.sql" Link="Migrations/029_MoneyPuckPublication.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/Excitement/*.json;Fixtures/Excitement/*.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/ProHype/*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/NflPlayoffLeverage/*.html;Fixtures/NflPlayoffLeverage/*.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/MoneyPuck/*.csv;Fixtures/MoneyPuck/*.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/MoneyPuckQualification/Synthetic/*" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="../backend/backend.csproj" />
