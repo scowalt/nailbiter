@@ -60,7 +60,7 @@ src/hype_score/
 
 Playoff probability means the chance that a team qualifies for its season's playoffs. It does not mean championship probability or team strength.
 
-The runtime NHL PlayoffStatus model fallback is a current-preview feature only and is disabled by default pending reuse and publication-clock approval. This analysis package deliberately remains **Kalshi-only**: it does not reproduce the NHL model fallback, shadow-evaluate it, or use current model rows as historical pregame evidence. Polymarket rows remain rejected and cannot fill missing qualification here. Current snapshots still cannot establish past pregame evidence.
+The legacy NHL PlayoffStatus model fallback is **rejected**, not awaiting permission or activation ([ADR 0002](../../docs/adr/0002-nhl-market-only-qualification.md)). [ADR 0003](../../docs/adr/0003-nhl-moneypuck-qualification-exception.md) permits the specifically approved MoneyPuck NHL runtime forecast exception. Its application defaults keep collection and selection off; production overrides and remaining activation gates are documented in the [MoneyPuck runbook](../../docs/nhl-moneypuck-qualification.md). This analysis package deliberately remains **Kalshi-only**: it does not reproduce runtime model fallbacks, shadow-evaluate them, or use current model rows as historical pregame evidence. Polymarket rows remain rejected and cannot fill missing qualification here. Current snapshots still cannot establish past pregame evidence.
 
 For NFL, NBA, NHL, and MLB, qualification comes only from Kalshi. The loader first selects the newest Kalshi row for each `(sport, team_abbreviation, season)` key. It then applies these rules:
 
