@@ -2,7 +2,7 @@
 
 Nailbiter helps viewers choose sports events to watch, using pregame hype and live excitement scores. The live service is at [nailbiter.app](https://nailbiter.app).
 
-This is a clean-source migration candidate for `scowalt/nailbiter`. Its intended end state is one canonical public repository for development, issues/PRs, CI and production delivery on GitHub Actions. **The repository/controller handoff is not activated by this source snapshot.** See [deployment and cutover](docs/deployment.md).
+This is the canonical public repository for development, issues/PRs, CI and production delivery on GitHub Actions. The repository handoff completed on 2026-11-03 with a [verified backend and marketing release](https://github.com/scowalt/nailbiter/actions/runs/41571691550). The original repository remains a private historical archive, not an active development or deployment dependency. See [deployment and operational boundaries](docs/deployment.md).
 
 ## Components
 
@@ -75,6 +75,6 @@ League logos are retained for referential identification, not endorsement or own
 
 ## Delivery boundary
 
-GitHub Actions validates PRs on hosted runners without production credentials. CD is initially inert: the canonical repository must have `PRODUCTION_RELEASES_ENABLED=true`, protected `main` and an appropriately restricted `production` environment before it can release. That switch is set only during an approved handoff after old publishers are stopped. The release promotes the scanned image and tested marketing artifact for the same source revision, never a rebuild of moving `main`.
+GitHub Actions validates PRs on hosted runners without production credentials and is the production release controller. Releases require `PRODUCTION_RELEASES_ENABLED=true`, protected `main` and the main-only `production` environment. Operators may pause releases during explicitly approved maintenance; the legacy publisher remains inactive. The release promotes the scanned image and tested marketing artifact for the same source revision, never a rebuild of moving `main`.
 
 No production, DNS, database, backup, provider activation or migration action should be inferred from a source/documentation edit. [The deployment runbook](docs/deployment.md) is authoritative for release approval and rollback boundaries.

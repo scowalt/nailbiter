@@ -2,31 +2,33 @@
 
 ## Status and authority
 
-This clean-source candidate targets `scowalt/nailbiter` as the sole public development, issue/PR, CI and CD repository. **No handoff, production deployment or publication is established by these files.** `.github/workflows/ci.yml` provides validation and guarded release code. Releases stay inert unless an authorized operator sets repository variable `PRODUCTION_RELEASES_ENABLED=true` after the old controllers are drained and disabled.
+`scowalt/nailbiter` is the sole public development, issue/PR, CI and CD repository. The handoff completed on **2026-11-03** with [Actions release41571691550](https://github.com/scowalt/nailbiter/actions/runs/41571691550) at `67f8274e2ec136a0b4c847e8aab869067c2c2cfd`, verifying backend and marketing delivery. The old Nailbiter Woodpecker project is inactive and its webhook removed; its history is preserved.
 
-The existing private repository is historical evidence after cutover, not a continuing release system, required private test suite or source checkout dependency. Keep it private; preserve old refs, captured fixtures and archives. Move all continuing development into reviewed public records/fresh PRs without importing old ancestors or unreviewed attachments. Archival and issue/PR mutations require their own approval.
+`.github/workflows/ci.yml` provides validation and guarded production delivery. Releases require `PRODUCTION_RELEASES_ENABLED=true`, protected current `main` and the main-only `production` environment. A documentation edit is not authorization to alter credentials, controllers, data or provider activation. Operators may pause releases for approved maintenance; never re-enable a second publisher.
+
+The original repository is privately archived historical evidence, not a continuing release system, required private test suite or source checkout dependency. Keep it private; preserve old refs, captured fixtures and archives. Move all continuing development into reviewed public records/fresh PRs without importing old ancestors or unreviewed attachments. Archival and issue/PR mutations require their own approval.
 
 ## Hosting identities and image boundary
 
 | Component | Target / boundary |
 |---|---|
 | Backend/live app | Tailscale SSH `root@nailbiter-app-us`, checkout `/opt/nailbiter-app`, Docker/Caddy |
-| Future clean backend images | `ghcr.io/scowalt/nailbiter/backend`; separately verified and provisioned before release |
+| Backend images | `ghcr.io/scowalt/nailbiter/backend`; clean history linked to this repository |
 | Historical backend images | `ghcr.io/scowalt/nailbiter-app/backend`; remain private, with no canonical-repository Actions grant |
 | Marketing | Cloudflare Worker `nailbiter`, `nailbiter.app` / `www.nailbiter.app` |
 | Live/API origins | `live.nailbiter.app` / `api.nailbiter.app` |
 | Production environment | Doppler configured on the VPS; no database/Doppler token is passed to PR jobs |
 | Deploy serialization | `/opt/nailbiter-app-deploy.lock` plus non-cancelling Actions production concurrency |
 
-The hosting targets, database and backup volumes stay unchanged. Release code deliberately targets a separate image namespace so historical image versions are not shared with the future public repository. This source change does not create a package, change access or deploy anything. Current runtime/access must be verified only under approved operational-read/deployment scope. Old documented origin IPs are historical, not a verified new routing instruction.
+The hosting targets, database and backup volumes stay unchanged. Release code targets a separate image namespace so historical image versions are not shared with this public repository. Changes to source alone do not establish live package permissions or deployment acceptance. Current runtime/access must be verified only under approved operational-read/deployment scope. Old documented origin IPs are historical, not a verified new routing instruction.
 
 ## Separate clean image history
 
-[GitHub warns](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility#ensuring-workflow-access-to-your-package) that public forks may access private packages granted to the public repository. A private visibility label is therefore not sufficient isolation for historical images once the canonical repository becomes public. Environment secrets restrictions do not by themselves restrict repository-level package-token access.
+[GitHub warns](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility#ensuring-workflow-access-to-your-package) that public forks may access private packages granted to the public repository. A private visibility label is therefore not sufficient isolation for historical images from this public repository. Environment secrets restrictions do not by themselves restrict repository-level package-token access.
 
 - Publish only reviewed clean-source builds to `ghcr.io/scowalt/nailbiter/backend`. Before the first approved publish, verify that this namespace has no pre-existing unreviewed versions. If it does, stop and review another clean namespace; do not delete evidence or silently reuse it. Namespace availability/history is not established by these source files.
 - Do not grant the canonical repository Actions access to `ghcr.io/scowalt/nailbiter-app/backend`, change its inheritance, or copy/retag its historical images into the clean package. Preserve its existing versions and the VPS's rollback access privately.
-- Treat every image accessible to the future public repository as potentially readable by public forks, regardless of package visibility. Preserve the clean-source, synthetic-fixture and no-build-secret boundaries for all future versions.
+- Treat every image accessible to the public repository as potentially readable by public forks, regardless of package visibility. Preserve the clean-source, synthetic-fixture and no-build-secret boundaries for all future versions.
 - Verify the VPS's access to the clean package under separate operational approval before deployment. Do not fall back to the historical package, a long-lived token in PR jobs, or a mutable tag when access fails. Historical-image recovery remains a separately approved operator procedure, not an exception to the new release guards.
 
 ## Validation contract
@@ -59,11 +61,13 @@ No credential values belong in source, comments, outputs or diagnostic screensho
 
 The image is built once, scanned, saved, hashed and bound to its source SHA. Release downloads that run's named artifact, checks commit/bytes/image ID, loads it and pushes it without rebuilding. The resulting registry digest is passed to the locked SSH receiver; Compose uses `BACKEND_IMAGE` with an immutable `@sha256` reference. Publisher digest selection, transport and backend deployment require the exact `ghcr.io/scowalt/nailbiter/backend` namespace and reject historical/foreign images, including lookalike registry hostnames. A `latest` tag remains only within the clean namespace for compatibility, not deploy selection.
 
-The receiver verifies the exact Git-bundle commit before checkout and deployment, and points the deployed checkout's origin at the canonical repository without fetching old private ancestry. Legacy SQL through `020_*` retains best-effort replay; later migrations use `ON_ERROR_STOP=1` and block restart on error. The receiver lock covers checkout, migrations and restart. Never cancel running migrations or automatically undo schema changes. After restart, compare the running container's image ID with the selected digest and require public `/health` liveness before image pruning. That endpoint is a liveness check, not a database-content or end-to-end traffic proof; controlled release acceptance still needs its separately approved operational verification.
+The receiver verifies the exact Git-bundle commit before checkout and deployment, and points the deployed checkout's origin at the canonical repository without fetching old private ancestry. Legacy SQL through `020_*` retains best-effort replay; later migrations use `ON_ERROR_STOP=1` and block restart on error. The receiver lock covers checkout, migrations and restart. Verify a recoverable [database backup](operations/database-backups.md) before migration work. Never cancel running migrations or automatically undo schema changes. After restart, compare the running container's image ID with the selected digest and require public `/health` liveness before image pruning. That endpoint is a liveness check, not a database-content or end-to-end traffic proof; controlled release acceptance still needs its separately approved operational verification.
 
 Marketing is built during validation and deployed from that same run's checked artifact, not rebuilt with credentials. Main pushes deploy it only for its source/build/workflow paths; manual main releases deploy both apps. Empty unrelated changes do not imply marketing deployment.
 
-## Approved cutover sequence
+## Migration record and future handoff safeguards
+
+The 2026-11-03 handoff followed the sequence below. It is a reference for future controller/repository migrations, not an outstanding activation checklist. Any new operational handoff still needs explicit scope and fresh evidence.
 
 1. Review/test the clean source, synthetic coverage, MIT/third-party notices and all public metadata. Obtain exact-name private repository creation and push/build approval before bootstrap.
 2. Bootstrap privately with validation-only Actions. Keep the old controller as the sole temporary release owner. Establish tested `Validate` and `Build and scan backend image` required contexts on the new repository, preserving equivalent branch safeguards.

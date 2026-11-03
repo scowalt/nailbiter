@@ -1,6 +1,6 @@
 # Nailbiter development rules
 
-The intended canonical development, issue/PR, CI and CD repository is `scowalt/nailbiter`. The clean-source migration remains unactivated until its reviewed handoff is approved. Historical private repositories are evidence archives, not active development or build dependencies.
+The canonical public development, issue/PR, CI and CD repository is `scowalt/nailbiter`. GitHub Actions owns production delivery; the original repository is a private historical archive. Historical repositories are not active development, test or release dependencies.
 
 ## Source and review
 
@@ -16,6 +16,7 @@ The intended canonical development, issue/PR, CI and CD repository is `scowalt/n
 - Before issue operations, read `docs/agents/issue-tracker.md`; before triage, read `docs/agents/triage-labels.md`.
 - Before fixture changes, read `tests/fixtures/README.md`. Maintain deterministic synthetic cases and regenerate with `scripts/test-fixtures/generate.py`; no provider/production captures or relabeled observations.
 - Before Actions, package publishing, production or infrastructure work, read `docs/deployment.md`. Source workflow code is not permission to arm or run CD. Full migration means one public development home and one Actions release controller, never parallel private/public publishers.
+- Before database backup or restore work, read `docs/operations/database-backups.md`; verify the target and exact extension version before restoring.
 - Before the optional TesterArmy pilot, read `docs/operations/testerarmy-pilot-local.md`. Running a paid/live provider experiment requires separate explicit approval; it is not CI.
 
 ## Validation and safety
