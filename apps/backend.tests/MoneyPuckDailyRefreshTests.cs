@@ -70,7 +70,7 @@ public sealed class MoneyPuckDailyRefreshTests
     [InlineData(2, 403, "")]
     [InlineData(3, 429, "")]
     [InlineData(2, 200, "Please verify you are human: CAPTCHA")]
-    public async Task Ranking_denial_stops_the_cycle_and_blocks_both_inputs_after_restart(int stopAt, int status, string body)
+    public async Task Ranking_denial_stops_the_cycle_and_blocks_both_inputs_until_backoff_expires_across_restart(int stopAt, int status, string body)
     {
         await using var h = new MoneyPuckQualificationHarness();
         await h.StartAsync(enabled: false);
@@ -86,11 +86,15 @@ public sealed class MoneyPuckDailyRefreshTests
         Assert.Equal(previous.Select(row => (row.PowerRank, row.RankPublishedAt, row.FetchedAt)), (await h.RowsAsync("moneypuck")).Select(row => (row.PowerRank, row.RankPublishedAt, row.FetchedAt)));
         h.Handler.Override = null;
         await h.RestartApplicationAsync();
-        h.Clock.Now = h.Clock.Now.AddDays(2);
+        h.Clock.Now = h.Clock.Now.AddHours(24).AddTicks(-1);
         Assert.Equal(0, await h.Service.RefreshNhlRatingsAsync(default));
         Assert.Equal(0, await h.App.Services.GetRequiredService<MoneyPuckService>().RefreshNhlRatingsAsync(default));
         Assert.Equal(3 + stopAt, h.Handler.Requests.Count);
         Assert.Empty(await h.RowsAsync());
+        h.Clock.Now = h.Clock.Now.AddTicks(1);
+        h.Handler.Marker = h.Clock.Now.AddMinutes(-5).ToString("O");
+        Assert.Equal(32, await h.Service.RefreshNhlRatingsAsync(default));
+        Assert.Equal(12 + stopAt, h.Handler.Requests.Count);
     }
 
     [Theory]
@@ -161,8 +165,14 @@ public sealed class MoneyPuckDailyRefreshTests
         var sql = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", "033_MoneyPuckDailyRefresh.sql"));
         await db.Database.ExecuteSqlRawAsync(sql);
         await db.Database.ExecuteSqlRawAsync(sql);
+        Assert.Equal(0, await h.Service.RefreshNhlRatingsAsync(default));
+        Assert.Empty(h.Handler.Requests);
+        var expiry = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", "036_MoneyPuckRefusalExpiry.sql"));
+        await db.Database.ExecuteSqlRawAsync(expiry);
+        await db.Database.ExecuteSqlRawAsync(expiry);
         Assert.Equal(32, await h.Service.RefreshNhlRatingsAsync(default));
         await db.Database.ExecuteSqlRawAsync(sql);
+        await db.Database.ExecuteSqlRawAsync(expiry);
         await h.RestartApplicationAsync();
         Assert.Equal(0, await h.Service.RefreshNhlRatingsAsync(default));
         Assert.Equal(9, h.Handler.Requests.Count);

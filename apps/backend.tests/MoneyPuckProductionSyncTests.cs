@@ -30,7 +30,7 @@ public sealed class MoneyPuckProductionSyncTests
             var result = await deployed.Services.GetRequiredService<MoneyPuckService>().RefreshNhlAsync(default);
             Assert.Equal(32, result.Rankings);
             Assert.Equal(32, result.Qualification);
-            Assert.Equal(admitted.UtcDateTime.AddHours(24), result.NextAttemptAt.Value);
+            Assert.Equal<DateTime?>(admitted.UtcDateTime.AddHours(24), result.NextAttemptAt);
             using var scope = deployed.Services.CreateScope();
             var team = (await scope.ServiceProvider.GetRequiredService<GameDataService>().GetTeamRankInfoAsync("nhl", "NSH", 2027, 2, default)).Value;
             Assert.NotNull(team.PowerRank);
@@ -58,7 +58,7 @@ public sealed class MoneyPuckProductionSyncTests
     }
 
     [Fact]
-    public async Task Turning_on_selection_does_not_clear_a_persisted_denial_or_retry_the_provider()
+    public async Task Turning_on_selection_does_not_shorten_a_persisted_denial_backoff_or_retry_the_provider()
     {
         var selectionOff = await DeploymentSettingsAsync(selectionEnabled: false);
         var selectionOn = await DeploymentSettingsAsync();
@@ -74,7 +74,7 @@ public sealed class MoneyPuckProductionSyncTests
         }
 
         h.Handler.Override = null;
-        h.Clock.Now = h.Clock.Now.AddDays(2);
+        h.Clock.Now = h.Clock.Now.AddHours(24).AddTicks(-1);
         await using var deployed = h.App.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(selectionOn)));
         Assert.True(deployed.Services.GetRequiredService<IOptions<PlayoffRatingsOptions>>().Value.MoneyPuckSelectionEnabled);
         var blocked = await deployed.Services.GetRequiredService<MoneyPuckService>().RefreshNhlAsync(default);
