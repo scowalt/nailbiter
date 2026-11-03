@@ -8,7 +8,7 @@ Playoff qualification is a different question from game-winner odds or champions
 
 ## Preserved restrictions
 
-- All MoneyPuck collection shares at least 24 hours between attempts, including failed/cancelled attempts, across callers/restarts. Denial blocks both inputs persistently. Qualification switches remain default off pending their activation evidence.
+- All MoneyPuck collection shares at least 24 hours between attempts, including failed/cancelled attempts, across callers/restarts. Denial blocks both inputs persistently. Qualification application defaults remain off; production Compose follows the owner's explicit collection/selection settings. Enabling selection does not establish live-source readiness or bypass missing/stale evidence, denial or the daily budget.
 - Polymarket is rejected for Nailbiter; do not resume investigation, denied-source probing or importer/rollout work without a new explicit decision.
 - Legacy PlayoffStatus remains rejected/default off, not an awaiting-permission production path.
 - Free-only remains a constraint. Do not add paid/trial feeds, enroll accounts, contact providers for extra permission, or use unsupported proxy/identity/access workarounds without a separately authorized scope.

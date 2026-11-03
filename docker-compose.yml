@@ -44,7 +44,7 @@ services:
       EnableScraper: "true"
       ASPNETCORE_ENVIRONMENT: "Production"
       PlayoffRatings__MoneyPuckRefreshEnabled: "${MONEYPUCK_REFRESH_ENABLED:-true}"
-      PlayoffRatings__MoneyPuckSelectionEnabled: "false"
+      PlayoffRatings__MoneyPuckSelectionEnabled: "${MONEYPUCK_SELECTION_ENABLED:-true}"
       PlayoffRatings__MoneyPuckApprovedSeasons__0: "2027"
       Logging__LogLevel__System.Net.Http.HttpClient.MoneyPuckService: "Information"
       Highlights__YouTube__Enabled: "${HIGHLIGHTS_YOUTUBE_ENABLED:-false}"

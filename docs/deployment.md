@@ -31,11 +31,11 @@ The hosting targets, database and backup volumes stay unchanged. Release code ta
 - Treat every image accessible to the public repository as potentially readable by public forks, regardless of package visibility. Preserve the clean-source, synthetic-fixture and no-build-secret boundaries for all future versions.
 - Verify the VPS's access to the clean package under separate operational approval before deployment. Do not fall back to the historical package, a long-lived token in PR jobs, or a mutable tag when access fails. Historical-image recovery remains a separately approved operator procedure, not an exception to the new release guards.
 
-## Proposed MoneyPuck daily-sync persistence
+## MoneyPuck production controls
 
-This draft carries forward the owner's recorded 2026-10-13 direction to make normal MoneyPuck collection durable across deployments, rather than dependent on temporary host overrides. Its production Compose configuration sets qualification refresh on for season 2027 and selection off; `MONEYPUCK_REFRESH_ENABLED=false` is the operator stop for qualification collection. Other application hosts keep their default-off controls.
+The owner requested normal daily collection on 2026-10-13 and explicitly requested “use forecast ON” on 2026-11-03. Production Compose defaults qualification refresh and forecast selection on for season 2027. `MONEYPUCK_REFRESH_ENABLED=false` stops qualification collection; `MONEYPUCK_SELECTION_ENABLED=false` independently stops forecast selection. Other application hosts keep their default-off controls. Selection uses only eligible stored forecasts, after Kalshi priority and unchanged source/season/freshness checks; it performs no provider HTTP.
 
-This source proposal is **not deployed or activated by migration**. Review its settings against the actual approved production configuration before any separately authorized merge/release; do not infer that configuration from an old incident record. The existing persisted, provider-wide 24-hour admission budget and denial/interruption blocks remain authoritative across deployments. No extra refresh, ledger reset or provider probe is a deployment check. See the [runbook](nhl-moneypuck-qualification.md).
+Source configuration is not a completed deployment or proof of usable forecasts. Review actual settings through the authorized PR/release workflow. The persisted provider-wide 24-hour admission budget and denial/interruption blocks remain authoritative across deployments; a denial still blocks both MoneyPuck inputs even when both settings are true. Preserve that state and existing operator stops. No extra refresh, ledger reset or provider probe is a deployment check. See the [runbook](nhl-moneypuck-qualification.md) for remaining live-source readiness evidence.
 
 ## Validation contract
 

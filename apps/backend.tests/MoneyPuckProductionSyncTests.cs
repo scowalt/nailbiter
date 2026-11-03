@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 using System.Text.Json;
 using backend.Models;
 using backend.Services;
@@ -12,7 +13,7 @@ namespace backend.tests;
 public sealed class MoneyPuckProductionSyncTests
 {
     [Fact]
-    public async Task Normal_deployment_syncs_both_inputs_and_redeployment_preserves_the_daily_limit()
+    public async Task Normal_deployment_selects_imported_forecasts_and_redeployment_preserves_the_daily_limit()
     {
         var settings = await DeploymentSettingsAsync();
         await using var h = new MoneyPuckQualificationHarness();
@@ -22,7 +23,9 @@ public sealed class MoneyPuckProductionSyncTests
         {
             var options = deployed.Services.GetRequiredService<IOptions<PlayoffRatingsOptions>>().Value;
             Assert.True(options.MoneyPuckRefreshEnabledFor("nhl", 2027));
-            Assert.False(options.MoneyPuckSelectionEnabled);
+            Assert.True(options.MoneyPuckSelectionEnabledFor("nhl", 2027));
+            Assert.False(options.MoneyPuckSelectionEnabledFor("nhl", 2028));
+            Assert.False(options.MoneyPuckSelectionEnabledFor("nba", 2027));
             Assert.False(options.MoneyPuckRefreshEnabledFor("nhl", 2028));
             var result = await deployed.Services.GetRequiredService<MoneyPuckService>().RefreshNhlAsync(default);
             Assert.Equal(32, result.Rankings);
@@ -31,7 +34,9 @@ public sealed class MoneyPuckProductionSyncTests
             using var scope = deployed.Services.CreateScope();
             var team = (await scope.ServiceProvider.GetRequiredService<GameDataService>().GetTeamRankInfoAsync("nhl", "NSH", 2027, 2, default)).Value;
             Assert.NotNull(team.PowerRank);
-            Assert.Null(team.PlayoffOdds);
+            Assert.Equal(.2518, team.PlayoffOdds.Value);
+            Assert.False(team.PlayoffIsFinal);
+            Assert.Equal(9, h.Handler.Requests.Count);
         }
         await using var redeployed = h.App.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(settings)));
         var service = redeployed.Services.GetRequiredService<MoneyPuckService>();
@@ -52,7 +57,66 @@ public sealed class MoneyPuckProductionSyncTests
         Assert.Equal(18, h.Handler.Requests.Count);
     }
 
-    private static async Task<Dictionary<string, string?>> DeploymentSettingsAsync()
+    [Fact]
+    public async Task Turning_on_selection_does_not_clear_a_persisted_denial_or_retry_the_provider()
+    {
+        var selectionOff = await DeploymentSettingsAsync(selectionEnabled: false);
+        var selectionOn = await DeploymentSettingsAsync();
+        await using var h = new MoneyPuckQualificationHarness();
+        await h.StartAsync(enabled: false);
+        h.Handler.Override = (_, _) => Task.FromResult<HttpResponseMessage?>(new(HttpStatusCode.Forbidden));
+        await using (var previous = h.App.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(selectionOff))))
+        {
+            var denied = await previous.Services.GetRequiredService<MoneyPuckService>().RefreshNhlAsync(default);
+            Assert.Equal(0, denied.Rankings);
+            Assert.Equal(0, denied.Qualification);
+            Assert.Single(h.Handler.Requests);
+        }
+
+        h.Handler.Override = null;
+        h.Clock.Now = h.Clock.Now.AddDays(2);
+        await using var deployed = h.App.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(selectionOn)));
+        Assert.True(deployed.Services.GetRequiredService<IOptions<PlayoffRatingsOptions>>().Value.MoneyPuckSelectionEnabled);
+        var blocked = await deployed.Services.GetRequiredService<MoneyPuckService>().RefreshNhlAsync(default);
+        Assert.Equal(0, blocked.Rankings);
+        Assert.Equal(0, blocked.Qualification);
+        using var scope = deployed.Services.CreateScope();
+        var team = (await scope.ServiceProvider.GetRequiredService<GameDataService>().GetTeamRankInfoAsync("nhl", "NSH", 2027, 2, default)).Value;
+        Assert.Null(team.PlayoffOdds);
+        Assert.Single(h.Handler.Requests);
+    }
+
+    [Fact]
+    public async Task Selection_uses_stored_forecasts_without_HTTP_and_preserves_the_stop_and_36_hour_expiry()
+    {
+        var selectionOn = await DeploymentSettingsAsync();
+        var selectionOff = await DeploymentSettingsAsync(selectionEnabled: false);
+        await using var h = new MoneyPuckQualificationHarness();
+        await h.StartAsync(enabled: false);
+        await using var deployed = h.App.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(selectionOn)));
+        var result = await deployed.Services.GetRequiredService<MoneyPuckService>().RefreshNhlAsync(default);
+        Assert.Equal(32, result.Qualification);
+        var requestCount = h.Handler.Requests.Count;
+        var published = DateTimeOffset.Parse(h.Handler.Marker, System.Globalization.CultureInfo.InvariantCulture);
+
+        async Task<double?> Forecast(Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program> app)
+        {
+            using var scope = app.Services.CreateScope();
+            var team = (await scope.ServiceProvider.GetRequiredService<GameDataService>().GetTeamRankInfoAsync("nhl", "NSH", 2027, 2, default)).Value;
+            return team.PlayoffOdds?.Value;
+        }
+
+        Assert.Equal(.2518, await Forecast(deployed));
+        await using (var stopped = h.App.WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(selectionOff))))
+            Assert.Null(await Forecast(stopped));
+        h.Clock.Now = published.AddHours(36).AddTicks(-1);
+        Assert.Equal(.2518, await Forecast(deployed));
+        h.Clock.Now = h.Clock.Now.AddTicks(1);
+        Assert.Null(await Forecast(deployed));
+        Assert.Equal(requestCount, h.Handler.Requests.Count);
+    }
+
+    private static async Task<Dictionary<string, string?>> DeploymentSettingsAsync(bool? selectionEnabled = null)
     {
         var envFile = Path.GetTempFileName();
         try
@@ -67,6 +131,8 @@ public sealed class MoneyPuckProductionSyncTests
             start.Environment["LOKI_URL"] = "https://logs.example.invalid";
             start.Environment["LOKI_USERNAME"] = "fixture";
             start.Environment["GRAFANA_CLOUD_API_KEY"] = "fixture";
+            if (selectionEnabled.HasValue)
+                start.Environment["MONEYPUCK_SELECTION_ENABLED"] = selectionEnabled.Value.ToString().ToLowerInvariant();
             using var process = Process.Start(start)!;
             var output = process.StandardOutput.ReadToEndAsync();
             var error = process.StandardError.ReadToEndAsync();
