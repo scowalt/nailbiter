@@ -802,18 +802,67 @@ let private collegeEvent codes =
     root
 
 [<Fact>]
-let ``College qualification maps Missouri South Carolina NC State and Miami Ohio`` () = task {
+let ``College qualification maps Missouri South Carolina NC State Miami Ohio and Northwestern`` () = task {
     use importer = new Importer()
-    do! importer.CollegeTeams ["MIZ"; "SC"; "NCSU"; "M-OH"]
-    importer.Event(collegeEvent ["MIZZ"; "SCAR"; "NCST"; "MOH"])
+    do! importer.CollegeTeams ["MIZ"; "SC"; "NCSU"; "M-OH"; "NU"]
+    importer.Event(collegeEvent ["MIZZ"; "SCAR"; "NCST"; "MOH"; "NW"])
     let! count = importer.Refresh("cfb", 2026)
-    Assert.Equal(4, count)
+    Assert.Equal(5, count)
     let! rows = importer.Rows("cfb", 2026)
-    Assert.Equal(4, rows.Count)
+    Assert.Equal(5, rows.Count)
     Assert.All(rows, fun row ->
         Assert.Equal(Nullable 0.62, row.PlayoffProbability)
         Assert.Equal("kalshi", row.Source)
         Assert.False(row.PlayoffProbabilityIsFinal))
+}
+
+[<Theory>]
+[<InlineData(false)>]
+[<InlineData(true)>]
+let ``Northwestern qualification alias preserves hype for unrelated unlisted college teams`` archived = task {
+    use importer = new Importer()
+    do! importer.CollegeTeams ["NU"; "OHIO"; "AKR"]
+    let root = collegeEvent ["NW"]
+    if archived then
+        let northwestern = market root "NW"
+        finalMarket northwestern "no" "0.0000"
+        withArchive importer (collegeEvent []) HttpStatusCode.OK (archiveResponse [northwestern] "")
+    else importer.Event(root)
+
+    let now = importer.Clock.Now.UtcDateTime
+    let game = Game(Id = "synthetic-cfb-alias", Sport = "cfb", HomeTeam = "Akron", AwayTeam = "Ohio",
+                    HomeTeamAbbreviation = "AKR", AwayTeamAbbreviation = "OHIO", Status = "scheduled",
+                    ScheduledStart = now.AddHours(1), SeasonYear = Nullable 2026, SeasonType = Nullable 2,
+                    CollegeCompetition = "regular", HomeFpi = Nullable -10.0, AwayFpi = Nullable -4.0,
+                    RatingsObservedAt = Nullable now)
+    use scope = importer.Provider.CreateScope()
+    let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
+    db.Games.Add(game) |> ignore
+    db.PregameOdds.Add(PregameOdds(GameId = game.Id, Source = "ESPN synthetic", FetchedAt = now,
+                                 HomeMoneyline = Nullable 150, AwayMoneyline = Nullable -150,
+                                 HomeWinProbability = 0.4, AwayWinProbability = 0.6)) |> ignore
+    let! _ = db.SaveChangesAsync()
+    let! _ = importer.Refresh("cfb", 2026)
+    let hype = HypeScoreService(importer.Provider, NullLogger<HypeScoreService>.Instance, importer.Clock)
+    let! score = hype.CalculateHypeScoreAsync(game)
+    Assert.True(score.HasValue, "An unrelated Northwestern alias must not suppress the unlisted matchup's hype score")
+    let! components = hype.GetHypeComponentsAsync(game)
+    Assert.True(components.IsComplete)
+    Assert.Equal(Nullable 0.005, components.HomePlayoffOdds)
+    Assert.Equal(Nullable 0.005, components.AwayPlayoffOdds)
+
+    let! rows = importer.Rows("cfb", 2026)
+    Assert.Equal(3, rows.Count)
+    for team in ["OHIO"; "AKR"] do
+        let assumed = rows |> Seq.find (fun row -> row.TeamAbbreviation = team)
+        Assert.Equal("cfp_no_market", assumed.Source)
+        Assert.False(assumed.PlayoffProbabilityIsFinal)
+        let! rank = GameDataService(db, importer.Clock).GetTeamRankInfoAsync("cfb", team, Nullable 2026, Nullable 2, CancellationToken.None)
+        Assert.Equal(Some "CFP <1%", rank.Value.DisplayRank)
+    let northwestern = rows |> Seq.find (fun row -> row.TeamAbbreviation = "NU")
+    Assert.Equal("kalshi", northwestern.Source)
+    Assert.Equal((if archived then Nullable 0.0 else Nullable 0.62), northwestern.PlayoffProbability)
+    Assert.Equal(archived, northwestern.PlayoffProbabilityIsFinal)
 }
 
 [<Fact>]
@@ -884,6 +933,8 @@ let ``Listed college markets with unusable quotes never receive the no-market as
 [<InlineData("incomplete-archive")>]
 [<InlineData("unknown-live-team")>]
 [<InlineData("unknown-archived-team")>]
+[<InlineData("unverified-northwestern-live")>]
+[<InlineData("unverified-northwestern-archive")>]
 let ``College no-market assumptions require complete season-verified and mapped listings`` failure = task {
     use importer = new Importer()
     do! importer.CollegeTeams ["ORE"; "BOIS"]
@@ -897,8 +948,10 @@ let ``College no-market assumptions require complete season-verified and mapped 
     | "archive-failure" -> withArchive importer root HttpStatusCode.ServiceUnavailable "unavailable"
     | "incomplete-archive" -> withArchive importer root HttpStatusCode.OK "{\"markets\":[]}"
     | "unknown-live-team" -> importer.Event(collegeEvent ["ORE"; "UNKNOWN"])
+    | "unverified-northwestern-live" -> importer.Event(collegeEvent ["ORE"; "NW"])
     | _ ->
-        let archived = market (collegeEvent ["UNKNOWN"]) "UNKNOWN"
+        let code = if failure = "unverified-northwestern-archive" then "NW" else "UNKNOWN"
+        let archived = market (collegeEvent [code]) code
         finalMarket archived "no" "0.0000"
         withArchive importer root HttpStatusCode.OK (archiveResponse [archived] "")
     let! _ = importer.Refresh("cfb", 2026)
