@@ -328,6 +328,81 @@ public sealed class NflPlayoffLeverageTests
         Assert.Null(result[game.Id]); Assert.Null(result[second.Id]); Assert.Single(handler.Requests);
     }
 
+    [Theory]
+    [InlineData(37)]
+    [InlineData(1440)]
+    public async Task One_future_kickoff_disagreement_does_not_poison_unrelated_verified_next_games(int minutes)
+    {
+        var game = Game(); var schedules = Schedules(); var handler = new Handler();
+        var changed = schedules.SelectMany(s => s.Events).First(e => e.GetProperty("week").GetProperty("number").GetInt32() == 7
+            && e.GetProperty("competitions")[0].GetProperty("competitors").EnumerateArray()
+                .All(t => t.GetProperty("team").GetProperty("abbreviation").GetString() is not ("DET" or "GB")));
+        var changedId = changed.GetProperty("id").GetString();
+        var changedStart = DateTimeOffset.Parse(changed.GetProperty("date").GetString()!).UtcDateTime.AddMinutes(minutes);
+        var competitors = changed.GetProperty("competitions")[0].GetProperty("competitors").EnumerateArray().ToArray();
+        var affected = Game(); affected.Id = changedId!; affected.ScheduledStart = changedStart;
+        affected.HomeTeamAbbreviation = competitors.Single(t => t.GetProperty("homeAway").GetString() == "home").GetProperty("team").GetProperty("abbreviation").GetString()!;
+        affected.AwayTeamAbbreviation = competitors.Single(t => t.GetProperty("homeAway").GetString() == "away").GetProperty("team").GetProperty("abbreviation").GetString()!;
+        schedules = schedules.Select(s => s with { Events = s.Events.Select(e =>
+        {
+            if (e.GetProperty("id").GetString() != changedId) return e;
+            var copy = System.Text.Json.Nodes.JsonNode.Parse(e.GetRawText())!; copy["date"] = changedStart;
+            return JsonSerializer.SerializeToElement(copy);
+        }).ToArray() }).ToArray();
+        var results = await Collector(handler).CollectAsync([game, affected], schedules, default);
+        var supported = results[game.Id]!;
+        Assert.True(supported.ScheduleVerified, supported.Reason);
+        Assert.NotNull(supported.HomeOdds); Assert.NotNull(supported.AwayOdds);
+        var context = Context(game); context.NflPlayoffLeverage = supported;
+        Assert.Equal(20, Score(game, context).Stakes.Value!.Value, 8);
+        Assert.Equal(59, Math.Round(Score(game, context).Total!.Value));
+        var blocked = results[affected.Id]!;
+        Assert.False(blocked.ScheduleVerified);
+        Assert.Null(blocked.HomeOdds); Assert.Null(blocked.AwayOdds);
+        Assert.Contains("verified next game", blocked.Reason);
+        Assert.Equal(3, handler.Requests.Count);
+    }
+
+    [Theory]
+    [InlineData("week")]
+    [InlineData("roles")]
+    [InlineData("missing-week-and-date")]
+    [InlineData("inconsistent-copies")]
+    [InlineData("completed-start")]
+    [InlineData("completed-score")]
+    public async Task Isolation_preserves_league_identity_copy_consistency_and_exact_completed_results(string problem)
+    {
+        var game = Game(); var schedules = Schedules();
+        var past = problem.StartsWith("completed-", StringComparison.Ordinal);
+        var changedId = schedules.SelectMany(s => s.Events).First(e => e.GetProperty("week").GetProperty("number").GetInt32() == (past ? 1 : 7)
+            && e.GetProperty("competitions")[0].GetProperty("competitors").EnumerateArray()
+                .All(t => t.GetProperty("team").GetProperty("abbreviation").GetString() is not ("DET" or "GB"))).GetProperty("id").GetString();
+        var modified = false;
+        schedules = schedules.Select(s => s with { Events = s.Events.Select(e =>
+        {
+            if (e.GetProperty("id").GetString() != changedId || problem == "inconsistent-copies" && modified) return e;
+            modified = true;
+            var copy = System.Text.Json.Nodes.JsonNode.Parse(e.GetRawText())!;
+            switch (problem)
+            {
+                case "week": copy["week"]!["number"] = 8; break;
+                case "roles":
+                    copy["competitions"]![0]!["competitors"]![0]!["homeAway"] = "away";
+                    copy["competitions"]![0]!["competitors"]![1]!["homeAway"] = "home"; break;
+                case "missing-week-and-date":
+                    copy.AsObject().Remove("week"); copy["date"] = DateTimeOffset.Parse(e.GetProperty("date").GetString()!).AddDays(1); break;
+                case "completed-score": copy["competitions"]![0]!["competitors"]![0]!["score"]!["value"] = "999"; break;
+                default: copy["date"] = DateTimeOffset.Parse(e.GetProperty("date").GetString()!).AddMinutes(37); break;
+            }
+            return JsonSerializer.SerializeToElement(copy);
+        }).ToArray() }).ToArray();
+        var handler = new Handler();
+        var result = (await Collector(handler).CollectAsync([game], schedules, default))[game.Id]!;
+        Assert.False(result.ScheduleVerified);
+        Assert.Null(result.HomeOdds); Assert.Null(result.AwayOdds);
+        Assert.Single(handler.Requests);
+    }
+
     [Fact]
     public async Task One_collection_shares_requests_and_never_contacts_other_leagues()
     {

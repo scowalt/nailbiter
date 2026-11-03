@@ -23,14 +23,26 @@ public sealed partial class NflPlayoffPageTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task NflPlayoffLeverage_synthetic_forecasts_flow_through_registered_collector_persistence_public_scoring_and_all_pages(bool decimalScores)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task NflPlayoffLeverage_synthetic_forecasts_flow_through_registered_collector_persistence_public_scoring_and_all_pages(bool decimalScores, bool unrelatedKickoff)
     {
         clock.Now = new DateTimeOffset(2026, 10, 18, 12, 0, 0, TimeSpan.Zero);
         var game = NflPlayoffLeverageTests.Game(); game.Id = "control-7-DET-GB";
         var source = new NflPlayoffLeverageTests.Handler { ServerDate = clock.Now.UtcDateTime };
         var schedules = NflPlayoffLeverageTests.Schedules(score => decimalScores ? score + ".0" : score);
+        if (unrelatedKickoff)
+        {
+            var changedId = schedules.SelectMany(s => s.Events).First(e => e.GetProperty("week").GetProperty("number").GetInt32() == 10).GetProperty("id").GetString();
+            schedules = schedules.Select(s => s with { Events = s.Events.Select(e =>
+            {
+                if (e.GetProperty("id").GetString() != changedId) return e;
+                var copy = JsonNode.Parse(e.GetRawText())!;
+                copy["date"] = DateTimeOffset.Parse(e.GetProperty("date").GetString()!).AddMinutes(37);
+                return JsonSerializer.SerializeToElement(copy);
+            }).ToArray() }).ToArray();
+        }
         var boardEvent = JsonNode.Parse(schedules.Single(s => s.Team == "DET").Events.Single(e => e.GetProperty("id").GetString() == game.Id).GetRawText())!;
         boardEvent["season"]!["type"] = 2;
         var espn = new NflScheduleWire(request =>

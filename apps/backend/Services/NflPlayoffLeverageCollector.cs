@@ -166,8 +166,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
         {
             var matches = source.Games.Where(x => x.Home == game.Contest.Home && x.Away == game.Contest.Away).ToArray();
             if (matches.Length != 1 || (game.Contest.Week != 0 && matches[0].Week != game.Contest.Week) ||
-                (matches[0].Start.HasValue ? matches[0].Start != game.Contest.Start :
-                    game.Contest.Week == 0 && matches[0].Date != game.Contest.Date))
+                (game.Contest.Week == 0 && matches[0].Date != game.Contest.Date))
                 return "PlayoffStatus future schedule does not match the verified NFL season";
         }
         foreach (var game in actual.Where(x => x.Contest.HomeScore.HasValue))
