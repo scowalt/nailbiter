@@ -25,7 +25,7 @@ module private PlayoffMarkets =
         let create series teams aliases =
             Some { Series = series; Teams = teams; Aliases = Map.ofList aliases }
         match sport with
-        | "cfb" -> create "KXNCAAFPLAYOFF" [] []  
+        | "cfb" -> create "KXNCAAFPLAYOFF" [] [ "NW", "NU" ]
         | "nfl" ->
             create "KXNFLPLAYOFF"
                 [ "ARI"; "ATL"; "BAL"; "BUF"; "CAR"; "CHI"; "CIN"; "CLE"; "DAL"; "DEN"; "DET"; "GB"
@@ -203,7 +203,8 @@ type KalshiPlayoffRatingsService
             |> Option.map (fun league ->
                 if sport <> "cfb" then league
                 else { league with Teams = collegeTeams
-                                   Aliases = collegeTeams |> List.map (fun team -> CollegeFootballPolicy.KalshiCode(team), team) |> Map.ofList })
+                                   Aliases = collegeTeams |> List.fold (fun aliases team ->
+                                       Map.add (CollegeFootballPolicy.KalshiCode(team)) team aliases) league.Aliases })
         match league with
         | None ->
             logger.LogWarning("Unsupported Kalshi playoff sport {Sport}", sport)
