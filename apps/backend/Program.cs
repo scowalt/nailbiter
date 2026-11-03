@@ -138,6 +138,16 @@ builder.Services.AddTransient<MoneyPuckQualificationService>();
 builder.Services.AddHttpClient<KalshiPlayoffRatingsService>()
     .AddStandardResilienceHandler();
 builder.Services.AddScoped<HypeScoreService>();
+builder.Services.AddHttpClient<NflPlayoffLeverageCollector>(client =>
+    {
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Nailbiter-NFL-Leverage/1.0 (+https://nailbiter.app)");
+        client.Timeout = TimeSpan.FromSeconds(15);
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        AllowAutoRedirect = false,
+        AutomaticDecompression = System.Net.DecompressionMethods.All
+    });
 builder.Services.AddEspnHttpClient<ProCompetitionEvidenceService>();
 
 builder.Services.AddEspnHttpClient<EspnStandingsService>();

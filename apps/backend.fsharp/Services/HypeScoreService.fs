@@ -222,6 +222,7 @@ type HypeScoreService
             StakesAvailable = result.Stakes.Value.HasValue, StakesScore = result.Stakes.Value.GetValueOrDefault(), StakesExplanation = result.Stakes.Explanation,
             QualityAvailable = result.Quality.Value.HasValue, QualityScore = result.Quality.Value.GetValueOrDefault(), QualityExplanation = result.Quality.Explanation,
             ClosenessAvailable = result.Closeness.Value.HasValue, ClosenessScore = result.Closeness.Value.GetValueOrDefault(), ClosenessExplanation = result.Closeness.Explanation,
+            NflPlayoffLeverage = result.NflPlayoffLeverage,
             HomePlayoffOdds = h.Probability, AwayPlayoffOdds = a.Probability,
             HomeQualificationSource = (homeSelection.Source |> Option.defaultValue ""),
             AwayQualificationSource = (awaySelection.Source |> Option.defaultValue ""),

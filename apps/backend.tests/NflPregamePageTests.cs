@@ -34,6 +34,7 @@ public sealed partial class NflPlayoffPageTests
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
         var context = ProHypeTests.Evidence(game); context.ObservedAt = clock.Now.UtcDateTime;
+        context.NflPlayoffLeverage = NflPlayoffLeverageTests.SyntheticEvidence(game, clock.Now.UtcDateTime);
         game.ProEvidenceJson = JsonSerializer.Serialize(context);
         var ranks = ProHypeTests.Ranks(game, 20, 24);
         foreach (var rank in ranks) rank.FetchedAt = clock.Now.UtcDateTime;

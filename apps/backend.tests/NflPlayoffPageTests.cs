@@ -104,6 +104,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
         {
             var game = ProHypeTests.Game(sport); game.Id = "pro-" + sport; game.WeekNumber = 1;
             var evidence = ProHypeTests.Evidence(game);
+            if (sport == "nfl") evidence.NflPlayoffLeverage = NflPlayoffLeverageTests.SyntheticEvidence(game, clock.Now.UtcDateTime);
             game.ProEvidenceJson = System.Text.Json.JsonSerializer.Serialize(evidence);
             var ranks = ProHypeTests.Ranks(game);
             var qualification = new[] { game.HomeTeamAbbreviation, game.AwayTeamAbbreviation }.Select(team => new TeamRating

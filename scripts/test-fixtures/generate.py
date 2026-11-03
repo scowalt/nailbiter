@@ -6,6 +6,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[2]
 OUTPUTS = {}
@@ -265,11 +266,68 @@ def chart_histories():
          'seedingAssumptions': {'isHistoricalImport': False, 'isHistorical': False, 'explanation': 'Explicit synthetic eligibility controls', 'scheduledStart': 'First constructed timestamp', 'moneylines': 'Unset placeholders', 'otherFields': 'Constructed', 'labels': 'Constructed football clock', 'bounds': 'Final ten samples of the CFB scenario are constructed bounds'}, 'games': contexts})
 
 
+def nfl_leverage():
+    prefix = F + 'NflPlayoffLeverage/'
+    slugs = dict(zip(TEAMS['nfl'], ['cardinals', 'falcons', 'ravens', 'bills', 'panthers', 'bears', 'bengals', 'browns', 'cowboys', 'broncos', 'lions', 'packers', 'texans', 'colts', 'jaguars', 'chiefs', 'chargers', 'rams', 'raiders', 'dolphins', 'vikings', 'patriots', 'saints', 'giants', 'jets', 'eagles', 'steelers', 'seahawks', 'forty-niners', 'buccaneers', 'titans', 'commanders'], strict=True))
+    circle = TEAMS['nfl'][:]
+    rounds = []
+    for rotation in range(31):
+        pairs = []
+        for index in range(16):
+            home, away = circle[index], circle[-index - 1]
+            if (rotation + index) % 2:
+                home, away = away, home
+            if {home, away} == {'DET', 'GB'}:
+                home, away = 'DET', 'GB'
+            pairs.append((home, away))
+        rounds.append(pairs)
+        circle = [circle[0], circle[-1], *circle[1:-1]]
+    target = next(pairs for pairs in rounds if ('DET', 'GB') in pairs)
+    others = [pairs for pairs in rounds if pairs is not target][:16]
+    selected = [*others[:6], target, *others[6:]]
+    eastern = ZoneInfo('America/New_York')
+    origin = datetime(2026, 9, 6, 13, 0, tzinfo=eastern)
+    rows = []
+    tables = []
+    for week in range(1, 19):
+        local = origin + timedelta(weeks=week - 1)
+        date = f'{local:%a %b} {local.day}, ' + ('TBD' if week >= 12 else '1:00 pm')
+        table = [f'<h2 id="{week}">Week {week}</h2><table>', '<tr><th>Home Team</th><th>Score</th><th>Visiting Team</th><th>Date / Time (ET)</th></tr>']
+        for index, (home, away) in enumerate(selected[week - 1] if week <= 17 else []):
+            home_score = str(17 + (week + index) % 7) if week < 7 else ''
+            away_score = str(10 + (3 * week + index) % 9) if week < 7 else ''
+            start = local.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+            rows.append([week, home, away, start, home_score, away_score])
+            score = f'{home_score}–{away_score}' if home_score else ''
+            table.append(f'<tr><td><a href="#{slugs[home]}">{home}</a></td><td>{score}</td><td><a href="#{slugs[away]}">{away}</a></td><td>{date}</td></tr>')
+        table.append('</table>')
+        tables.append('\n'.join(table))
+    def document(title, content):
+        return f'<!doctype html><html><head><title>{title}</title></head><body><header><span class="datetime">Synthetic publication batch A</span></header><p class="wkinfo">NFL - Week 7 of 18</p><main class="mncntnt"><h1>{title}</h1><p>Independently authored synthetic contract fixture; not provider content or real sports results.</p>{content}</main></body></html>\n'
+    emit(prefix + 'nflschedule.html', document('2026 NFL Schedule', '\n'.join(tables)))
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator='\n')
+    writer.writerow(['week', 'home', 'away', 'start', 'home_score', 'away_score'])
+    writer.writerows(rows)
+    emit(prefix + 'synthetic-espn-controls.csv', buffer.getvalue())
+    for team, name, opponent, probabilities in [('GB', 'Green Bay Packers', 'Lions', (18, 32, 43)), ('DET', 'Detroit Lions', 'Packers', (26, 36, 46))]:
+        completed = [row for row in rows if row[4] and team in row[1:3]]
+        wins = sum(int(row[4] if row[1] == team else row[5]) > int(row[5] if row[1] == team else row[4]) for row in completed)
+        ties = sum(row[4] == row[5] for row in completed)
+        losses = len(completed) - wins - ties
+        content = [f'<h3>Next Game - {opponent}</h3><table>', '<tr>' + ''.join(f'<th>{label}</th>' for label in ['Scenario', 'W', 'L', 'T', *[f'Seed {n}' for n in range(1, 8)], 'No Playoffs']) + '</tr>', '<tr><th colspan="12">Independent synthetic scenarios</th></tr>']
+        for label, w, loss, no_playoffs in [('Win Next Game', wins + 1, losses, probabilities[0]), ('Current Standings', wins, losses, probabilities[1]), ('Lose Next Game', wins, losses + 1, probabilities[2])]:
+            cells = [label, w, loss, ties, f'{100 - no_playoffs}%', *['0%'] * 6, f'{no_playoffs}%']
+            content.append('<tr>' + ''.join(f'<td>{value}</td>' for value in cells) + '</tr>')
+        content.append('</table>')
+        emit(prefix + slugs[team] + 'whatif.html', document(name + ' What If?', '\n'.join(content)))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
-    for generate in [qualification_fixtures, rankings, moneypuck_model, pro_schedules, mlb_preview, nfl_preview, nhl_stakes, mlb_reconciliation, chart_histories]:
+    for generate in [qualification_fixtures, rankings, moneypuck_model, pro_schedules, mlb_preview, nfl_preview, nhl_stakes, mlb_reconciliation, chart_histories, nfl_leverage]:
         generate()
     manifest = {path: hashlib.sha256(text.encode()).hexdigest() for path, text in sorted(OUTPUTS.items())}
     emit('tests/fixtures/manifest.json', {'provenance': 'Independently constructed by scripts/test-fixtures/generate.py; no provider responses used as inputs.', 'sha256': manifest})

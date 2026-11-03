@@ -4,6 +4,8 @@ NFL playoff qualification probabilities come from Kalshi alone. NBA, NHL, and ML
 See [Playoff qualification probabilities](playoff-odds.md) for season matching, price rules, refreshes, final outcomes, and tests.
 Power rankings and championship probabilities remain separate inputs.
 
+The continuing [NFL conditional-leverage proposal](nfl-playoff-leverage.md) uses separately verified PlayoffStatus win/loss scenarios for regular-season qualification Stakes, not for Kalshi's unconditional Playoff outlook or trusted final outcomes. This unmerged source proposal does not deploy or activate collection, change other leagues or authorize NHL PlayoffStatus. Missing conditional evidence cannot be replaced with an unconditional estimate.
+
 ## NFL season verification
 
 The 2026 NFL season uses Kalshi event `KXNFLPLAYOFF-27`. Its subtitle must identify `2026-27` or `2026-2027`.

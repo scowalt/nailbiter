@@ -48,6 +48,34 @@ class SyntheticFixtureTests(unittest.TestCase):
         self.assertEqual(lines['away']['close']['odds'], '+110')
         self.assertEqual(Fraction(6, 11) / (Fraction(6, 11) + Fraction(10, 21)), Fraction(63, 118))
 
+    def test_nfl_leverage_schedule_and_oracle_are_independent_constructions(self):
+        from collections import Counter
+        from fractions import Fraction
+        prefix = ROOT / 'apps/backend.tests/Fixtures/NflPlayoffLeverage'
+        rows = list(csv.DictReader(io.StringIO((prefix / 'synthetic-espn-controls.csv').read_text())))
+        self.assertEqual(len(rows), 272)
+        counts = Counter(team for row in rows for team in [row['home'], row['away']])
+        self.assertEqual(len(counts), 32)
+        self.assertEqual(set(counts.values()), {17})
+        self.assertEqual(len({(row['home'], row['away']) for row in rows}), 272)
+        target = [row for row in rows if row['home'] == 'DET' and row['away'] == 'GB']
+        self.assertEqual(len(target), 1)
+        self.assertEqual(target[0]['week'], '7')
+        self.assertEqual(target[0]['start'], '2026-10-18T17:00:00Z')
+        self.assertEqual(target[0]['home_score'], '')
+        self.assertEqual((prefix / 'nflschedule.html').read_text().count('<h2 id='), 18)
+        for filename in ['nflschedule.html', 'packerswhatif.html', 'lionswhatif.html']:
+            self.assertIn('Independently authored synthetic contract fixture', (prefix / filename).read_text())
+        away = 80 * ((1 - Fraction(18, 100)) - (1 - Fraction(43, 100)))
+        home = 80 * ((1 - Fraction(26, 100)) - (1 - Fraction(46, 100)))
+        self.assertEqual(away, 20)
+        self.assertEqual(home, 16)
+        rank_one, rank_two = Fraction(100 * 63, 64), Fraction(100 * 61, 64)
+        quality = 2 * rank_one * rank_two / (rank_one + rank_two)
+        total = Fraction(45, 100) * max(home, away) + Fraction(35, 100) * quality + Fraction(20, 100) * 80
+        self.assertEqual(total, Fraction(29213125, 496000))
+        self.assertEqual(round(total), 59)
+
     def test_chart_oracle_uses_exact_step_integrals_not_production_scorer(self):
         from fractions import Fraction
         csv_text = (ROOT / 'apps/backend.tests/Fixtures/Excitement/histories.csv').read_text()

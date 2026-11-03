@@ -18,7 +18,18 @@ module GameDetailRenderer =
                 let missingTeams =
                     [ game.AwayTeam, hype.AwayPlayoffOdds; game.HomeTeam, hype.HomePlayoffOdds ]
                     |> List.choose (fun (team, odds) -> if odds.HasValue then None else Some team)
-                if game.SeasonType = Nullable 2 && PlayoffRatingPolicy.isSupported game.Sport && not missingTeams.IsEmpty then
+                if game.Sport = "nfl" && game.SeasonType = Nullable 2 then
+                    let forecast = hype.NflPlayoffLeverage
+                    let missingScenarios =
+                        [ game.AwayTeam, (if isNull (box forecast) then null else forecast.AwayOdds), hype.AwayQualificationIsFinal
+                          game.HomeTeam, (if isNull (box forecast) then null else forecast.HomeOdds), hype.HomeQualificationIsFinal ]
+                        |> List.choose (fun (team, odds, final) -> if not final && isNull (box odds) then Some team else None)
+                    if missingScenarios.IsEmpty then
+                        yield "Stakes need verified competition and playoff context."
+                    else
+                        let teams = String.Join(" and ", missingScenarios)
+                        yield $"Stakes need current win/loss playoff scenarios for {teams}."
+                elif game.SeasonType = Nullable 2 && PlayoffRatingPolicy.isSupported game.Sport && not missingTeams.IsEmpty then
                     let qualification = if game.Sport = "cfb" then "CFP qualification odds" else "playoff odds"
                     let teams = String.Join(" and ", missingTeams)
                     yield $"Hype needs reliable {qualification} for {teams}."
@@ -33,14 +44,14 @@ module GameDetailRenderer =
     let private comparisonRow (label: string) (away: string) (home: string) =
         Elem.div [ cls "grid grid-cols-3 gap-2 py-2 border-b border-border last:border-b-0 text-sm" ] [
             Elem.div [ cls "text-right font-semibold" ] [ Text.enc away ]
-            Elem.div [ cls "text-center text-text-muted text-xs uppercase self-center" ] [ Text.enc label ]
+            Elem.div [ cls "text-center text-text-secondary text-xs uppercase self-center" ] [ Text.enc label ]
             Elem.div [ cls "font-semibold" ] [ Text.enc home ]
         ]
 
     let private teamHeader (game: Game) =
         Elem.div [ cls "grid grid-cols-3 gap-2 mb-3 text-center" ] [
             Elem.div [ cls "text-right font-medium" ] [ Text.enc game.AwayTeamAbbreviation ]
-            Elem.div [ cls "text-text-muted text-xs uppercase self-center" ] [ Text.raw "vs" ]
+            Elem.div [ cls "text-text-secondary text-xs uppercase self-center" ] [ Text.raw "vs" ]
             Elem.div [ cls "font-medium" ] [ Text.enc game.HomeTeamAbbreviation ]
         ]
 
@@ -338,6 +349,29 @@ module GameDetailRenderer =
                         renderHypeBar "Stakes" hypeComponents.StakesScore hypeComponents.StakesAvailable
                         renderHypeBar "Quality" hypeComponents.QualityScore hypeComponents.QualityAvailable
                         renderHypeBar "Closeness" hypeComponents.ClosenessScore hypeComponents.ClosenessAvailable
+                        if game.Sport = "nfl" && not (isNull (box hypeComponents.NflPlayoffLeverage)) then
+                            let forecast = hypeComponents.NflPlayoffLeverage
+                            let probability (lower: Nullable<float>) (upper: Nullable<float>) =
+                                if not lower.HasValue || not upper.HasValue then "Unavailable"
+                                elif lower.Value = upper.Value then $"{Math.Round(lower.Value * 100.0)}%%"
+                                elif lower.Value = 0.0 && upper.Value <= 0.010000001 then "<1%"
+                                elif lower.Value >= 0.989999999 && upper.Value = 1.0 then ">99%"
+                                else $"{Math.Round(lower.Value * 100.0)}–{Math.Round(upper.Value * 100.0)}%%"
+                            let scenario win (odds: NflConditionalPlayoffOdds) =
+                                if isNull (box odds) then "Unavailable"
+                                elif win then probability odds.WinLower odds.WinUpper
+                                else probability odds.LossLower odds.LossUpper
+                            Elem.div [ Attr.id "nfl-playoff-leverage"; cls "mt-6" ] [
+                                Elem.h3 [ cls "font-semibold mb-3" ] [ Text.raw "Playoff chances by result" ]
+                                teamHeader game
+                                comparisonRow "If win" (scenario true forecast.AwayOdds) (scenario true forecast.HomeOdds)
+                                comparisonRow "If loss" (scenario false forecast.AwayOdds) (scenario false forecast.HomeOdds)
+                                Elem.p [ cls "text-xs text-text-secondary mt-3" ] [
+                                    Text.raw "Model estimates from "
+                                    Elem.a [ Attr.href backend.Scoring.NflPlayoffLeveragePolicy.ScheduleUrl; cls "underline hover:text-text-primary" ] [ Text.raw "PlayoffStatus" ]
+                                    Text.raw ". Stakes considers the larger swing and seeding consequences."
+                                ]
+                            ]
                         if game.SeasonType = Nullable 2 && hypeComponents.StakesAvailable then
                             let modelTeams =
                                 [ game.AwayTeamAbbreviation, hypeComponents.AwayQualificationEvidenceKind

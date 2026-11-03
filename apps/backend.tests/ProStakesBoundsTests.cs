@@ -52,7 +52,6 @@ public sealed class ProStakesBoundsTests
     [InlineData("nhl", 84)]
     [InlineData("nhl", 82)]
     [InlineData("nba", 82)]
-    [InlineData("nfl", 17)]
     [InlineData("mlb", 162)]
     public void Same_formula_proof_applies_to_each_audited_season_without_changing_complete_scores(string sport, int length)
     {
