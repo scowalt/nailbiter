@@ -170,8 +170,9 @@ public sealed class ProHypePageTests
                 var fragments = await Fragments(reader, deadline.Token);
                 Assert.Null(fragments.QuerySelector($"#excitement-{game.Id}"));
                 Assert.Equal("Scheduled", fragments.QuerySelector($"#status-{game.Id}")!.TextContent);
-                Assert.Contains("7", fragments.QuerySelector($"#scores-{game.Id}")!.TextContent);
-                Assert.Contains("65%", fragments.QuerySelector($"#probbar-{game.Id}")!.TextContent);
+                Assert.Null(fragments.QuerySelector($"#scores-{game.Id}"));
+                Assert.Equal(reader == liveReader ? "" : "7", fragments.QuerySelector($"#home-score-{game.Id}")!.TextContent);
+                Assert.Null(fragments.QuerySelector($"#probbar-{game.Id}"));
             }
             Score(await Page(host.Client, "/", true), game, captured.Total.Value);
             update.Status = GameStatus.CANCELED;
@@ -179,7 +180,7 @@ public sealed class ProHypePageTests
             foreach (var reader in new[] { liveReader, leagueReader })
             {
                 var fragments = await Fragments(reader, deadline.Token);
-                Assert.Equal("", fragments.QuerySelector($"#excitement-{game.Id}")!.TextContent);
+                Assert.Null(fragments.QuerySelector($"#excitement-{game.Id}"));
                 Assert.Equal("Canceled", fragments.QuerySelector($"#status-{game.Id}")!.TextContent);
             }
             update.Status = GameStatus.IN_PROGRESS;

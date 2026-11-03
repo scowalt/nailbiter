@@ -249,7 +249,7 @@ public sealed partial class NflPlayoffPageTests
                 Assert.NotNull(region.QuerySelector("a[href='https://moneypuck.com/predictions.htm']"));
                 Assert.DoesNotContain("Hype unavailable", region.TextContent);
                 var score = path.StartsWith("/game/") ? doc.QuerySelector("#detail-hype")! : doc.QuerySelector($"#excitement-{game.Id}")!;
-                Assert.Equal("64", score.QuerySelector(path.StartsWith("/game/") ? ".text-3xl" : ".text-xl")!.TextContent);
+                Assert.Equal("64", score.QuerySelector(path.StartsWith("/game/") ? ".text-3xl" : ".text-xl, .home-metric-value")!.TextContent);
                 if (!eligible)
                 {
                     Assert.DoesNotContain("25%", region.TextContent);
