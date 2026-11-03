@@ -38,18 +38,23 @@ class MoneyPuckComposeTests(unittest.TestCase):
             )
             return json.loads(result.stdout)["services"]["backend"]["environment"]
 
-    def test_normal_deployment_collects_approved_forecasts_without_enabling_selection(self):
+    def test_normal_deployment_collects_and_selects_approved_forecasts(self):
         environment = self.compose()
         self.assertEqual(environment.get("PlayoffRatings__MoneyPuckRefreshEnabled"), "true")
-        self.assertEqual(environment.get("PlayoffRatings__MoneyPuckSelectionEnabled"), "false")
+        self.assertEqual(environment.get("PlayoffRatings__MoneyPuckSelectionEnabled"), "true")
         self.assertEqual(environment.get("PlayoffRatings__MoneyPuckApprovedSeasons__0"), "2027")
         self.assertEqual(environment.get("Logging__LogLevel__System.Net.Http.HttpClient.MoneyPuckService"), "Information")
 
-    def test_operator_can_disable_collection_without_enabling_selection_or_changing_season(self):
-        environment = self.compose({"MONEYPUCK_REFRESH_ENABLED": "false"})
-        self.assertEqual(environment["PlayoffRatings__MoneyPuckRefreshEnabled"], "false")
-        self.assertEqual(environment["PlayoffRatings__MoneyPuckSelectionEnabled"], "false")
-        self.assertEqual(environment["PlayoffRatings__MoneyPuckApprovedSeasons__0"], "2027")
+    def test_operator_stops_are_independent_and_do_not_change_approved_season(self):
+        for refresh, selection in [("true", "false"), ("false", "true"), ("false", "false")]:
+            with self.subTest(refresh=refresh, selection=selection):
+                environment = self.compose({
+                    "MONEYPUCK_REFRESH_ENABLED": refresh,
+                    "MONEYPUCK_SELECTION_ENABLED": selection,
+                })
+                self.assertEqual(environment["PlayoffRatings__MoneyPuckRefreshEnabled"], refresh)
+                self.assertEqual(environment["PlayoffRatings__MoneyPuckSelectionEnabled"], selection)
+                self.assertEqual(environment["PlayoffRatings__MoneyPuckApprovedSeasons__0"], "2027")
 
 
 if __name__ == "__main__":
