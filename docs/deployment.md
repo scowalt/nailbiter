@@ -31,6 +31,12 @@ The hosting targets, database and backup volumes stay unchanged. Release code ta
 - Treat every image accessible to the public repository as potentially readable by public forks, regardless of package visibility. Preserve the clean-source, synthetic-fixture and no-build-secret boundaries for all future versions.
 - Verify the VPS's access to the clean package under separate operational approval before deployment. Do not fall back to the historical package, a long-lived token in PR jobs, or a mutable tag when access fails. Historical-image recovery remains a separately approved operator procedure, not an exception to the new release guards.
 
+## Proposed MoneyPuck daily-sync persistence
+
+This draft carries forward the owner's recorded 2026-10-13 direction to make normal MoneyPuck collection durable across deployments, rather than dependent on temporary host overrides. Its production Compose configuration sets qualification refresh on for season 2027 and selection off; `MONEYPUCK_REFRESH_ENABLED=false` is the operator stop for qualification collection. Other application hosts keep their default-off controls.
+
+This source proposal is **not deployed or activated by migration**. Review its settings against the actual approved production configuration before any separately authorized merge/release; do not infer that configuration from an old incident record. The existing persisted, provider-wide 24-hour admission budget and denial/interruption blocks remain authoritative across deployments. No extra refresh, ledger reset or provider probe is a deployment check. See the [runbook](nhl-moneypuck-qualification.md).
+
 ## Validation contract
 
 Every PR/main validation includes source policy/regressions, independent secret scanning without README exclusions, deterministic synthetic fixture checks, Bun/Biome/live-sync browser tests, deployment-contract tests, Python analysis and real isolated Timescale recovery tests, web-component build, .NET Release build and both .NET test suites, independent Astro build, icon verification, and an image scan blocking fixed HIGH/CRITICAL vulnerabilities.
