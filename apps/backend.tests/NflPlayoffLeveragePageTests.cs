@@ -22,13 +22,15 @@ public sealed partial class NflPlayoffPageTests
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body(request)) });
     }
 
-    [Fact]
-    public async Task NflPlayoffLeverage_synthetic_forecasts_flow_through_registered_collector_persistence_public_scoring_and_all_pages()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task NflPlayoffLeverage_synthetic_forecasts_flow_through_registered_collector_persistence_public_scoring_and_all_pages(bool decimalScores)
     {
         clock.Now = new DateTimeOffset(2026, 10, 18, 12, 0, 0, TimeSpan.Zero);
         var game = NflPlayoffLeverageTests.Game(); game.Id = "control-7-DET-GB";
         var source = new NflPlayoffLeverageTests.Handler { ServerDate = clock.Now.UtcDateTime };
-        var schedules = NflPlayoffLeverageTests.Schedules();
+        var schedules = NflPlayoffLeverageTests.Schedules(score => decimalScores ? score + ".0" : score);
         var boardEvent = JsonNode.Parse(schedules.Single(s => s.Team == "DET").Events.Single(e => e.GetProperty("id").GetString() == game.Id).GetRawText())!;
         boardEvent["season"]!["type"] = 2;
         var espn = new NflScheduleWire(request =>

@@ -25,6 +25,14 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
     private static bool IsTrue(JsonElement e, string name) => Get(e, name).ValueKind == JsonValueKind.True;
     private static JsonElement[] Items(JsonElement e, string name) => Get(e, name).ValueKind == JsonValueKind.Array ? Get(e, name).EnumerateArray().ToArray() : [];
     private static DateTime? Date(JsonElement e, string name) => DateTimeOffset.TryParse(Text(e, name), out var date) ? date.UtcDateTime : null;
+    internal static int? ReadScore(JsonElement competitor)
+    {
+        var score = Get(competitor, "score");
+        if (score.ValueKind == JsonValueKind.Object) score = Get(score, "value");
+        var integral = Regex.Match(score.ToString(), @"\A([0-9]+)(?:\.0+)?\z");
+        return integral.Success && int.TryParse(integral.Groups[1].Value, System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out var value) ? value : null;
+    }
     private static string? Abbreviation(JsonElement competitor)
     {
         var value = Text(Get(competitor, "team"), "abbreviation");
@@ -39,8 +47,7 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
             Text(Get(Get(competition, "status"), "type"), "name"),
             Text(Get(Get(competition, "status"), "type"), "state"),
             IsTrue(Get(Get(competition, "status"), "type"), "completed"), Number(Get(competition, "status"), "period")) &&
-        Items(competition, "competitors").All(x => Get(x, "score").ValueKind == JsonValueKind.Undefined ||
-            Get(x, "score").ToString() == "0" || Get(Get(x, "score"), "value").ToString() == "0");
+        Items(competition, "competitors").All(x => Get(x, "score").ValueKind == JsonValueKind.Undefined || ReadScore(x) == 0);
 
     public sealed record Schedule(string Team, string? Group, int Season, int Phase, int Length, int Completed,
         double Points, string[] CompletedIds, JsonElement[] Events);
@@ -58,7 +65,9 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
         var events = Items(root, "events");
         if (events.Any(e => Number(Get(e, "season"), "year") != season || Number(Get(e, "seasonType"), "type") != phase || string.IsNullOrEmpty(Text(e, "id")))) return null;
         if (events.GroupBy(e => Text(e, "id")).Any(g => g.Count() > 1)) return null;
-        if (phase == 2 && (ProHypePolicy.ScheduledLength(sport, season) is not int expected || events.Length != expected)) return null;
+        var expected = ProHypePolicy.ScheduledLength(sport, season);
+        var partialNba = sport == "nba" && phase == 2 && expected.HasValue && events.Length >= expected.Value - 2 && events.Length < expected.Value;
+        if (phase == 2 && (!expected.HasValue || events.Length != expected.Value && !partialNba)) return null;
         var completed = new List<string>();
         double points = 0;
         var canceled = 0;
@@ -80,14 +89,8 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
             if (Date(e, "date") is not DateTime start || start > now) return null;
             var own = competitors.Single(x => Abbreviation(x) == team);
             var opponent = competitors.Single(x => Abbreviation(x) != team);
-            double? Score(JsonElement x)
-            {
-                var s = Get(x, "score");
-                if (s.ValueKind == JsonValueKind.Object) s = Get(s, "value");
-                return double.TryParse(s.ToString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
-            }
-            var ownScore = Score(own); var otherScore = Score(opponent);
-            if (!ownScore.HasValue || !otherScore.HasValue || ownScore < 0 || otherScore < 0 || (sport != "nfl" && ownScore == otherScore)) return null;
+            var ownScore = ReadScore(own); var otherScore = ReadScore(opponent);
+            if (!ownScore.HasValue || !otherScore.HasValue || (sport != "nfl" && ownScore == otherScore)) return null;
             if (sport == "nhl")
             {
                 if (ownScore == otherScore || Number(Get(c, "status"), "period") is not int period || period < 3) return null;
@@ -96,7 +99,17 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
             else points += ownScore > otherScore ? 1 : ownScore == otherScore && sport == "nfl" ? 0.5 : 0;
             completed.Add(Text(e, "id")!);
         }
-        return new(team, Text(Get(Get(root, "team"), "groups"), "id"), season, phase, events.Length - canceled, completed.Count, points, completed.ToArray(), events);
+        if (partialNba)
+        {
+            var identity = Get(root, "team");
+            var record = Regex.Match(Text(identity, "recordSummary") ?? "", @"\A([0-9]{1,2})-([0-9]{1,2})\z");
+            if (canceled != 0 || Text(identity, "seasonSummary") != $"{season - 1}-{season % 100:D2}" || !record.Success) return null;
+            var wins = int.Parse(record.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+            var losses = int.Parse(record.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+            if (wins + losses != completed.Count || wins != points) return null;
+        }
+        return new(team, Text(Get(Get(root, "team"), "groups"), "id"), season, phase,
+            (partialNba ? expected!.Value : events.Length) - canceled, completed.Count, points, completed.ToArray(), events);
     }
 
     public static void ApplySeedingCertificates(ProGameEvidence evidence, IReadOnlyCollection<Schedule> league)
@@ -104,7 +117,7 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
         var n = ProHypePolicy.TeamCount(evidence.Sport, evidence.Season);
         var length = ProHypePolicy.ScheduledLength(evidence.Sport, evidence.Season);
         if (!n.HasValue || league.Count != n || league.Select(s => s.Team).Distinct().Count() != n ||
-            league.Any(s => s.Season != evidence.Season || s.Phase != 2 || s.Length != length)) return;
+            league.Any(s => s.Season != evidence.Season || s.Phase != 2 || s.Length != length || s.Events.Length != s.Length)) return;
         var games = league.SelectMany(s => s.Events.Select(e => (Team: s.Team, Event: e))).GroupBy(x => Text(x.Event, "id"));
         if (games.Any(g => g.Count() != 2 || g.Select(x => x.Team).Distinct().Count() != 2 ||
             g.Select(x => Final(Items(x.Event, "competitions")[0])).Distinct().Count() != 1 ||

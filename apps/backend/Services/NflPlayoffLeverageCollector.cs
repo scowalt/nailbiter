@@ -149,11 +149,8 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
                 var away = teams.Single(t => t.GetProperty("homeAway").GetString() == "away");
                 var start = DateTimeOffset.Parse(e.GetProperty("date").GetString()!, CultureInfo.InvariantCulture).UtcDateTime;
                 var final = schedule.CompletedIds.Contains(group.Key);
-                int Score(System.Text.Json.JsonElement team)
-                {
-                    var score = team.GetProperty("score");
-                    return int.Parse(score.ValueKind == System.Text.Json.JsonValueKind.Object ? score.GetProperty("value").ToString() : score.ToString(), CultureInfo.InvariantCulture);
-                }
+                int Score(System.Text.Json.JsonElement team) => ProCompetitionEvidenceService.ReadScore(team)
+                    ?? throw new FormatException("NFL result score must be a nonnegative integer");
                 var game = new Contest(Canonical(home.GetProperty("team").GetProperty("abbreviation").GetString()!),
                     Canonical(away.GetProperty("team").GetProperty("abbreviation").GetString()!),
                     DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(start, Eastern)), start,
