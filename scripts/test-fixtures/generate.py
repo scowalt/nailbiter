@@ -122,6 +122,28 @@ def rankings():
     emit(F + 'MoneyPuck/update_time.txt', 'Sunday September 27, 2026 at 12:00 PM Eastern Time\n')
 
 
+def nhl_guru_rankings():
+    slugs = {
+        'ANA': 'anaheim-ducks', 'BOS': 'boston-bruins', 'BUF': 'buffalo-sabres', 'CGY': 'calgary-flames',
+        'CAR': 'carolina-hurricanes', 'CHI': 'chicago-blackhawks', 'COL': 'colorado-avalanche', 'CBJ': 'columbus-blue-jackets',
+        'DAL': 'dallas-stars', 'DET': 'detroit-red-wings', 'EDM': 'edmonton-oilers', 'FLA': 'florida-panthers',
+        'LA': 'los-angeles-kings', 'MIN': 'minnesota-wild', 'MTL': 'montreal-canadiens', 'NSH': 'nashville-predators',
+        'NJ': 'new-jersey-devils', 'NYI': 'new-york-islanders', 'NYR': 'new-york-rangers', 'OTT': 'ottawa-senators',
+        'PHI': 'philadelphia-flyers', 'PIT': 'pittsburgh-penguins', 'SJ': 'san-jose-sharks', 'SEA': 'seattle-kraken',
+        'STL': 'st-louis-blues', 'TB': 'tampa-bay-lightning', 'TOR': 'toronto-maple-leafs', 'UTAH': 'utah-mammoth',
+        'VAN': 'vancouver-canucks', 'VGK': 'vegas-golden-knights', 'WSH': 'washington-capitals', 'WPG': 'winnipeg-jets',
+    }
+    teams = ['PHI', 'PIT'] + [team for team in TEAMS['nhl'] if team not in ['PHI', 'PIT']]
+    rows = [f'<tr><td><span>{rank}</span></td><td><a href="/nhl/teams/{slugs[team]}">Synthetic {team}</a></td>'
+            '<td>0</td><td>1500</td><td>16</td><td>84.0</td><td>50%</td><td>1%</td></tr>'
+            for rank, team in enumerate(teams, 1)]
+    emit(F + 'NhlGuru/rankings.html', '<!doctype html><html><body><main><div data-component="PageSheet"><header>'
+         '<h1>2026-27 NHL Power Rankings</h1><p>Updated Oct 11, 2026, 4:30 AM ET</p>'
+         '<p>Synthetic fixture; not observed provider rankings.</p></header><div data-component="PowerRankingsTable">'
+         '<table><thead><tr><th>Rank</th><th>Team</th><th>Trend</th><th>Elo</th><th>SoS Rk</th><th>Pts Proj</th>'
+         '<th>Make</th><th>Title</th></tr></thead><tbody>' + ''.join(rows) + '</tbody></table></div></div></main></body></html>\n')
+
+
 def moneypuck_model():
     rows = ['teamCode,scenerio,madePlayoffs,firstSimulatedId,wonCup']
     for team in TEAMS['nhl']:
@@ -327,7 +349,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
-    for generate in [qualification_fixtures, rankings, moneypuck_model, pro_schedules, mlb_preview, nfl_preview, nhl_stakes, mlb_reconciliation, chart_histories, nfl_leverage]:
+    for generate in [qualification_fixtures, rankings, nhl_guru_rankings, moneypuck_model, pro_schedules, mlb_preview, nfl_preview, nhl_stakes, mlb_reconciliation, chart_histories, nfl_leverage]:
         generate()
     manifest = {path: hashlib.sha256(text.encode()).hexdigest() for path, text in sorted(OUTPUTS.items())}
     emit('tests/fixtures/manifest.json', {'provenance': 'Independently constructed by scripts/test-fixtures/generate.py; no provider responses used as inputs.', 'sha256': manifest})

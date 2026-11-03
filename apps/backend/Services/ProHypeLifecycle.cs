@@ -251,8 +251,9 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
             && support.PublishedAt == current.PublishedAt && current.ExpiredProbability !=
                 (ProHypePolicy.TeamKey(saved.Identity.Sport, support.Team) == saved.Identity.Home
                     ? saved.Components.HomePlayoffOdds : saved.Components.AwayPlayoffOdds)) return true;
-        return support.Kind == ProEvidenceKind.Ranking && support.Source == MoneyPuckRankings.Source
-            && current.State == ProEvidenceState.Gap && current.PowerRank.HasValue
+        return support.Kind == ProEvidenceKind.Ranking
+            && (support.Source == NhlPowerRankingsGuruService.Source || support.Source == MoneyPuckRankings.Source && current.State == ProEvidenceState.Gap)
+            && current.PowerRank.HasValue
             && support.PublishedAt.HasValue && support.PublishedAt == current.PublishedAt
             && support.Revision != ProEvidenceReference.Fingerprint(new { FetchedAt = support.ObservedAt,
                 SourceSeason = saved.Identity.Season, current.PowerRank, RankPublishedAt = current.PublishedAt });
@@ -298,6 +299,8 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
         && saved.SupportingEvidence.Count(r => r.Kind == ProEvidenceKind.Odds) == 1
         && saved.SupportingEvidence.Count(r => r.Kind == ProEvidenceKind.Ranking) == 2
         && saved.SupportingEvidence.Where(r => r.Kind == ProEvidenceKind.Ranking).Select(r => r.Source).Distinct().Count() == 1
+        && saved.SupportingEvidence.Where(r => r.Kind == ProEvidenceKind.Ranking).All(r => r.Source == saved.Components.QualitySource
+            || string.IsNullOrEmpty(saved.Components.QualitySource) && r.Source != NhlPowerRankingsGuruService.Source)
         && saved.SupportingEvidence.Count(r => r.Kind == ProEvidenceKind.Ranking && ProHypePolicy.TeamKey(saved.Identity.Sport, r.Team) == saved.Identity.Home) == 1
         && saved.SupportingEvidence.Count(r => r.Kind == ProEvidenceKind.Ranking && ProHypePolicy.TeamKey(saved.Identity.Sport, r.Team) == saved.Identity.Away) == 1
         && saved.SupportingEvidence.Count(r => r.Kind == ProEvidenceKind.Qualification || r.Kind == ProEvidenceKind.Conditional) == (saved.Identity.Phase == 2 ? 2 : 0)

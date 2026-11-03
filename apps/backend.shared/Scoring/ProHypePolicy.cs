@@ -38,11 +38,14 @@ public static class ProHypePolicy
         r.Sport == sport && r.Season == season && r.SourceSeason == season &&
         TeamCount(sport, season) is int n && r.PowerRank is int rank && rank >= 1 && rank <= n &&
         (r.Source != MoneyPuckRankings.Source || (sport == "nhl" && r.RankPublishedAt is DateTime published && published <= r.FetchedAt &&
-            MoneyPuckRankings.SeasonAtPublication(published) == season));
+            MoneyPuckRankings.SeasonAtPublication(published) == season)) &&
+        (r.Source != NhlPowerRankingsGuruService.Source || (sport == "nhl" && r.RankPublishedAt is DateTime guruPublished
+            && NhlPowerRankingsGuruService.ValidPublication(guruPublished, r.FetchedAt, season)));
 
     public static bool EligibleRank(TeamRating r, string sport, int season, DateTime now) =>
         ValidRankFacts(r, sport, season) && Fresh(r.FetchedAt, now, 48) &&
-        (r.Source != MoneyPuckRankings.Source || MoneyPuckRankings.EligiblePublication(r.RankPublishedAt!.Value, now, season));
+        (r.Source != MoneyPuckRankings.Source || MoneyPuckRankings.EligiblePublication(r.RankPublishedAt!.Value, now, season)) &&
+        (r.Source != NhlPowerRankingsGuruService.Source || Fresh(r.RankPublishedAt!.Value, now, NhlPowerRankingsGuruService.MaxPublicationAgeHours));
 
     private static bool ContextApplicable(Game game, ProGameEvidence? context) => context is not null
         && context.GameId == game.Id && context.Sport == game.Sport && context.Season == game.SeasonYear
@@ -62,7 +65,7 @@ public static class ProHypePolicy
         {
             "nfl" => new[] { "espn_fpi", "powerrankingsguru" },
             "nba" => new[] { "espn_bpi", "powerrankingsguru" },
-            "nhl" => new[] { MoneyPuckRankings.Source },
+            "nhl" => new[] { MoneyPuckRankings.Source, NhlPowerRankingsGuruService.Source },
             _ => new[] { "powerrankingsguru" }
         };
         TeamRating? Latest(string source, string team) => rows.Where(r => r.Sport == game.Sport && r.Season == game.SeasonYear
@@ -74,7 +77,9 @@ public static class ProHypePolicy
     private static RankingPair? SelectRankingPair(Game game, RankingPair[] candidates, DateTime now) =>
         candidates.FirstOrDefault(pair => pair.Home is not null && pair.Away is not null
             && EligibleRank(pair.Home, game.Sport, game.SeasonYear.GetValueOrDefault(), now)
-            && EligibleRank(pair.Away, game.Sport, game.SeasonYear.GetValueOrDefault(), now));
+            && EligibleRank(pair.Away, game.Sport, game.SeasonYear.GetValueOrDefault(), now)
+            && (pair.Source != NhlPowerRankingsGuruService.Source || pair.Home.RankPublishedAt == pair.Away.RankPublishedAt
+                && pair.Home.FetchedAt == pair.Away.FetchedAt));
 
     public static ProMetric Quality(Game game, IEnumerable<TeamRating> ratings, DateTime now)
     {
@@ -83,7 +88,8 @@ public static class ProHypePolicy
         var candidates = RankingCandidates(game, ratings);
         var selected = SelectRankingPair(game, candidates, now);
         string Publication(TeamRating row) => row.Source == MoneyPuckRankings.Source
-            ? $"; rolling ranking published {row.RankPublishedAt?.ToString("O") ?? "unknown"} (seven-day limit; season from Eastern publication date)" : "";
+            ? $"; rolling ranking published {row.RankPublishedAt?.ToString("O") ?? "unknown"} (seven-day limit; season from Eastern publication date)"
+            : row.Source == NhlPowerRankingsGuruService.Source ? $"; Power Rankings Guru published {row.RankPublishedAt:O} (48-hour limit)" : "";
         var observations = new List<string>();
         foreach (var pair in candidates)
         {
@@ -99,7 +105,7 @@ public static class ProHypePolicy
             return new(2 * h * a / (h + a), $"{source}: #{home.PowerRank} / #{away.PowerRank}; season {season}, {n} teams; observed {home.FetchedAt:O} / {away.FetchedAt:O}{Publication(home)}{(home.RankPublishedAt != away.RankPublishedAt ? Publication(away) : "")}");
         }
         return new(null, "No complete current-season same-source ranking pair fetched within 48 hours. " +
-            (game.Sport == "nhl" ? "MoneyPuck requires a valid publication date less than seven days old. " : "") + string.Join("; ", observations));
+            (game.Sport == "nhl" ? "MoneyPuck requires a publication less than seven days old; Power Rankings Guru requires a coherent batch published within 48 hours. " : "") + string.Join("; ", observations));
     }
 
     internal static ProHypeAssessment Assess(Game game, ProGameEvidence? context, TeamRating[] ratings,

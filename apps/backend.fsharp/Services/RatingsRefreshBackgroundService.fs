@@ -59,6 +59,11 @@ type RatingsRefreshBackgroundService(serviceProvider: IServiceProvider, logger: 
             | :? OperationCanceledException -> logger.LogDebug("PowerRankingsGuru NBA ratings refresh cancelled")
             | ex -> logger.LogError(ex, "Failed to refresh PowerRankingsGuru NBA ratings")
 
+            try let! _ = powerRankingsGuru.RefreshNhlRatingsAsync(ct) in ()
+            with
+            | :? OperationCanceledException -> logger.LogDebug("PowerRankingsGuru NHL rankings refresh cancelled")
+            | ex -> logger.LogError(ex, "Failed to refresh PowerRankingsGuru NHL rankings")
+
             try let! _ = powerRankingsGuru.RefreshMlbRatingsAsync(ct) in ()
             with
             | :? OperationCanceledException -> logger.LogDebug("PowerRankingsGuru MLB ratings refresh cancelled")

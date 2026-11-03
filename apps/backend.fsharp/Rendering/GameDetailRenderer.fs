@@ -389,6 +389,8 @@ module GameDetailRenderer =
                                     Elem.a [ Attr.href "https://moneypuck.com/predictions.htm"; cls "underline hover:text-text-primary" ] [ Text.raw "MoneyPuck" ]
                                     Text.raw "."
                                 ]
+                        if hypeComponents.QualityAvailable && hypeComponents.QualitySource = NhlPowerRankingsGuruService.Source then
+                            QualificationCredit.renderQuality "quality-credit" hypeScore.HasValue
                         if game.Sport = "cfb" && hypeComponents.ClosenessAvailable && hypeComponents.ClosenessExplanation <> "" then
                             Elem.p [ cls "text-text-muted text-xs" ] [ Text.enc hypeComponents.ClosenessExplanation ]
                     ]

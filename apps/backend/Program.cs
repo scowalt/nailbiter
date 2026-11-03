@@ -132,6 +132,16 @@ builder.Services.AddHttpClient(nameof(PlayoffStatusService))
     .AddStandardResilienceHandler();
 builder.Services.AddHttpClient<PowerRankingsGuruService>()
     .AddStandardResilienceHandler();
+builder.Services.AddHttpClient<NhlPowerRankingsGuruService>(client =>
+    {
+        client.Timeout = TimeSpan.FromSeconds(15);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Nailbiter-NHL-Rankings/1.0 (+https://nailbiter.app)");
+    })
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        AllowAutoRedirect = false,
+        AutomaticDecompression = System.Net.DecompressionMethods.All
+    });
 builder.Services.AddHttpClient<MoneyPuckService>(client => client.Timeout = Timeout.InfiniteTimeSpan)
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 builder.Services.AddTransient<MoneyPuckQualificationService>();
@@ -374,6 +384,7 @@ app.MapPost("/api/ratings/refresh", async (
     results["nhl_powerRankings"] = moneyPuckResult.Rankings;
     await Run("nfl_powerRankings", () => powerRankingsGuru.RefreshNflRatingsAsync(ct));
     await Run("nba_powerRankings", () => powerRankingsGuru.RefreshNbaRatingsAsync(ct));
+    await Run("nhl_guruPowerRankings", () => powerRankingsGuru.RefreshNhlRatingsAsync(ct));
     await Run("mlb_powerRankings", () => powerRankingsGuru.RefreshMlbRatingsAsync(ct));
 
     await Run("nfl_standings", () => standings.RefreshNflStandingsAsync(ct));

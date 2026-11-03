@@ -28,7 +28,7 @@ ESPN result scores accept equivalent nonnegative integral representations such a
 
 ## Components
 
-- **Quality:** current-season complete same-source ranks, converted to relative strengths and combined harmonically. NHL uses MoneyPuck rolling ranks, not an unapproved substitute or its forecast values. Rank comes from row order, with explicit publication-season/freshness policy.
+- **Quality:** current-season complete same-source ranks, converted to relative strengths and combined harmonically. NHL prefers MoneyPuck rolling ranks, then the owner-selected [Power Rankings Guru single-page fallback](nhl-guru-rankings.md). Never mix providers or batches, or use forecast probabilities as ranks. MoneyPuck rank comes from row order with its existing seven-day publication policy; Guru uses explicit consecutive ranks and both fetch/publication ages strictly under 48 hours. Source clocks and supporting-source credit survive retained whole tuples.
 - **Closeness:** `100 * (1 - abs(2 * homeProbability - 1))` for an eligible complementary whole pair. Preserve game-winner source preference, executable quote/depth validation and fixed expiry; do not mix qualification probabilities into matchup closeness.
 - **Stakes:** phase-specific competition consequences. Regular-season qualification urgency uses verified completed/scheduled counts and explicit playoff probabilities. Unknown seeding may be bounded only when verified terms dominate its entire range; otherwise keep it unknown. Postseason rounds, series progression and play-in variants use verified context, not generic playoff flags or name guesses.
 

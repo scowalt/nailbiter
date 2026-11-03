@@ -19,6 +19,7 @@ public class ExcitementDbContext : DbContext
     public DbSet<PregameOdds> PregameOdds => Set<PregameOdds>();
     public DbSet<TeamRating> TeamRatings => Set<TeamRating>();
     public DbSet<MoneyPuckRefreshState> MoneyPuckRefreshOperations => Set<MoneyPuckRefreshState>();
+    public DbSet<NhlGuruRefreshState> NhlGuruRefreshOperations => Set<NhlGuruRefreshState>();
     public DbSet<TeamStanding> TeamStandings => Set<TeamStanding>();
     public DbSet<F1Race> F1Races => Set<F1Race>();
     public DbSet<F1Driver> F1Drivers => Set<F1Driver>();
@@ -84,6 +85,18 @@ public class ExcitementDbContext : DbContext
             entity.Property(e => e.Active).HasColumnName("active");
             entity.Property(e => e.Denied).HasColumnName("denied");
             entity.Property(e => e.DeniedUntilTicks).HasColumnName("denied_until_ticks");
+        });
+
+        modelBuilder.Entity<NhlGuruRefreshState>(entity =>
+        {
+            entity.ToTable("nhl_guru_refresh_state", table =>
+            {
+                table.HasCheckConstraint("ck_nhl_guru_singleton", "id = 1");
+                table.HasCheckConstraint("ck_nhl_guru_ticks", "next_attempt_at_ticks BETWEEN 1 AND 3155378975999999999");
+            });
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedNever();
+            entity.Property(e => e.NextAttemptAtTicks).HasColumnName("next_attempt_at_ticks");
         });
 
         modelBuilder.Entity<CollegeTeam>(entity =>

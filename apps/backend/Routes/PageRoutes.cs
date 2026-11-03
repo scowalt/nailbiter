@@ -66,7 +66,8 @@ public static class PageRoutes
                 teams.Add(game.AwayTeamAbbreviation);
             if (components.HomeQualificationEvidenceKind == ProQualificationEvidenceKind.MoneyPuckModel)
                 teams.Add(game.HomeTeamAbbreviation);
-            if (teams.Count > 0) credits[game.Id] = new DerivedHypeCredit(teams.ToFSharpList());
+            if (teams.Count > 0 || components.QualitySource == NhlPowerRankingsGuruService.Source)
+                credits[game.Id] = new DerivedHypeCredit(teams.ToFSharpList(), components.QualitySource);
         }
         return (scores, credits);
     }
