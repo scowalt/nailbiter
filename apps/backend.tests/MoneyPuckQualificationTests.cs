@@ -162,7 +162,7 @@ public sealed class MoneyPuckQualificationTests
     [InlineData(5, 200, "Please verify you are human: CAPTCHA")]
     [InlineData(6, 200, "Access denied")]
     [InlineData(2, 200, "Enable JavaScript and cookies to continue")]
-    public async Task Denial_or_challenge_stops_attempt_and_latches_all_future_callers_without_changing_evidence(int stopAt, int status, string body)
+    public async Task Denial_or_challenge_stops_attempt_and_blocks_callers_for_24_hours_without_changing_evidence(int stopAt, int status, string body)
     {
         await using var h = new MoneyPuckQualificationHarness();
         await h.StartAsync();
@@ -177,11 +177,15 @@ public sealed class MoneyPuckQualificationTests
         Assert.Equal(stopAt, calls);
         Assert.Equal(original.Select(r => r.PlayoffEvidenceJson), (await h.RowsAsync()).Select(r => r.PlayoffEvidenceJson));
         h.Handler.Override = null;
-        h.Clock.Now = h.Clock.Now.AddDays(7);
+        h.Clock.Now = h.Clock.Now.AddHours(24).AddTicks(-1);
         Assert.Equal(0, await h.Service.RefreshNhlRatingsAsync(default));
         Assert.Equal(0, await h.Service.RefreshNhlRatingsForSeasonAsync(2027, default));
         Assert.Equal(9 + stopAt, h.Handler.Requests.Count);
         Assert.Null((await h.SelectAsync()).Probability);
+        h.Clock.Now = h.Clock.Now.AddTicks(1);
+        h.Handler.Marker = h.Clock.Now.AddMinutes(-5).ToString("O");
+        Assert.Equal(32, await h.Service.RefreshNhlRatingsAsync(default));
+        Assert.Equal(18 + stopAt, h.Handler.Requests.Count);
     }
 
     [Fact]

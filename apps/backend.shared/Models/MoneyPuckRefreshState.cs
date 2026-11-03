@@ -6,4 +6,5 @@ public sealed class MoneyPuckRefreshState
     public long NextAttemptAtTicks { get; set; }
     public bool Active { get; set; }
     public bool Denied { get; set; }
+    public long? DeniedUntilTicks { get; set; }
 }

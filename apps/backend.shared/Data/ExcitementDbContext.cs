@@ -76,12 +76,14 @@ public class ExcitementDbContext : DbContext
             {
                 table.HasCheckConstraint("ck_moneypuck_refresh_singleton", "id = 1");
                 table.HasCheckConstraint("ck_moneypuck_refresh_ticks", "next_attempt_at_ticks BETWEEN 1 AND 3155378975999999999");
+                table.HasCheckConstraint("ck_moneypuck_denied_until_ticks", "denied_until_ticks IS NULL OR denied_until_ticks BETWEEN 1 AND 3155378975999999999");
             });
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedNever();
             entity.Property(e => e.NextAttemptAtTicks).HasColumnName("next_attempt_at_ticks");
             entity.Property(e => e.Active).HasColumnName("active");
             entity.Property(e => e.Denied).HasColumnName("denied");
+            entity.Property(e => e.DeniedUntilTicks).HasColumnName("denied_until_ticks");
         });
 
         modelBuilder.Entity<CollegeTeam>(entity =>

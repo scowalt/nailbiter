@@ -32,12 +32,12 @@ public sealed class MoneyPuckQualificationHostTests
     }
 
     [Theory]
-    [InlineData(HttpStatusCode.Unauthorized, true)]
-    [InlineData(HttpStatusCode.Forbidden, true)]
-    [InlineData(HttpStatusCode.TooManyRequests, true)]
-    [InlineData(HttpStatusCode.Found, false)]
-    [InlineData(HttpStatusCode.ServiceUnavailable, false)]
-    public async Task Configured_transport_stops_without_following_redirects_or_retrying_failure(HttpStatusCode status, bool latched)
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.TooManyRequests)]
+    [InlineData(HttpStatusCode.Found)]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    public async Task Configured_transport_stops_without_redirects_or_same_day_retries_then_permits_next_day(HttpStatusCode status)
     {
         await using var h = new MoneyPuckQualificationHarness();
         var requests = new List<string>();
@@ -49,9 +49,12 @@ public sealed class MoneyPuckQualificationHostTests
         Assert.Contains("Host: moneypuck.com", requests[0]);
         Assert.Equal(0, await service.RefreshNhlRatingsForSeasonAsync(2027, default));
         Assert.Single(requests);
-        h.Clock.Now = h.Clock.Now.AddHours(24);
+        h.Clock.Now = h.Clock.Now.AddHours(24).AddTicks(-1);
         Assert.Equal(0, await service.RefreshNhlRatingsForSeasonAsync(2027, default));
-        Assert.Equal(latched ? 1 : 2, requests.Count);
+        Assert.Single(requests);
+        h.Clock.Now = h.Clock.Now.AddTicks(1);
+        Assert.Equal(0, await service.RefreshNhlRatingsForSeasonAsync(2027, default));
+        Assert.Equal(2, requests.Count);
         Assert.All(requests, request => Assert.DoesNotContain("offline-redirect", request));
     }
 

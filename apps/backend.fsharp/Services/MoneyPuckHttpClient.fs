@@ -17,10 +17,21 @@ type internal MoneyPuckHttpClient(httpClient: HttpClient, timeProvider: TimeProv
         use linked = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token)
         use request = new HttpRequestMessage(HttpMethod.Get, url)
         use! response = httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linked.Token)
+        let latchDenial () =
+            let header = response.Headers.RetryAfter
+            let retryAfter =
+                if isNull header then None
+                elif header.Date.HasValue then Some header.Date.Value.UtcDateTime
+                elif header.Delta.HasValue then
+                    let now = timeProvider.GetUtcNow().UtcDateTime
+                    Some(if header.Delta.Value > DateTime.MaxValue - now then DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc)
+                         else now.Add(header.Delta.Value))
+                else None
+            gate.LatchDenial(?retryAfter = retryAfter)
         if response.StatusCode = HttpStatusCode.Unauthorized || response.StatusCode = HttpStatusCode.Forbidden
            || response.StatusCode = HttpStatusCode.TooManyRequests then
-            gate.LatchDenial()
-            raise (HttpRequestException("MoneyPuck access denied; collection latched pending access review"))
+            latchDenial ()
+            raise (HttpRequestException("MoneyPuck access denied; collection paused until refusal backoff expires"))
         response.EnsureSuccessStatusCode() |> ignore
         use! stream = response.Content.ReadAsStreamAsync(linked.Token)
         use body = new MemoryStream()
@@ -34,8 +45,8 @@ type internal MoneyPuckHttpClient(httpClient: HttpClient, timeProvider: TimeProv
                 if body.Length > int64 maxBytes then finished <- true
         let bytes = body.ToArray()
         if Regex.IsMatch(Encoding.UTF8.GetString(bytes), @"cf-chl-|captcha|verify (?:that )?you are human|checking your browser|just a moment|access denied|challenge-platform|enable javascript and cookies", RegexOptions.IgnoreCase) then
-            gate.LatchDenial()
-            raise (HttpRequestException("MoneyPuck challenge; collection latched pending access review"))
+            latchDenial ()
+            raise (HttpRequestException("MoneyPuck challenge; collection paused until refusal backoff expires"))
         if body.Length > int64 maxBytes || (response.Content.Headers.ContentLength.HasValue && response.Content.Headers.ContentLength.Value > int64 maxBytes) then
             raise (MoneyPuckInvalidSource "response_too_large")
         return UTF8Encoding(false, true).GetString(bytes)

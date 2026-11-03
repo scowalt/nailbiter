@@ -95,9 +95,13 @@ public sealed class MoneyPuckQualificationBracketingTests
         if (status == 403)
         {
             h.Handler.Override = null;
-            h.Clock.Now = h.Clock.Now.AddHours(24);
+            h.Clock.Now = h.Clock.Now.AddHours(24).AddTicks(-1);
             Assert.Equal(0, await h.Service.RefreshNhlRatingsAsync(default));
             Assert.Equal(12, h.Handler.Requests.Count);
+            h.Clock.Now = h.Clock.Now.AddTicks(1);
+            h.Handler.Marker = h.Clock.Now.AddMinutes(-5).ToString("O");
+            Assert.Equal(32, await h.Service.RefreshNhlRatingsAsync(default));
+            Assert.Equal(21, h.Handler.Requests.Count);
         }
     }
 
