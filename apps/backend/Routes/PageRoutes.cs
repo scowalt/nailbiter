@@ -49,8 +49,8 @@ public static class PageRoutes
             .Concat(liveGames)
             .Where(g => g.Sport != Sport.WORLD_CUP.ToDbValue())
             .DistinctBy(g => g.Id)
-            .OrderByDescending(g => g.Status == "in_progress")
-            .ThenBy(g => g.ScheduledStart)
+            .OrderBy(g => g.ScheduledStart)
+            .ThenBy(g => g.Id, StringComparer.Ordinal)
             .ToList();
 
         var gameIds = allGames.Select(g => g.Id).ToList();

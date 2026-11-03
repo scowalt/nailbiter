@@ -81,7 +81,7 @@ public sealed class ListingPerformanceTests : IAsyncLifetime
         using var page = await new HtmlParser().ParseDocumentAsync(await host.Client.GetStringAsync(path));
         Assert.NotNull(page.QuerySelector("a[href='/game/scheduled']"));
         Assert.Equal("Scheduled", page.QuerySelector("#status-scheduled")!.TextContent.Trim());
-        Assert.Equal("Hype unavailable", page.QuerySelector("#excitement-scheduled")!.TextContent.Trim());
+        Assert.Equal(path == "/" ? "Hype unavailable—" : "Hype unavailable", page.QuerySelector("#excitement-scheduled")!.TextContent.Trim());
         Assert.Contains("50%", page.QuerySelector("#probbar-scheduled")!.TextContent);
         var historyReads = recorder.Commands.Where(c => c.Sql.Contains("odds_snapshots") && c.Sql.Contains("is_historical_import"));
         Assert.Empty(historyReads);
@@ -110,7 +110,7 @@ public sealed class ListingPerformanceTests : IAsyncLifetime
         foreach (var id in new[] { "live", "final" })
             Assert.Contains(Math.Round(score.GetValueOrDefault()).ToString(System.Globalization.CultureInfo.InvariantCulture),
                 page.QuerySelector("#excitement-" + id)!.TextContent);
-        Assert.Equal("Hype unavailable", page.QuerySelector("#excitement-scheduled")!.TextContent.Trim());
+        Assert.Equal(path == "/" ? "Hype unavailable—" : "Hype unavailable", page.QuerySelector("#excitement-scheduled")!.TextContent.Trim());
         var history = Assert.Single(recorder.Commands, c => c.Sql.Contains("odds_snapshots") && c.Sql.Contains("is_historical_import"));
         var parameters = history.Parameters.Select(p => p.Value).OfType<IEnumerable<string>>().SelectMany(p => p)
             .Concat(history.Parameters.Select(p => p.Value).OfType<string>()).ToArray();

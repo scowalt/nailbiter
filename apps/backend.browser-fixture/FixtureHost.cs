@@ -32,14 +32,16 @@ internal sealed class FixtureHost : WebApplicationFactory<global::Program>
     private readonly string webRoot;
     public DateTime ListingDate { get; private set; }
     public HighlightsFixture? Highlights { get; }
+    public GroupedHomeFixture? GroupedHome { get; }
     public SeriesFixture? Series { get; }
 
-    public FixtureHost(string connectionString, string contentRoot, string webRoot, int port, bool highlights = false, bool series = false)
+    public FixtureHost(string connectionString, string contentRoot, string webRoot, int port, bool highlights = false, bool groupedHome = false, bool series = false)
     {
         this.connectionString = connectionString;
         this.contentRoot = contentRoot;
         this.webRoot = webRoot;
         Highlights = highlights ? new HighlightsFixture() : null;
+        GroupedHome = groupedHome ? new GroupedHomeFixture() : null;
         Series = series ? new SeriesFixture() : null;
         UseKestrel(options => options.Listen(IPAddress.Loopback, port));
     }
@@ -71,6 +73,7 @@ internal sealed class FixtureHost : WebApplicationFactory<global::Program>
             services.ConfigureAll<HttpClientFactoryOptions>(options =>
                 options.HttpMessageHandlerBuilderActions.Add(handler => handler.PrimaryHandler = new NoOutboundHttp()));
             Highlights?.Configure(services);
+            GroupedHome?.Configure(services);
             Series?.Configure(services);
         });
     }
@@ -88,7 +91,7 @@ internal sealed class FixtureHost : WebApplicationFactory<global::Program>
             var localNoon = DateTime.SpecifyKind(ListingDate.AddHours(12), DateTimeKind.Unspecified);
             var scheduledStart = TimeZoneInfo.ConvertTimeToUtc(localNoon, eastern);
             var season = ListingDate.Month >= 10 ? ListingDate.Year + 1 : ListingDate.Year;
-            db.Games.AddRange(new[] { Intended, Distraction }.Select(game => new Game
+            if (GroupedHome is null) db.Games.AddRange(new[] { Intended, Distraction }.Select(game => new Game
             {
                 Id = game.Id,
                 Sport = "nba",
@@ -106,6 +109,8 @@ internal sealed class FixtureHost : WebApplicationFactory<global::Program>
                 GameClock = "0:00"
             }));
             db.SaveChanges();
+            GroupedHome?.Seed(db);
+            if (GroupedHome is not null) ListingDate = TimeZoneInfo.ConvertTime(GroupedHomeFixture.Now, eastern).Date;
             Highlights?.Seed(db);
             Highlights?.InitializeAsync(host.Services).GetAwaiter().GetResult();
             Series?.InitializeAsync(host.Services).GetAwaiter().GetResult();

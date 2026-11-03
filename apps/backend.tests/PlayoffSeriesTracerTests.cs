@@ -30,8 +30,8 @@ public sealed class PlayoffSeriesTracerTests : IAsyncLifetime
         Assert.Contains("Series tied 1–1", card.TextContent);
         Assert.Contains("NLWC · Game 3 · Best of 3", card.TextContent);
         Assert.Contains("Hype87", card.QuerySelector("#excitement-401907973")!.TextContent);
-        Assert.Equal("0", card.QuerySelector("#away-score-401907973")!.TextContent);
-        Assert.Equal("0", card.QuerySelector("#home-score-401907973")!.TextContent);
+        Assert.Equal("", card.QuerySelector("#away-score-401907973")!.TextContent);
+        Assert.Equal("", card.QuerySelector("#home-score-401907973")!.TextContent);
         Assert.Equal(requests, fixture.Provider.Requests);
     }
 
@@ -54,7 +54,7 @@ public sealed class PlayoffSeriesTracerTests : IAsyncLifetime
             var card = page.QuerySelector("a[href='/game/401907973']")!;
             Assert.NotNull(card);
             Assert.DoesNotContain("Series tied", card.TextContent);
-            Assert.Equal("0", card.QuerySelector("#home-score-401907973")!.TextContent);
+            Assert.Equal("", card.QuerySelector("#home-score-401907973")!.TextContent);
         }
     }
 
@@ -149,8 +149,8 @@ public sealed class PlayoffSeriesTracerTests : IAsyncLifetime
             Assert.Contains("Series tied 1–1", card.TextContent);
             Assert.Contains("NLWC · Game 3 · Best of 3", card.TextContent);
             Assert.Contains("Hype unavailable", card.TextContent);
-            Assert.Equal("0", card.QuerySelector("#home-score-401907973")!.TextContent);
-            Assert.Equal("0", card.QuerySelector("#away-score-401907973")!.TextContent);
+            Assert.Equal("", card.QuerySelector("#home-score-401907973")!.TextContent);
+            Assert.Equal("", card.QuerySelector("#away-score-401907973")!.TextContent);
             Assert.DoesNotContain("prototype", card.TextContent, StringComparison.OrdinalIgnoreCase);
         }
         Assert.Equal(requests, fixture.Provider.Requests);

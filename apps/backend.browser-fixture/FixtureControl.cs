@@ -23,8 +23,10 @@ internal static class FixtureControl
                 var command = await reader.ReadLineAsync(ct);
                 try
                 {
-                    var result = host.Series is not null
-                        ? await host.Series.ControlAsync(host.Services, command ?? "")
+                    var result = host.GroupedHome is not null
+                        ? await host.GroupedHome.ControlAsync(host.Services, command ?? "")
+                        : host.Series is not null
+                            ? await host.Series.ControlAsync(host.Services, command ?? "")
                         : await host.Highlights!.ControlAsync(host.Services, command ?? "");
                     await writer.WriteLineAsync(JsonSerializer.Serialize(result));
                 }

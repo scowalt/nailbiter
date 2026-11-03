@@ -41,7 +41,7 @@ public sealed class PlayoffSeriesEvidenceTests : IAsyncLifetime
             var card = page.QuerySelector("a[href='/game/401907973']")!;
             Assert.NotNull(card);
             Assert.True(!card.TextContent.Contains("Series tied"), name);
-            Assert.Equal("0", card.QuerySelector("#home-score-401907973")!.TextContent);
+            Assert.Equal("", card.QuerySelector("#home-score-401907973")!.TextContent);
             Assert.Contains("Series tied 1–1", page.QuerySelector("a[href='/game/malformed-neighbor']")!.TextContent);
         }
     }
@@ -62,8 +62,8 @@ public sealed class PlayoffSeriesEvidenceTests : IAsyncLifetime
         var card = page.QuerySelector("a[href='/game/401907973']")!;
         Assert.Contains(summary, card.TextContent);
         Assert.Contains(context, card.TextContent);
-        Assert.Equal("0", card.QuerySelector("#home-score-401907973")!.TextContent);
-        Assert.Equal("0", card.QuerySelector("#away-score-401907973")!.TextContent);
+        Assert.Equal("", card.QuerySelector("#home-score-401907973")!.TextContent);
+        Assert.Equal("", card.QuerySelector("#away-score-401907973")!.TextContent);
     }
 
     [Fact]
@@ -137,8 +137,8 @@ public sealed class PlayoffSeriesEvidenceTests : IAsyncLifetime
         {
             var card = page.QuerySelector("a[href='/game/401907973']")!;
             Assert.Contains("Series tied 1–1", card.TextContent);
-            Assert.Equal("42", card.QuerySelector("#home-score-401907973")!.TextContent);
-            Assert.Equal("37", card.QuerySelector("#away-score-401907973")!.TextContent);
+            Assert.Equal("", card.QuerySelector("#home-score-401907973")!.TextContent);
+            Assert.Equal("", card.QuerySelector("#away-score-401907973")!.TextContent);
         }
         Competition["series"]!["competitors"]![0]!.AsObject().Remove("wins");
         fixture.Host.Clock.Advance(TimeSpan.FromSeconds(1));
@@ -381,7 +381,7 @@ public sealed class PlayoffSeriesEvidenceTests : IAsyncLifetime
             var card = page.QuerySelector("a[href='/game/401907973']")!;
             Assert.NotNull(card);
             Assert.True(!card.TextContent.Contains("Series tied"), name);
-            Assert.Equal("0", card.QuerySelector("#home-score-401907973")!.TextContent);
+            Assert.Equal("", card.QuerySelector("#home-score-401907973")!.TextContent);
         }
     }
 

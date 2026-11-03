@@ -34,12 +34,12 @@ async function staticAsset(route) {
   await route.fulfill({ contentType: url.includes("datastar.js") ? "text/javascript" : "image/png", body: staticAssets.get(url) });
 }
 
-async function context(options = {}, patchOnly = false) {
+async function context(options = {}, patchOnly = false, snapshots = false) {
   const ctx = await browser.newContext(options);
   await ctx.route("**/*", async (route) => {
     const url = new URL(route.request().url());
     if (url.origin === origin) {
-      if (url.pathname === "/sse/page-sync") return;
+      if (url.pathname === "/sse/page-sync" && !snapshots) return;
       if (patchOnly && route.request().headers()["x-nailbiter-live-snapshot"]) await route.abort();
       else await route.continue();
     } else if (url.hostname === "cdn.jsdelivr.net" && url.pathname === "/gh/starfederation/datastar@v1.0.4/bundles/datastar.js") await staticAsset(route);
@@ -61,16 +61,25 @@ try {
   const noJs = await context({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
   await home(noJs.page);
   assert.equal(await noJs.page.locator("[id^='series-']").count(), 5);
+  for (const [section, id] of [["best", "401907973"], ["more", "series-nhl-long"], ["live", "series-mlb-live"], ["other", "series-nba-final"]]) {
+    assert.equal(await noJs.page.locator(`#home-section-${section} a[href='/game/${id}'] #series-${id}`).count(), 1, "verified series context stays attached to its real grouped game card");
+  }
+  for (const id of fixture.manifest.series.cards) {
+    assert.equal(await noJs.page.locator(`a[href='/game/${id}']`).count(), 1);
+    assert.equal(await noJs.page.locator(`#excitement-${id}`).count(), 1, "merged footer does not duplicate the authoritative status-specific metric target");
+  }
+  assert.equal(await noJs.page.getByRole("heading", { name: "Today's Games", exact: true }).count(), 1);
+  assert.equal(await noJs.page.locator("main [role='tab'], main select, main input, main button").count(), 0);
   assert.equal(await noJs.page.locator("#series-401907973").textContent(), "Series tied 1–1NLWC · Game 3 · Best of 3");
-  assert.equal(await noJs.page.locator("#excitement-401907973").textContent(), "Hype89");
+  assert.equal(await noJs.page.locator("#excitement-401907973").textContent(), "Hype87");
   const scheduledCard = noJs.page.locator("a[href='/game/401907973']");
   assert.match(await scheduledCard.textContent(), /#2 seed/);
   assert.match(await scheduledCard.textContent(), /#5 seed/);
-  assert.equal(await scheduledCard.locator("#home-score-401907973").textContent(), "0");
-  assert.equal(await scheduledCard.locator("#away-score-401907973").textContent(), "0");
+  assert.equal(await scheduledCard.locator("#home-score-401907973").textContent(), "");
+  assert.equal(await scheduledCard.locator("#away-score-401907973").textContent(), "");
   assert.equal(await noJs.page.locator("#excitement-series-mlb-live").textContent(), "Excitement4");
   assert.equal(await noJs.page.locator("#excitement-series-nba-final").textContent(), "Excitement4");
-  assert.equal(await noJs.page.locator("#excitement-series-nhl-long").textContent(), "Hype unavailable");
+  assert.equal(await noJs.page.locator("#excitement-series-nhl-long").textContent(), "Hype unavailable—");
   assert.equal(await noJs.page.locator("#series-series-nba-final").textContent(), "ATL wins series 4–1NBA Finals · Game 5 · Best of 7");
   assert.match(await noJs.page.locator("#series-series-mlb-opening").textContent(), /Series tied 0–0/);
   assert.equal(await noJs.page.locator("a[href='/game/series-mlb-baseline'] [id^='series-']").count(), 0);
@@ -108,7 +117,7 @@ try {
       return {
         viewport: innerWidth, pageWidth: document.documentElement.scrollWidth,
         cardWidth: round.closest("a").getBoundingClientRect().width,
-        summaryRight: round.getBoundingClientRect().right, metricLeft: hype.getBoundingClientRect().left,
+        summaryTop: round.getBoundingClientRect().top, metricBottom: hype.getBoundingClientRect().bottom,
         context: text.textContent, fontSize: style.fontSize, lineHeight: style.lineHeight,
         color: style.color, background, contextContrast: Math.round(contrast * 100) / 100,
         textHeight: rect.height, textFits: text.scrollWidth <= text.clientWidth,
@@ -118,7 +127,7 @@ try {
     });
     assert.ok(measurements.pageWidth <= viewport.width, JSON.stringify(measurements));
     assert.ok(measurements.textFits, JSON.stringify(measurements));
-    assert.ok(measurements.summaryRight <= measurements.metricLeft, JSON.stringify(measurements));
+    assert.ok(measurements.summaryTop >= measurements.metricBottom, JSON.stringify(measurements));
     assert.ok(measurements.sparklineBelow);
     assert.ok(measurements.contextContrast >= 4.5, JSON.stringify(measurements));
     assert.equal(measurements.context, "Stanley Cup Final · Game 7 · Best of 7");
@@ -182,6 +191,23 @@ try {
   assert.equal((await detail.page.goto(`${origin}/game/${id}`, { waitUntil: "domcontentloaded" })).status(), 200);
   await detailSync;
   report.claims.push("Stable data-init/@get initializes both home and MLB league SSE; league receives actual publish without series addition. Live detail retains its existing native page-sync request path, covered separately by the live-sync regression suite.");
+  const synced = await context({ viewport: { width: 390, height: 844 } }, false, true);
+  await home(synced.page);
+  await synced.page.evaluate(() => {
+    window.snapshotCount = 0;
+    new MutationObserver(() => window.snapshotCount++).observe(document.querySelector("#main-content"), { childList: true });
+  });
+  await synced.page.waitForFunction(() => window.snapshotCount >= 3);
+  assert.equal(await synced.page.locator("[id^='series-']").count(), 5);
+  assert.equal(await synced.page.locator("#home-section-best #series-401907973").textContent(), "Series tied 1–1NLWC · Game 3 · Best of 3");
+  assert.equal(await synced.page.locator("#home-section-more #series-series-nhl-long").textContent(), "Series tied 3–3Stanley Cup Final · Game 7 · Best of 7");
+  assert.equal(await synced.page.locator("#home-section-live #series-series-mlb-live").textContent(), "ATL leads 2–1NLDS · Game 4 · Best of 5");
+  assert.equal(await synced.page.locator("#home-section-other #series-series-nba-final").textContent(), "ATL wins series 4–1NBA Finals · Game 5 · Best of 7");
+  assert.equal(await synced.page.locator("#excitement-401907973").textContent(), "Hype87");
+  assert.equal(await synced.page.locator("#home-score-401907973").textContent(), "");
+  assert.equal((await fixture.control("inspect")).upstreamCalls, initial.upstreamCalls);
+  report.claims.push("Three actual successful page-sync snapshots retain grouped scheduled/live/final series context, unique membership, synthetic Hype87 and pregame score omission without provider collection.");
+  await synced.ctx.close();
   report.staticAssets = [...staticAssets.keys()].map((url) => new URL(url).pathname);
   report.claims.push("Actual IGameUpdateService.PublishUpdateAsync via owned Unix IPC produces real Datastar SSE patches: score/probability/clock/excitement change; standing remains unchanged exactly once. Patch-only context suppresses independent whole-page polling to isolate this preapproved seam; no HTML/helper injection.");
   console.log("PASS real-backend series browser acceptance", report);

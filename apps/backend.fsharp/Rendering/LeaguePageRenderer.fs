@@ -57,10 +57,9 @@ module LeaguePageRenderer =
                                 | None -> ()
                             | _ -> ()
                         ]
-                        if game.Sport = "cfb" || game.AwayScore.HasValue then
-                            Elem.span [ cls "text-lg font-semibold tabular-nums text-text-primary"; Attr.id $"away-score-{game.Id}" ] [
-                                if game.AwayScore.HasValue then Text.raw $"{game.AwayScore.Value}"
-                            ]
+                        Elem.span [ cls "text-lg font-semibold tabular-nums text-text-primary"; Attr.id $"away-score-{game.Id}" ] [
+                            if game.AwayScore.HasValue then Text.raw $"{game.AwayScore.Value}"
+                        ]
                     ]
                     Elem.span [ cls "text-text-muted text-xs mx-2" ] [ Text.raw "@" ]
                     Elem.div [ cls "flex items-center gap-2 min-w-0" ] [
@@ -79,10 +78,9 @@ module LeaguePageRenderer =
                                 | None -> ()
                             | _ -> ()
                         ]
-                        if game.Sport = "cfb" || game.HomeScore.HasValue then
-                            Elem.span [ cls "text-lg font-semibold tabular-nums text-text-primary"; Attr.id $"home-score-{game.Id}" ] [
-                                if game.HomeScore.HasValue then Text.raw $"{game.HomeScore.Value}"
-                            ]
+                        Elem.span [ cls "text-lg font-semibold tabular-nums text-text-primary"; Attr.id $"home-score-{game.Id}" ] [
+                            if game.HomeScore.HasValue then Text.raw $"{game.HomeScore.Value}"
+                        ]
                     ]
                 ]
                 Elem.div [ cls (if game.Sport = "cfb" then "flex items-center justify-between gap-3 sm:flex-shrink-0 sm:ml-4" else "flex items-center gap-3 flex-shrink-0 ml-4") ] [
@@ -206,7 +204,7 @@ module LeaguePageRenderer =
                     ]
                 else
                     let sportStr = sport.ToString().ToLowerInvariant()
-                    Elem.div [ cls "space-y-2"; Attr.create "data-init" $"@get('/sse/live/{sportStr}')" ] [
+                    Elem.div [ cls "space-y-2"; Attr.create "data-init" $"@get('/sse/live/{sportStr}', {{requestCancellation: 'cleanup'}})" ] [
                         for game in games do
                             gameRow game sport odds scores hypeScores teamRanks
                     ]

@@ -10,7 +10,7 @@ export async function verifyStoppedFixture(fixture) {
 	assert.equal(routes.status, 0);
 	assert.ok(!routes.stdout.includes(fixture.manifest.localUrl));
 	await assert.rejects(access(fixture.manifestPath), { code: "ENOENT" });
-	const supplement = fixture.manifest.series ?? fixture.manifest.highlights;
+	const supplement = fixture.manifest.groupedHome ?? fixture.manifest.series ?? fixture.manifest.highlights;
 	if (supplement) await assert.rejects(access(supplement.controlPath), { code: "ENOENT" });
 	return {
 		databaseContainerId: fixture.manifest.databaseContainerId,

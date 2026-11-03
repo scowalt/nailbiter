@@ -33,17 +33,30 @@ function localizeTimes(root) {
 }
 
 function visibleAnchor(root) {
-  return [...root.querySelectorAll("[id], a[href]")].find((el) => {
+  const isVisible = (el) => {
     const r = el.getBoundingClientRect();
     return r.bottom > 0 && r.top < innerHeight;
-  });
+  };
+  return (
+    [
+      ...root.querySelectorAll(
+        'a[href^="/game/"], [id^="qualification-credit-"] a[href]',
+      ),
+    ].find(isVisible) ??
+    [...root.querySelectorAll("[id], a[href]")].find(isVisible)
+  );
 }
 
 function selectorFor(el) {
   if (!el) return null;
   if (el.id) return `#${CSS.escape(el.id)}`;
   const href = el.getAttribute("href");
-  return href ? `a[href=${JSON.stringify(href)}]` : null;
+  if (!href) return null;
+  const owner = href.startsWith("/game/")
+    ? null
+    : el.parentElement?.closest("[id]");
+  const scope = owner ? `#${CSS.escape(owner.id)} ` : "";
+  return `${scope}a[href=${JSON.stringify(href)}]`;
 }
 
 function synchronizeAttributes(existing, replacement) {
@@ -107,6 +120,9 @@ async function synchronize() {
     if (!current || !next) return;
     localizeTimes(next);
 
+    const focusedSelector = current.contains(document.activeElement)
+      ? selectorFor(document.activeElement)
+      : null;
     const anchor = visibleAnchor(current);
     const anchorSelector = selectorFor(anchor);
     const anchorOffset = anchor?.getBoundingClientRect().top ?? 0;
@@ -131,7 +147,11 @@ async function synchronize() {
     }
 
     current.replaceChildren(...next.childNodes);
+    warning?.classList.add("hidden");
     document.title = nextDocument.title;
+    if (focusedSelector) {
+      current.querySelector(focusedSelector)?.focus({ preventScroll: true });
+    }
     if (anchorSelector) {
       const moved = current.querySelector(anchorSelector);
       if (moved) scrollBy(0, moved.getBoundingClientRect().top - anchorOffset);

@@ -37,9 +37,10 @@ internal static class FixtureProgram
 
     private static async Task RunAsync(string[] args)
     {
-        if (args.Length is < 1 or > 2 || (args.Length == 2 && args[1] is not ("--highlights" or "--series")))
-            throw new ArgumentException("Usage: backend.browser-fixture <manifest-path> [--highlights|--series] (run through Portless --tailscale)");
+        if (args.Length is < 1 or > 2 || (args.Length == 2 && args[1] is not ("--highlights" or "--grouped-home" or "--series")))
+            throw new ArgumentException("Usage: backend.browser-fixture <manifest-path> [--highlights|--grouped-home|--series] (run through Portless --tailscale)");
         var highlights = args.Length == 2 && args[1] == "--highlights";
+        var groupedHome = args.Length == 2 && args[1] == "--grouped-home";
         var series = args.Length == 2 && args[1] == "--series";
         var localUrl = RequiredUrl("PORTLESS_URL");
         var privateUrl = RequiredUrl("PORTLESS_TAILSCALE_URL");
@@ -98,7 +99,7 @@ internal static class FixtureProgram
             Environment.SetEnvironmentVariable("Sentry__Dsn", "");
             Environment.SetEnvironmentVariable("OpenTelemetry__Enabled", "false");
             var webRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../backend/wwwroot"));
-            await using var host = new FixtureHost(database.GetConnectionString(), root, webRoot, port, highlights, series);
+            await using var host = new FixtureHost(database.GetConnectionString(), root, webRoot, port, highlights, groupedHome, series);
             host.StartServer();
             var manifest = new
             {
@@ -112,6 +113,7 @@ internal static class FixtureProgram
                 distraction = FixtureHost.Distraction,
                 databaseContainerId = database.Id,
                 highlights = highlights ? new { completed = HighlightsFixture.Completed, hidden = HighlightsFixture.Hidden.Select(s => $"mlb-{s}"), controlPath = args[0] + ".control" } : null,
+                groupedHome = groupedHome ? new { now = GroupedHomeFixture.Now, controlPath = args[0] + ".control" } : null,
                 series = series ? new { cards = SeriesFixture.Cards, live = SeriesFixture.Live, controlPath = args[0] + ".control" } : null
             };
             var json = JsonSerializer.Serialize(manifest, new JsonSerializerOptions
@@ -119,7 +121,7 @@ internal static class FixtureProgram
             await File.WriteAllTextAsync(args[0] + ".pending", json, shutdown.Token);
             File.Move(args[0] + ".pending", args[0]);
             Console.WriteLine("Browser fixture ready (deterministic setup only; no AI evaluation).");
-            if (highlights || series) await FixtureControl.RunAsync(args[0] + ".control", host, shutdown.Token);
+            if (highlights || groupedHome || series) await FixtureControl.RunAsync(args[0] + ".control", host, shutdown.Token);
             else
             {
                 try { await Task.Delay(Timeout.Infinite, shutdown.Token); }
