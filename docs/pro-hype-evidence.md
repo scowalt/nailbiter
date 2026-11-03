@@ -18,6 +18,14 @@ The proposed additive `035_ProHypeLifecycle.sql` installs snapshots and evidence
 
 Registered background capture runs at startup and every 30 seconds against already committed evidence in the existing exclusive seven-day horizon. It makes no provider requests, owns no collection budget and does not change source flags or denial handling. Current numeric calculations still apply all original eligibility rules. Complete snapshots preserve their original component tuple, source provenance and evaluation time across restarts and concurrent work. NFL regular-season snapshots record each contributing conditional forecast separately from the ordinary unconditional playoff outlook; trusted final outcomes remain qualification evidence. Expired conditional observations permit retention without new raw eligibility, while rejected or overwritten supporting scenarios revoke durably. A withdrawn noncontributing outlook does not invalidate conditional Stakes.
 
+## Verified progress versus future schedule coverage
+
+For NBA regular seasons, ESPN may list only 80 or 81 of the 82 matchups. A fresh, season/team-verified schedule can still prove completed progress when its explicit season-labelled win/loss record exactly matches all parsed final results. Missing or contradictory records, omitted/reversed results, cancellation, duplicate events, invalid scores and other incomplete lengths remain rejected. The denominator stays 82; no fixture or matchup is invented. Other leagues keep their complete-schedule requirements.
+
+Progress verification does not establish the unpublished matchups. Full-league seeding certificates still require every actual scheduled event, with consistent copies and results. Unknown seeding stays unknown; numeric Stakes is available only when existing full-precision bounds agree. Current calculation, source clocks, retained snapshots and weights remain independent and unchanged.
+
+ESPN result scores accept equivalent nonnegative integral representations such as `21`, `21.0` and object-wrapped values. Fractional, nonfinite, negative or overflowing scores never become rounded results or default zeroes. The same reader validates confirmed results, scoreless pregame state and NFL conditional-result corroboration.
+
 ## Components
 
 - **Quality:** current-season complete same-source ranks, converted to relative strengths and combined harmonically. NHL uses MoneyPuck rolling ranks, not an unapproved substitute or its forecast values. Rank comes from row order, with explicit publication-season/freshness policy.

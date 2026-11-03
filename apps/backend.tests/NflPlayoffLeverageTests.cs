@@ -25,7 +25,7 @@ public sealed class NflPlayoffLeverageTests
         HomeTeamAbbreviation = "DET", AwayTeamAbbreviation = "GB", SeasonYear = 2026, SeasonType = 2, WeekNumber = 7,
         ScheduledStart = new DateTime(2026, 10, 18, 17, 0, 0, DateTimeKind.Utc)
     };
-    internal static ProCompetitionEvidenceService.Schedule[] Schedules()
+    internal static ProCompetitionEvidenceService.Schedule[] Schedules(Func<string, object>? formatScore = null)
     {
         var rows = Fixture("synthetic-espn-controls.csv").Trim().Split('\n').Skip(1).Select(line => line.Split(',')).ToArray();
         return rows.SelectMany(r => new[] { r[1], r[2] }).Distinct().Select(team =>
@@ -40,8 +40,8 @@ public sealed class NflPlayoffLeverageTests
                     status = new { type = new { name = r[4] == "" ? "STATUS_SCHEDULED" : "STATUS_FINAL", state = r[4] == "" ? "pre" : "post", completed = r[4] != "" }, period = r[4] == "" ? 0 : 4 },
                     competitors = new[]
                     {
-                        new { id = Array.IndexOf(rows.SelectMany(x => new[] { x[1], x[2] }).Distinct().ToArray(), r[1]).ToString(), homeAway = "home", team = new { abbreviation = r[1] }, score = new { value = r[4] == "" ? "0" : r[4] } },
-                        new { id = Array.IndexOf(rows.SelectMany(x => new[] { x[1], x[2] }).Distinct().ToArray(), r[2]).ToString(), homeAway = "away", team = new { abbreviation = r[2] }, score = new { value = r[5] == "" ? "0" : r[5] } }
+                        new { id = Array.IndexOf(rows.SelectMany(x => new[] { x[1], x[2] }).Distinct().ToArray(), r[1]).ToString(), homeAway = "home", team = new { abbreviation = r[1] }, score = new { value = formatScore?.Invoke(r[4] == "" ? "0" : r[4]) ?? (r[4] == "" ? "0" : r[4]) } },
+                        new { id = Array.IndexOf(rows.SelectMany(x => new[] { x[1], x[2] }).Distinct().ToArray(), r[2]).ToString(), homeAway = "away", team = new { abbreviation = r[2] }, score = new { value = formatScore?.Invoke(r[5] == "" ? "0" : r[5]) ?? (r[5] == "" ? "0" : r[5]) } }
                     }
                 } }
             })).ToArray();
@@ -150,6 +150,51 @@ public sealed class NflPlayoffLeverageTests
         Assert.True(components.IsComplete, components.StakesExplanation);
         Assert.False(components.HomePlayoffOdds.HasValue); Assert.False(components.AwayPlayoffOdds.HasValue);
         Assert.Equal(result.Total, service.CalculateFinalScore("nfl", components));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Integral_decimal_schedule_scores_preserve_verified_NFL_forecasts_and_hype(bool numeric)
+    {
+        var game = Game();
+        var schedules = Schedules(score => numeric
+            ? (object)(decimal.Parse(score, System.Globalization.CultureInfo.InvariantCulture) + 0.00m) : score + ".0");
+        var evidence = (await Collector(new Handler()).CollectAsync([game], schedules, default))[game.Id]!;
+        Assert.True(evidence.ScheduleVerified, evidence.Reason);
+        Assert.NotNull(evidence.HomeOdds); Assert.NotNull(evidence.AwayOdds);
+        var context = Context(game); context.NflPlayoffLeverage = evidence;
+        var result = Score(game, context);
+        Assert.Equal(20, result.Stakes.Value!.Value, 8);
+        Assert.Equal(59, Math.Round(result.Total!.Value));
+    }
+
+    [Theory]
+    [InlineData("fractional")]
+    [InlineData("tiny-fraction")]
+    [InlineData("negative")]
+    [InlineData("overflow")]
+    [InlineData("nonfinite")]
+    [InlineData("empty")]
+    [InlineData("comma")]
+    public async Task Invalid_schedule_scores_cannot_be_truncated_or_replaced_with_zero(string problem)
+    {
+        var game = Game();
+        var schedules = Schedules(score => problem switch
+        {
+            "fractional" => score + ".5",
+            "tiny-fraction" => score + ".00000000000000000000000000001",
+            "negative" => "-3.0",
+            "overflow" => "2147483648.0",
+            "nonfinite" => "NaN",
+            "empty" => "",
+            _ => "1,000.0"
+        });
+        var evidence = (await Collector(new Handler()).CollectAsync([game], schedules, default))[game.Id]!;
+        Assert.False(evidence.ScheduleVerified);
+        Assert.Null(evidence.HomeOdds); Assert.Null(evidence.AwayOdds);
+        var context = Context(game); context.NflPlayoffLeverage = evidence;
+        Assert.Null(Score(game, context).Total);
     }
 
     [Fact]
