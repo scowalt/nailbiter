@@ -183,7 +183,7 @@ type HypeScoreService
                     c.ClosenessExplanation <- "Closeness uses a near-certain market bound, not an exact quoted probability."
         c
 
-    static let proComponents (game: Game) (ratings: seq<TeamRating>) (pregame: PregameOdds) completed now (options: PlayoffRatingsOptions) (selectionCache: PlayoffRatingPolicy.PlayoffSelectionCache) (logger: ILogger<HypeScoreService>) =
+    static let proEvaluation (game: Game) (ratings: seq<TeamRating>) (pregame: PregameOdds) completed now (options: PlayoffRatingsOptions) (selectionCache: PlayoffRatingPolicy.PlayoffSelectionCache) (logger: ILogger<HypeScoreService>) =
         let rows = ratings |> Seq.toArray
         let qualification team =
             let teamRows =
@@ -218,7 +218,7 @@ type HypeScoreService
             logger.LogDebug("Pro qualification selection for {Sport} season {Season}: selectedCounts {SelectedCounts}; providerReasons {ProviderReasons}; modelFallbackUsed {ModelFallbackUsed}",
                 game.Sport, game.SeasonYear.GetValueOrDefault(), selectedCounts, providerReasons, modelFallbackUsed)
         let result = ProHypePolicy.Calculate(game, ProGameEvidence.Parse(game.ProEvidenceJson), rows, h, a, pregame, completed, now)
-        HypeComponents(
+        let components = HypeComponents(
             StakesAvailable = result.Stakes.Value.HasValue, StakesScore = result.Stakes.Value.GetValueOrDefault(), StakesExplanation = result.Stakes.Explanation,
             QualityAvailable = result.Quality.Value.HasValue, QualityScore = result.Quality.Value.GetValueOrDefault(), QualityExplanation = result.Quality.Explanation,
             ClosenessAvailable = result.Closeness.Value.HasValue, ClosenessScore = result.Closeness.Value.GetValueOrDefault(), ClosenessExplanation = result.Closeness.Explanation,
@@ -229,6 +229,19 @@ type HypeScoreService
             HomeQualificationEvidenceKind = (if h.Probability.HasValue then h.EvidenceKind else ProQualificationEvidenceKind.Unavailable),
             AwayQualificationEvidenceKind = (if a.Probability.HasValue then a.EvidenceKind else ProQualificationEvidenceKind.Unavailable),
             HomeQualificationIsFinal = h.IsFinal, AwayQualificationIsFinal = a.IsFinal)
+        let references team (selection: PlayoffRatingPolicy.Selection) =
+            selection.Providers |> Seq.choose (fun p ->
+                rows |> Seq.filter (fun r -> r.Source = p.Source && r.Sport = game.Sport && r.Season = game.SeasonYear.GetValueOrDefault()
+                                            && ProHypePolicy.TeamKey(game.Sport, r.TeamAbbreviation) = ProHypePolicy.TeamKey(game.Sport, team))
+                     |> Seq.sortByDescending (fun r -> struct (r.FetchedAt, r.Id)) |> Seq.tryHead
+                     |> Option.map (fun row -> ProEvidenceReference.Qualification(row, p.Reason, p.EvidenceAt |> Option.toNullable, p.ResolutionBlocked)))
+        let qualifications = Seq.append (references game.HomeTeamAbbreviation homeSelection) (references game.AwayTeamAbbreviation awaySelection) |> Seq.toArray
+        let assessment = ProHypePolicy.Assess(game, ProGameEvidence.Parse(game.ProEvidenceJson), rows, result, qualifications,
+                                             h, a, pregame, completed, now)
+        ProCurrentHypeEvaluation(components, assessment)
+
+    static let proComponents game ratings pregame completed now options selectionCache logger =
+        (proEvaluation game ratings pregame completed now options selectionCache logger).Components
 
     new(serviceProvider, logger, timeProvider) =
         HypeScoreService(serviceProvider, logger, timeProvider, Options.Create(PlayoffRatingsOptions()), null)
@@ -430,6 +443,9 @@ type HypeScoreService
 
     static member CalculateThreeWayClosenessScore(homeProbability: float, drawProbability: float, awayProbability: float) =
         calculateThreeWayCloseness homeProbability drawProbability awayProbability
+
+    member _.EvaluateFromEvidence(game: Game, ratings: seq<TeamRating>, pregameOdds: PregameOdds, knownCompletedIds: seq<string>, now: DateTime) =
+        proEvaluation game ratings pregameOdds knownCompletedIds now playoffOptions null logger
 
     member _.CalculateFromEvidence(game: Game, ratings: seq<TeamRating>, pregameOdds: PregameOdds, knownCompletedIds: seq<string>, now: DateTime) =
         proComponents game ratings pregameOdds knownCompletedIds now playoffOptions null logger

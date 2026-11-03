@@ -258,12 +258,17 @@ module PlayoffRatingPolicy =
             let observed = { empty with FetchedAt = Some r.FetchedAt }
             let reject reason = { observed with Reason = reason }
             let evidence = PlayoffModelEvidence.Parse(r.PlayoffEvidenceJson)
+            let ageOnly = not (isNull evidence) && evidence.Version = moneyPuckQualificationEvidenceVersion
+                          && evidence.State = "unavailable" && evidence.ReasonCode = "expired"
+                          && (finiteProbability evidence.MoneyPuckExpiredProbability).IsSome
+                          && not r.PlayoffProbability.HasValue && not r.PlayoffProbabilityIsFinal
+                          && evidence.AcceptedTeamCount = 0 && evidence.TotalTeamCount = 32
             if r.SourceSeason <> Nullable request.Season then reject "unverified_season"
             elif isNull evidence || (evidence.Version <> 3 && evidence.Version <> moneyPuckQualificationEvidenceVersion) || evidence.EvidenceKind <> "model_projection" then
                 reject "unverified_model_evidence"
             elif evidence.Provider <> moneyPuckQualificationSource || not evidence.ProviderVerified
                  || evidence.ValidationPolicy <> moneyPuckQualificationValidationPolicy
-                 || evidence.Sport <> "nhl" || evidence.Season <> request.Season || not evidence.SeasonVerified
+                 || evidence.Sport <> "nhl" || evidence.Season <> request.Season || (not evidence.SeasonVerified && not ageOnly)
                  || not evidence.TeamVerified || not (NhlQualificationRoster.teams.Contains evidence.Team)
                  || evidence.Team <> teamKey "nhl" request.Team then reject "identity_mismatch"
             elif not evidence.PublishedAt.HasValue || not evidence.FetchedAt.HasValue
@@ -272,7 +277,7 @@ module PlayoffRatingPolicy =
                  || r.FetchedAt.Kind <> DateTimeKind.Utc || r.FetchedAt = DateTime.MinValue then reject "unverified_publication"
             elif evidence.PublishedAt.Value > evidence.FetchedAt.Value || evidence.FetchedAt.Value > request.Now
                  || r.FetchedAt > request.Now then reject "future_observation"
-            elif evidence.Version = moneyPuckQualificationEvidenceVersion && evidence.State = "estimate"
+            elif evidence.Version = moneyPuckQualificationEvidenceVersion && (evidence.State = "estimate" || ageOnly)
                  && evidence.PublicationBoundary <> evidence.PublishedAt then reject "unverified_publication_boundary"
             elif evidence.Version = moneyPuckQualificationEvidenceVersion && not (isNull evidence.MoneyPuckRejectedPublications)
                  && Array.contains evidence.PublishedAt.Value evidence.MoneyPuckRejectedPublications then reject "rejected_publication"
@@ -283,11 +288,14 @@ module PlayoffRatingPolicy =
             else
                 let observed = { observed with EvidenceAt = Some evidence.PublishedAt.Value
                                                ExpiresAt = Some(evidence.PublishedAt.Value.Add(moneyPuckQualificationMaxAge)) }
-                if evidence.State <> "estimate" || evidence.ReasonCode <> "accepted" then
+                if ageOnly && request.Now - evidence.PublishedAt.Value >= moneyPuckQualificationMaxAge then
+                    { observed with Reason = "expired" }
+                elif evidence.State <> "estimate" || evidence.ReasonCode <> "accepted" then
                     { observed with Reason = if String.IsNullOrWhiteSpace evidence.ReasonCode || evidence.ReasonCode = "accepted" then "unavailable" else evidence.ReasonCode }
                 elif evidence.AcceptedTeamCount <> 32 || evidence.TotalTeamCount <> 32 then
                     { observed with Reason = "incomplete_snapshot" }
                 elif r.PlayoffProbabilityIsFinal then { observed with Reason = "model_cannot_be_final" }
+                elif (finiteProbability r.PlayoffProbability).IsNone then { observed with Reason = "missing_probability" }
                 elif request.Now - evidence.PublishedAt.Value >= moneyPuckQualificationMaxAge then { observed with Reason = "expired" }
                 else
                     let value = finiteProbability r.PlayoffProbability

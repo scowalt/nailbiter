@@ -8,6 +8,9 @@ public class ExcitementDbContext : DbContext
     public ExcitementDbContext(DbContextOptions<ExcitementDbContext> options) : base(options) { }
 
     public DbSet<Game> Games => Set<Game>();
+    public DbSet<ProHypeSnapshot> ProHypeSnapshots => Set<ProHypeSnapshot>();
+    public DbSet<ProHypeEvidenceChange> ProHypeEvidenceChanges => Set<ProHypeEvidenceChange>();
+    public DbSet<ProHypeRevision> ProHypeRevisions => Set<ProHypeRevision>();
     public DbSet<GameHighlights> GameHighlights => Set<GameHighlights>();
     public DbSet<HighlightsOperationState> HighlightsOperations => Set<HighlightsOperationState>();
     public DbSet<CollegeTeam> CollegeTeams => Set<CollegeTeam>();
@@ -32,6 +35,41 @@ public class ExcitementDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ProHypeSnapshot>(entity =>
+        {
+            entity.ToTable("pro_hype_snapshots");
+            entity.HasKey(e => e.GameId);
+            entity.Property(e => e.GameId).HasColumnName("game_id");
+            entity.Property(e => e.LastEvaluationTicks).HasColumnName("last_evaluation_ticks");
+            entity.Property(e => e.EvidenceRevision).HasColumnName("evidence_revision");
+            entity.Property(e => e.ConfirmedStarted).HasColumnName("confirmed_started");
+            entity.Property(e => e.SnapshotJson).HasColumnName("snapshot_json");
+            entity.Property(e => e.RevokedEvidenceJson).HasColumnName("revoked_evidence_json");
+            entity.HasOne<Game>().WithOne().HasForeignKey<ProHypeSnapshot>(e => e.GameId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ProHypeRevision>(entity =>
+        {
+            entity.ToTable("pro_hype_revision");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedNever();
+            entity.Property(e => e.Revision).HasColumnName("revision");
+            entity.HasData(new ProHypeRevision());
+        });
+        modelBuilder.Entity<ProHypeEvidenceChange>(entity =>
+        {
+            entity.ToTable("pro_hype_evidence_changes");
+            entity.HasKey(e => e.Revision);
+            entity.Property(e => e.Revision).HasColumnName("revision").ValueGeneratedNever();
+            entity.Property(e => e.Kind).HasColumnName("kind");
+            entity.Property(e => e.BeforeSubject).HasColumnName("before_subject");
+            entity.Property(e => e.AfterSubject).HasColumnName("after_subject");
+            entity.HasIndex(e => new { e.BeforeSubject, e.Revision }).HasDatabaseName("ix_pro_hype_changes_before_subject_revision");
+            entity.HasIndex(e => new { e.AfterSubject, e.Revision }).HasDatabaseName("ix_pro_hype_changes_after_subject_revision");
+            entity.Property(e => e.BeforeJson).HasColumnName("before_json");
+            entity.Property(e => e.AfterJson).HasColumnName("after_json");
+        });
+
         modelBuilder.Entity<MoneyPuckRefreshState>(entity =>
         {
             entity.ToTable("moneypuck_refresh_state", table =>

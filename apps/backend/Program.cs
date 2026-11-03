@@ -148,6 +148,8 @@ builder.Services.AddHttpClient<NflPlayoffLeverageCollector>(client =>
         AllowAutoRedirect = false,
         AutomaticDecompression = System.Net.DecompressionMethods.All
     });
+builder.Services.AddScoped<ProHypeLifecycle>();
+builder.Services.AddScoped<IProHypeLifecycle>(services => services.GetRequiredService<ProHypeLifecycle>());
 builder.Services.AddEspnHttpClient<ProCompetitionEvidenceService>();
 
 builder.Services.AddEspnHttpClient<EspnStandingsService>();
@@ -175,6 +177,10 @@ builder.Services.AddScoped<NascarLiveDataService>();
 builder.Services.AddEspnHttpClient<EspnIndyCarService>();
 builder.Services.AddScoped<IndyCarDataService>();
 builder.Services.AddScoped<IndyCarLiveDataService>();
+
+if (!builder.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("EnableScraper")
+    || builder.Configuration.GetValue<bool>("EnableProHypeCapture"))
+    builder.Services.AddHostedService<ProHypeCaptureBackgroundService>();
 
 if (!builder.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>("EnableScraper"))
 {

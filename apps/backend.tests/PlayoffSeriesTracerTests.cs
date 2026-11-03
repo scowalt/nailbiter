@@ -23,6 +23,16 @@ public sealed class PlayoffSeriesTracerTests : IAsyncLifetime
             await db.SaveChangesAsync();
             await scope.ServiceProvider.GetRequiredService<backend.Services.ProCompetitionEvidenceService>().RefreshAsync(default);
             await scope.ServiceProvider.GetRequiredService<backend.Services.PregameOddsService>().RefreshPregameOddsForSportAsync("mlb", null);
+            await scope.ServiceProvider.GetRequiredService<backend.Services.IProHypeLifecycle>().CaptureAsync();
+        }
+        backend.Services.ProHypeResolution captured;
+        using (var scope = fixture.Host.Services.CreateScope())
+        {
+            captured = await scope.ServiceProvider.GetRequiredService<backend.Services.IProHypeLifecycle>().ResolveAsync("401907973");
+            var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+            for (var replay = 0; replay < 2; replay++)
+                foreach (var migration in new[] { "034_PlayoffSeriesObservation.sql", "035_ProHypeLifecycle.sql" })
+                    await db.Database.ExecuteSqlRawAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", migration)));
         }
         var requests = fixture.Provider.Requests;
         using var page = await fixture.HomeAsync();
@@ -33,6 +43,10 @@ public sealed class PlayoffSeriesTracerTests : IAsyncLifetime
         Assert.Equal("", card.QuerySelector("#away-score-401907973")!.TextContent);
         Assert.Equal("", card.QuerySelector("#home-score-401907973")!.TextContent);
         Assert.Equal(requests, fixture.Provider.Requests);
+        using var restoredScope = fixture.Host.Services.CreateScope();
+        var restored = await restoredScope.ServiceProvider.GetRequiredService<backend.Services.IProHypeLifecycle>().ResolveAsync("401907973");
+        Assert.Equal(captured.Total, restored.Total);
+        Assert.Equal(captured.EvaluatedAt, restored.EvaluatedAt);
     }
 
     [Fact]
@@ -109,7 +123,8 @@ public sealed class PlayoffSeriesTracerTests : IAsyncLifetime
         using var scope = fixture.Host.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
         await db.Database.ExecuteSqlRawAsync("ALTER TABLE games DROP COLUMN series_observation_json");
-        var sql = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", "034_PlayoffSeriesObservation.sql"));
+        var sql = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", "034_PlayoffSeriesObservation.sql"))
+            + "\n" + await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", "035_ProHypeLifecycle.sql"));
         await db.Database.ExecuteSqlRawAsync(sql);
         await db.Database.ExecuteSqlRawAsync(sql);
         Assert.Null((await db.Games.AsNoTracking().SingleAsync()).SeriesObservationJson);

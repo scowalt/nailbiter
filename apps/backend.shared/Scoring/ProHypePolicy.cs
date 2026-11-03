@@ -34,16 +34,29 @@ public static class ProHypePolicy
         _ => null
     };
 
-    public static bool EligibleRank(TeamRating r, string sport, int season, DateTime now) =>
+    private static bool ValidRankFacts(TeamRating r, string sport, int season) =>
         r.Sport == sport && r.Season == season && r.SourceSeason == season &&
-        Fresh(r.FetchedAt, now, 48) && TeamCount(sport, season) is int n && r.PowerRank is int rank && rank >= 1 && rank <= n &&
+        TeamCount(sport, season) is int n && r.PowerRank is int rank && rank >= 1 && rank <= n &&
         (r.Source != MoneyPuckRankings.Source || (sport == "nhl" && r.RankPublishedAt is DateTime published && published <= r.FetchedAt &&
-            MoneyPuckRankings.EligiblePublication(published, now, season)));
+            MoneyPuckRankings.SeasonAtPublication(published) == season));
 
-    public static ProMetric Quality(Game game, IEnumerable<TeamRating> ratings, DateTime now)
+    public static bool EligibleRank(TeamRating r, string sport, int season, DateTime now) =>
+        ValidRankFacts(r, sport, season) && Fresh(r.FetchedAt, now, 48) &&
+        (r.Source != MoneyPuckRankings.Source || MoneyPuckRankings.EligiblePublication(r.RankPublishedAt!.Value, now, season));
+
+    private static bool ContextApplicable(Game game, ProGameEvidence? context) => context is not null
+        && context.GameId == game.Id && context.Sport == game.Sport && context.Season == game.SeasonYear
+        && (!game.SeasonType.HasValue || context.Phase == game.SeasonType) && context.Home == game.HomeTeamAbbreviation
+        && context.Away == game.AwayTeamAbbreviation && context.ScheduledStart == game.ScheduledStart
+        && context.VerifiedUnstarted && context.Rejection == ProCompetitionRejection.None && !string.IsNullOrWhiteSpace(context.Source);
+
+    private sealed record RankingPair(string Source, TeamRating? Home, TeamRating? Away)
     {
-        if (game.SeasonYear is not int season || TeamCount(game.Sport, season) is not int n)
-            return new(null, "Verified season and league team count unavailable");
+        public IEnumerable<TeamRating> Rows => new[] { Home, Away }.OfType<TeamRating>();
+    }
+
+    private static RankingPair[] RankingCandidates(Game game, IEnumerable<TeamRating> ratings)
+    {
         var rows = ratings.ToArray();
         var sources = game.Sport switch
         {
@@ -52,18 +65,34 @@ public static class ProHypePolicy
             "nhl" => new[] { MoneyPuckRankings.Source },
             _ => new[] { "powerrankingsguru" }
         };
+        TeamRating? Latest(string source, string team) => rows.Where(r => r.Sport == game.Sport && r.Season == game.SeasonYear
+            && r.Source == source && TeamKey(game.Sport, r.TeamAbbreviation) == TeamKey(game.Sport, team))
+            .OrderByDescending(r => r.FetchedAt).ThenByDescending(r => r.Id).FirstOrDefault();
+        return sources.Select(source => new RankingPair(source, Latest(source, game.HomeTeamAbbreviation), Latest(source, game.AwayTeamAbbreviation))).ToArray();
+    }
+
+    private static RankingPair? SelectRankingPair(Game game, RankingPair[] candidates, DateTime now) =>
+        candidates.FirstOrDefault(pair => pair.Home is not null && pair.Away is not null
+            && EligibleRank(pair.Home, game.Sport, game.SeasonYear.GetValueOrDefault(), now)
+            && EligibleRank(pair.Away, game.Sport, game.SeasonYear.GetValueOrDefault(), now));
+
+    public static ProMetric Quality(Game game, IEnumerable<TeamRating> ratings, DateTime now)
+    {
+        if (game.SeasonYear is not int season || TeamCount(game.Sport, season) is not int n)
+            return new(null, "Verified season and league team count unavailable");
+        var candidates = RankingCandidates(game, ratings);
+        var selected = SelectRankingPair(game, candidates, now);
         string Publication(TeamRating row) => row.Source == MoneyPuckRankings.Source
             ? $"; rolling ranking published {row.RankPublishedAt?.ToString("O") ?? "unknown"} (seven-day limit; season from Eastern publication date)" : "";
         var observations = new List<string>();
-        foreach (var source in sources)
+        foreach (var pair in candidates)
         {
-            TeamRating? Latest(string team) => rows.Where(r => r.Sport == game.Sport && r.Season == season && TeamKey(game.Sport, r.TeamAbbreviation) == TeamKey(game.Sport, team) && r.Source == source)
-                .OrderByDescending(r => r.FetchedAt).ThenByDescending(r => r.Id).FirstOrDefault();
-            var home = Latest(game.HomeTeamAbbreviation);
-            var away = Latest(game.AwayTeamAbbreviation);
-            foreach (var row in new[] { home, away }.OfType<TeamRating>())
+            var source = pair.Source;
+            foreach (var row in pair.Rows)
                 observations.Add($"{source} {row.TeamAbbreviation}, source season {row.SourceSeason?.ToString() ?? "unverified"}, observed {row.FetchedAt:O}{Publication(row)}");
-            if (home is null || away is null || !EligibleRank(home, game.Sport, season, now) || !EligibleRank(away, game.Sport, season, now)) continue;
+            if (pair != selected) continue;
+            var home = pair.Home!;
+            var away = pair.Away!;
             double Strength(int rank) => 100.0 * (n - rank + 0.5) / n;
             var h = Strength(home.PowerRank!.Value);
             var a = Strength(away.PowerRank!.Value);
@@ -71,6 +100,80 @@ public static class ProHypePolicy
         }
         return new(null, "No complete current-season same-source ranking pair fetched within 48 hours. " +
             (game.Sport == "nhl" ? "MoneyPuck requires a valid publication date less than seven days old. " : "") + string.Join("; ", observations));
+    }
+
+    internal static ProHypeAssessment Assess(Game game, ProGameEvidence? context, TeamRating[] ratings,
+        ProHypeResult result, ProEvidenceReference[] qualifications, ProQualification home, ProQualification away,
+        PregameOdds? odds, IEnumerable<string> completed, DateTime now)
+    {
+        var observations = new List<ProEvidenceReference>(qualifications);
+        var support = new List<ProEvidenceReference>();
+        var contextApplicable = ContextApplicable(game, context);
+        if (context is not null)
+        {
+            var reference = new ProEvidenceReference(ProEvidenceKind.Competition, context.Source, "", ProEvidenceReference.Fingerprint(context),
+                context.ObservedAt, null, !contextApplicable || context.ObservedAt > now ? ProEvidenceState.Rejected
+                    : Fresh(context.ObservedAt, now, 1) ? ProEvidenceState.Accepted : ProEvidenceState.Gap,
+                !contextApplicable ? "inapplicable_context" : "competition", []);
+            observations.Add(reference);
+            if (result.Stakes.Value.HasValue) support.Add(reference);
+        }
+        var candidates = RankingCandidates(game, ratings);
+        var selected = SelectRankingPair(game, candidates, now);
+        foreach (var pair in candidates)
+        {
+            var references = pair.Rows.Select(r => new ProEvidenceReference(ProEvidenceKind.Ranking, r.Source, r.TeamAbbreviation,
+                ProEvidenceReference.Fingerprint(new { r.FetchedAt, r.SourceSeason, r.PowerRank, r.RankPublishedAt }), r.FetchedAt, r.RankPublishedAt,
+                EligibleRank(r, game.Sport, game.SeasonYear.GetValueOrDefault(), now) ? ProEvidenceState.Accepted
+                    : r.FetchedAt <= now && ValidRankFacts(r, game.Sport, game.SeasonYear.GetValueOrDefault()) ? ProEvidenceState.Gap : ProEvidenceState.Rejected,
+                "ranking", [], PowerRank: r.PowerRank)).ToArray();
+            observations.AddRange(references);
+            if (pair == selected) support.AddRange(references);
+        }
+        if (odds is not null)
+        {
+            var reference = new ProEvidenceReference(ProEvidenceKind.Odds, odds.Source, "", ProEvidenceReference.Fingerprint(new { odds.FetchedAt, odds.Source,
+                odds.SourceSeason, odds.ApplicableStart, odds.HomeTeamAbbreviation, odds.AwayTeamAbbreviation,
+                odds.HomeWinProbability, odds.AwayWinProbability, odds.DrawWinProbability }), odds.FetchedAt, null,
+                EligibleOdds(game, odds, now) ? ProEvidenceState.Accepted : odds.FetchedAt <= now && EligibleOdds(game, odds, odds.FetchedAt)
+                    ? ProEvidenceState.Gap : ProEvidenceState.Rejected, "game_winner", []);
+            observations.Add(reference);
+            if (result.Closeness.Value.HasValue) support.Add(reference);
+        }
+        if (context?.Phase == 2)
+        {
+            bool Final(ProQualification value) => value.IsFinal && value.EvidenceKind == ProQualificationEvidenceKind.Kalshi;
+            if (result.Stakes.Value.HasValue)
+                support.AddRange(qualifications.Where(q => q.State == ProEvidenceState.Accepted &&
+                    ((TeamKey(game.Sport, q.Team) == TeamKey(game.Sport, game.HomeTeamAbbreviation) && q.Source == home.Source && (game.Sport != "nfl" || Final(home)))
+                    || (TeamKey(game.Sport, q.Team) == TeamKey(game.Sport, game.AwayTeamAbbreviation) && q.Source == away.Source && (game.Sport != "nfl" || Final(away))))));
+            if (game.Sport == "nfl")
+            {
+                var evidence = context.NflPlayoffLeverage;
+                var current = NflPlayoffLeveragePolicy.Select(game, context, now, completed);
+                var original = evidence is null ? null : NflPlayoffLeveragePolicy.Select(game,
+                    new ProGameEvidence { NflPlayoffLeverage = evidence, CompletedGameIds = evidence.CompletedGameIds }, evidence.ObservedAt);
+                foreach (var (team, final, usable, valid) in new[] {
+                    (game.HomeTeamAbbreviation, Final(home), current?.HomeOdds, original?.HomeOdds),
+                    (game.AwayTeamAbbreviation, Final(away), current?.AwayOdds, original?.AwayOdds) })
+                {
+                    var reference = ProEvidenceReference.Conditional(evidence, team, context.ObservedAt,
+                        usable is not null ? ProEvidenceState.Accepted : valid is not null ? ProEvidenceState.Gap : ProEvidenceState.Rejected);
+                    observations.Add(reference);
+                    if (result.Stakes.Value.HasValue && !final) support.Add(reference);
+                }
+            }
+        }
+        var problems = new List<ProHypeProblem>();
+        if (!Supports(game.Sport) || game.IsHistoricalImport || game.Status != "scheduled" || game.ActualStart.HasValue
+            || game.ScheduledStart <= now || !game.SeasonYear.HasValue) problems.Add(ProHypeProblem.InvalidGame);
+        if (!result.Total.HasValue)
+        {
+            if (observations.Any(r => r.State == ProEvidenceState.Rejected)) problems.Add(ProHypeProblem.InvalidEvidence);
+            if (contextApplicable && !completed.All((context!.CompletedGameIds ?? []).Contains)) problems.Add(ProHypeProblem.CompletedResultLag);
+            if (problems.Count == 0 || observations.Any(r => r.State == ProEvidenceState.Gap)) problems.Add(ProHypeProblem.EvidenceGap);
+        }
+        return new(problems.ToArray(), support.ToArray(), observations.ToArray());
     }
 
     public static bool EligibleOdds(Game game, PregameOdds? odds, DateTime now) => odds is not null &&
@@ -111,10 +214,7 @@ public static class ProHypePolicy
         var closeness = EligibleOdds(game, odds, now)
             ? new ProMetric(100 * (1 - Math.Abs(2 * odds!.HomeWinProbability - 1)), oddsNote)
             : Missing("Game-winner odds missing, invalid, expired (one hour), or inapplicable to this schedule. " + oddsNote);
-        var contextValid = evidence is not null && evidence.GameId == game.Id && evidence.Sport == game.Sport &&
-            evidence.Season == game.SeasonYear && evidence.Home == game.HomeTeamAbbreviation && evidence.Away == game.AwayTeamAbbreviation &&
-            evidence.ScheduledStart == game.ScheduledStart && (!game.SeasonType.HasValue || evidence.Phase == game.SeasonType) &&
-            evidence.VerifiedUnstarted && !string.IsNullOrWhiteSpace(evidence.Source) && Fresh(evidence.ObservedAt, now, 1);
+        var contextValid = ContextApplicable(game, evidence) && Fresh(evidence!.ObservedAt, now, 1);
         var covered = (evidence?.CompletedGameIds ?? []).ToHashSet(StringComparer.Ordinal);
         var resultsCovered = knownCompletedIds.All(covered.Contains);
         var contextNote = evidence is null ? "No competition observation" : $"{evidence.Source}; season {evidence.Season}; observed {evidence.ObservedAt:O}. {evidence.Reason}";

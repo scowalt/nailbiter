@@ -163,7 +163,8 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
                 Season = game.SeasonYear ?? 0,
                 ObservedAt = observedAt,
                 Source = source,
-                Reason = "Successful observation has ambiguous or malformed competition context"
+                Reason = "Successful observation has ambiguous or malformed competition context",
+                Rejection = ProCompetitionRejection.MalformedObservation
             };
         }
     }
@@ -188,7 +189,11 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
         if (Text(e, "id") != game.Id || result.Season != game.SeasonYear || result.ScheduledStart != game.ScheduledStart || competitors.Length != 2 ||
             !competitors.Any(x => Text(x, "homeAway") == "home" && Abbreviation(x) == ProHypePolicy.TeamKey(game.Sport, result.Home)) ||
             !competitors.Any(x => Text(x, "homeAway") == "away" && Abbreviation(x) == ProHypePolicy.TeamKey(game.Sport, result.Away)) ||
-            competitors.Any(x => !int.TryParse(Text(x, "id"), out _) || Abbreviation(x) is null or "TBD")) return result;
+            competitors.Any(x => !int.TryParse(Text(x, "id"), out _) || Abbreviation(x) is null or "TBD"))
+        {
+            result.Rejection = ProCompetitionRejection.IdentityMismatch;
+            return result;
+        }
         result.VerifiedUnstarted = Unstarted(game.Sport, c);
         var eligible = schedules.Where(s => s.Season == result.Season && s.Phase == result.Phase).ToArray();
         result.CompletedGameIds = eligible.SelectMany(s => s.CompletedIds).Distinct().ToArray();
@@ -210,11 +215,13 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
                     !scheduledTeams.Any(x => Text(x, "homeAway") == "away" && Abbreviation(x) == ProHypePolicy.TeamKey(game.Sport, result.Away)))
                 {
                     result.VerifiedUnstarted = false;
+                    result.Rejection = ProCompetitionRejection.ConflictingSchedule;
                     result.Reason += "; Team schedule contradicts the upcoming event identity, start or status";
                     continue;
                 }
                 if (schedule.Events.Any(x => conflictingIds.Contains(Text(x, "id"))))
                 {
+                    result.Rejection = ProCompetitionRejection.ConflictingSchedule;
                     progress.Reason = "Conflicting schedule observations prevent verified completed-game progress";
                     continue;
                 }

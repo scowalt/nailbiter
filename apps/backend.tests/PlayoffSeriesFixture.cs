@@ -5,6 +5,7 @@ using AngleSharp.Html.Parser;
 using backend.Services;
 using backend.Services.Espn;
 using backend.Services.Kalshi;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -28,7 +29,14 @@ internal sealed class PlayoffSeriesFixture : IAsyncLifetime
         });
     }
 
-    public Task InitializeAsync() => Host.InitializeAsync();
+    public async Task InitializeAsync()
+    {
+        await Host.InitializeAsync();
+        using var scope = Host.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<backend.Data.ExcitementDbContext>();
+        foreach (var migration in new[] { "034_PlayoffSeriesObservation.sql", "035_ProHypeLifecycle.sql" })
+            await db.Database.ExecuteSqlRawAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", migration)));
+    }
     public Task DisposeAsync() => Host.DisposeAsync();
 
     public async Task CollectAsync(string sport = "mlb")
