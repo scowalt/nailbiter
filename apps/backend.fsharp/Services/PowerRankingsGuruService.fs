@@ -21,7 +21,6 @@ module private PowerRankingsGuruMappings =
         let d = Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         d.["nfl"] <- "/nfl/team-power-rankings.php"
         d.["nba"] <- "/nba/team-power-rankings.php"
-        d.["nhl"] <- "/nhl/team-power-rankings.php"
         d.["mlb"] <- "/mlb/team-power-rankings.php"
         d
 
@@ -404,13 +403,7 @@ type PowerRankingsGuruService [<ActivatorUtilitiesConstructor>]
     member this.RefreshNhlRatingsAsync(?ct: CancellationToken) : Task<int> =
         let ct = defaultArg ct CancellationToken.None
 
-        task {
-            let mutable count = 0
-            for season in PlayoffRatingPolicy.refreshSeasons "nhl" (timeProvider.GetUtcNow().UtcDateTime) do
-                let! updated = this.RefreshRatingsAsync("nhl", season, ct)
-                count <- count + updated
-            return count
-        }
+        serviceProvider.GetRequiredService<NhlPowerRankingsGuruService>().RefreshAsync(ct)
 
     member this.RefreshMlbRatingsAsync(?ct: CancellationToken) : Task<int> =
         let ct = defaultArg ct CancellationToken.None

@@ -18,6 +18,7 @@ type HypeComponents() =
     member this.IsComplete = this.StakesAvailable && this.QualityAvailable && this.ClosenessAvailable
     member val StakesExplanation = "" with get, set
     member val QualityExplanation = "" with get, set
+    member val QualitySource = "" with get, set
     member val ClosenessExplanation = "" with get, set
     member val StakesScore = 0.0 with get, set
     member val QualityScore = 0.0 with get, set
@@ -35,7 +36,8 @@ type HypeComponents() =
     member val AwayQualificationIsFinal = false with get, set
 
 type DerivedHypeCredit =
-    { MoneyPuckTeams: string list }
+    { MoneyPuckTeams: string list
+      QualitySource: string }
 
 type ProCurrentHypeEvaluation(components: HypeComponents, assessment: backend.Scoring.ProHypeAssessment) =
     member _.Components = components

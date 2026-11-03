@@ -26,6 +26,13 @@ module internal QualificationCredit =
             Text.raw (if plural then " model estimates." else " model estimate.")
         ]
 
+    let renderQuality id hasHype =
+        Elem.p [ Layout.cls "text-xs text-text-muted mt-2 px-4"; Attr.id id ] [
+            Text.raw (if hasHype then "Quality and hype use " else "Quality uses ")
+            Elem.a [ Attr.href NhlPowerRankingsGuruService.RankingsUrl; Layout.cls "underline hover:text-text-primary" ] [ Text.raw "Power Rankings Guru" ]
+            Text.raw " team-strength rankings."
+        ]
+
     let renderForGame (game: Game) (ranks: IDictionary<string, TeamRankInfo>) (hypeCredits: IDictionary<string, DerivedHypeCredit>) =
         let currentTeams = selectedTeams game ranks
         let derivedTeams =
@@ -33,6 +40,10 @@ module internal QualificationCredit =
             | true, credit -> credit.MoneyPuckTeams
             | _ -> []
         [
+            match hypeCredits.TryGetValue game.Id with
+            | true, credit when credit.QualitySource = NhlPowerRankingsGuruService.Source ->
+                renderQuality $"quality-credit-{game.Id}" true
+            | _ -> ()
             if not currentTeams.IsEmpty then
                 render $"qualification-credit-{game.Id}" currentTeams
             if not derivedTeams.IsEmpty then

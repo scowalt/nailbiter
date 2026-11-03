@@ -238,6 +238,9 @@ type HypeScoreService
         let qualifications = Seq.append (references game.HomeTeamAbbreviation homeSelection) (references game.AwayTeamAbbreviation awaySelection) |> Seq.toArray
         let assessment = ProHypePolicy.Assess(game, ProGameEvidence.Parse(game.ProEvidenceJson), rows, result, qualifications,
                                              h, a, pregame, completed, now)
+        components.QualitySource <-
+            assessment.SupportingEvidence |> Array.tryFind (fun r -> r.Kind = ProEvidenceKind.Ranking)
+            |> Option.map (fun r -> r.Source) |> Option.defaultValue ""
         ProCurrentHypeEvaluation(components, assessment)
 
     static let proComponents game ratings pregame completed now options selectionCache logger =
