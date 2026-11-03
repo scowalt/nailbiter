@@ -115,7 +115,7 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
         game.WeekNumber = 4;
         game.SeasonType = phase;
         game.ScheduledStart = ProHypeTests.Now.AddDays(3).AddHours(4.5);
-        var evidence = ProHypeTests.Evidence(game);
+        var evidence = ProHypeContinuityInputs.Evidence(game);
         if (phase == 3) { evidence.Round = 4; evidence.HomeElimination = evidence.AwayElimination = true; }
         if (phase == 5) evidence.PlayIn = "knockout";
         game.ProEvidenceJson = JsonSerializer.Serialize(evidence);
@@ -221,7 +221,7 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
         Start();
         await Capture();
         var original = await Resolve(game);
-        Assert.Equal(54.261473486063245, original.Total!.Value, 10);
+        Assert.Equal(54.25742943548387, original.Total!.Value, 10);
         clock.SetUtcNow(new DateTimeOffset(game.ScheduledStart.AddHours(-2)));
         await Change(async db =>
         {
@@ -229,6 +229,7 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
             var row = await db.Games.SingleAsync();
             var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
             evidence.ObservedAt = at;
+            ProHypeContinuityInputs.RefreshLeverage(row, evidence);
             row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
             foreach (var rating in await db.TeamRatings.ToArrayAsync()) rating.FetchedAt = at;
             (await db.PregameOdds.SingleAsync()).FetchedAt = at;
@@ -247,6 +248,7 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
                 var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
                 evidence.Home = "KC";
                 evidence.ObservedAt = at;
+                ProHypeContinuityInputs.RefreshLeverage(row, evidence);
                 row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
                 var odds = await db.PregameOdds.SingleAsync();
                 odds.HomeTeamAbbreviation = "KC";
@@ -269,7 +271,7 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
         Assert.DoesNotContain("Philadelphia", identity.TextContent);
         Assert.DoesNotContain("PHI", identity.TextContent);
         var resolved = await Resolve(game);
-        Assert.Equal(20.94216905057938, resolved.Total!.Value, 10);
+        Assert.Equal(20.938125, resolved.Total!.Value, 10);
         if (path.StartsWith("/game/", StringComparison.Ordinal))
         {
             Assert.Contains("KC", document.Title);
@@ -300,6 +302,7 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
                 evidence.ObservedAt = now;
                 evidence.CompletedGameIds = ["unrelated-result"];
                 evidence.HomeProgress.Completed = evidence.AwayProgress.Completed = 4;
+                ProHypeContinuityInputs.RefreshLeverage(row, evidence, .25);
                 row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
             }
             foreach (var rating in await db.TeamRatings.ToArrayAsync())
@@ -331,6 +334,12 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
         var expected = new ProHypeResolution(scorer.CalculateFinalScore(game.Sport, initial.Components), initial.Components, ProHypeTests.Now);
         Assert.Equal(rounded, Math.Round(expected.Total!.Value));
         await Capture();
+        if (sport == "nfl")
+        {
+            var captured = await Resolve(game);
+            Assert.Equal(expected.Total, captured.Total);
+            expected = captured;
+        }
         await Change(db =>
         {
             db.Games.Add(new Game { Id = "unrelated-result", Sport = game.Sport, SeasonYear = game.SeasonYear, SeasonType = 2,
@@ -370,6 +379,12 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
         Assert.NotEqual(expected.Components.QualityScore, replacement.Components.QualityScore);
         Assert.Equal(60, replacement.Components.ClosenessScore, 8);
         await Capture();
+        if (sport == "nfl")
+        {
+            var captured = await Resolve(game);
+            Assert.Equal(replacement.Total, captured.Total);
+            replacement = captured;
+        }
         clock.Advance(TimeSpan.FromHours(1));
         await Restart();
         await WholePreview(game, replacement);
@@ -452,7 +467,7 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
     [Fact]
     public async Task Never_complete_capture_keeps_independent_current_metrics_and_public_numeric_zero_is_not_unavailable()
     {
-        var game = await Seed("nfl");
+        var game = await Seed("nba");
         await Change(async db => (await db.TeamRatings.FirstAsync(r => r.Source == "kalshi")).PlayoffProbability = null);
         Start();
         await Capture();

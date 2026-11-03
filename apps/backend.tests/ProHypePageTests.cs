@@ -32,7 +32,7 @@ public sealed class ProHypePageTests
     {
         var game = ProHypeTests.Game(sport);
         game.WeekNumber = 4;
-        game.ProEvidenceJson = JsonSerializer.Serialize(ProHypeTests.Evidence(game));
+        game.ProEvidenceJson = JsonSerializer.Serialize(ProHypeContinuityInputs.Evidence(game));
         await Change(host, async db =>
         {
             await db.Database.ExecuteSqlRawAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", "035_ProHypeLifecycle.sql")));
@@ -407,6 +407,7 @@ public sealed class ProHypePageTests
                 var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
                 evidence.CompletedGameIds = ["uncovered-result"];
                 evidence.ObservedAt = host.Clock.GetUtcNow().UtcDateTime;
+                ProHypeContinuityInputs.RefreshLeverage(row, evidence);
                 row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
             });
             var recovered = await Capture(host, game);

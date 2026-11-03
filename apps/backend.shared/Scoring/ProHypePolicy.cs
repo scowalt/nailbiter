@@ -103,7 +103,7 @@ public static class ProHypePolicy
     }
 
     internal static ProHypeAssessment Assess(Game game, ProGameEvidence? context, TeamRating[] ratings,
-        ProHypeResult result, ProEvidenceReference[] qualifications, string homeSource, string awaySource,
+        ProHypeResult result, ProEvidenceReference[] qualifications, ProQualification home, ProQualification away,
         PregameOdds? odds, IEnumerable<string> completed, DateTime now)
     {
         var observations = new List<ProEvidenceReference>(qualifications);
@@ -140,10 +140,30 @@ public static class ProHypePolicy
             observations.Add(reference);
             if (result.Closeness.Value.HasValue) support.Add(reference);
         }
-        if (context?.Phase == 2 && result.Stakes.Value.HasValue)
-            support.AddRange(qualifications.Where(q => q.State == ProEvidenceState.Accepted &&
-                ((TeamKey(game.Sport, q.Team) == TeamKey(game.Sport, game.HomeTeamAbbreviation) && q.Source == homeSource)
-                || (TeamKey(game.Sport, q.Team) == TeamKey(game.Sport, game.AwayTeamAbbreviation) && q.Source == awaySource))));
+        if (context?.Phase == 2)
+        {
+            bool Final(ProQualification value) => value.IsFinal && value.EvidenceKind == ProQualificationEvidenceKind.Kalshi;
+            if (result.Stakes.Value.HasValue)
+                support.AddRange(qualifications.Where(q => q.State == ProEvidenceState.Accepted &&
+                    ((TeamKey(game.Sport, q.Team) == TeamKey(game.Sport, game.HomeTeamAbbreviation) && q.Source == home.Source && (game.Sport != "nfl" || Final(home)))
+                    || (TeamKey(game.Sport, q.Team) == TeamKey(game.Sport, game.AwayTeamAbbreviation) && q.Source == away.Source && (game.Sport != "nfl" || Final(away))))));
+            if (game.Sport == "nfl")
+            {
+                var evidence = context.NflPlayoffLeverage;
+                var current = NflPlayoffLeveragePolicy.Select(game, context, now, completed);
+                var original = evidence is null ? null : NflPlayoffLeveragePolicy.Select(game,
+                    new ProGameEvidence { NflPlayoffLeverage = evidence, CompletedGameIds = evidence.CompletedGameIds }, evidence.ObservedAt);
+                foreach (var (team, final, usable, valid) in new[] {
+                    (game.HomeTeamAbbreviation, Final(home), current?.HomeOdds, original?.HomeOdds),
+                    (game.AwayTeamAbbreviation, Final(away), current?.AwayOdds, original?.AwayOdds) })
+                {
+                    var reference = ProEvidenceReference.Conditional(evidence, team, context.ObservedAt,
+                        usable is not null ? ProEvidenceState.Accepted : valid is not null ? ProEvidenceState.Gap : ProEvidenceState.Rejected);
+                    observations.Add(reference);
+                    if (result.Stakes.Value.HasValue && !final) support.Add(reference);
+                }
+            }
+        }
         var problems = new List<ProHypeProblem>();
         if (!Supports(game.Sport) || game.IsHistoricalImport || game.Status != "scheduled" || game.ActualStart.HasValue
             || game.ScheduledStart <= now || !game.SeasonYear.HasValue) problems.Add(ProHypeProblem.InvalidGame);

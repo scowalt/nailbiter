@@ -98,7 +98,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
     {
         game = ProHypeTests.Game(sport);
         game.ScheduledStart = ProHypeTests.Now.AddDays(6);
-        game.ProEvidenceJson = JsonSerializer.Serialize(ProHypeTests.Evidence(game));
+        game.ProEvidenceJson = JsonSerializer.Serialize(ProHypeContinuityInputs.Evidence(game));
         await Change(db =>
         {
             db.Games.Add(game);
@@ -115,6 +115,84 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
     {
         using var scope = app.Services.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().ResolveAsync(game.Id, ct);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Conditional_NFL_capture_ignores_unrelated_outlook_withdrawal_and_retains_the_original_scenarios_during_age_gaps(bool absentAtCapture)
+    {
+        await Seed("nfl");
+        if (absentAtCapture)
+            await Change(async db =>
+            {
+                foreach (var row in await db.TeamRatings.Where(r => r.Source == "kalshi").ToArrayAsync())
+                    row.PlayoffProbability = null;
+            });
+        using (var scope = app.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
+        var captured = await Resolve();
+        Assert.Equal(54.25742943548387, captured.Total!.Value, 10);
+        Assert.NotNull(captured.Components.NflPlayoffLeverage);
+        Assert.Null(captured.Components.HomePlayoffOdds);
+        await Change(async db =>
+        {
+            foreach (var row in await db.TeamRatings.Where(r => r.Source == "kalshi").ToArrayAsync())
+                row.PlayoffProbability = null;
+        });
+        Assert.Equal(captured.Total, (await Resolve()).Total);
+        clock.Advance(TimeSpan.FromHours(2));
+        await Change(async db =>
+        {
+            var row = await db.Games.SingleAsync();
+            var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
+            evidence.ObservedAt = clock.GetUtcNow().UtcDateTime;
+            row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
+        });
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+            var current = await scope.ServiceProvider.GetRequiredService<HypeScoreService>()
+                .GetHypeComponentsAsync(await db.Games.SingleAsync(), null);
+            Assert.False(current.StakesAvailable);
+        }
+        await app.DisposeAsync();
+        app = CreateHost();
+        var retained = await Resolve();
+        Assert.Equal(captured.Total, retained.Total);
+        Assert.Equal(captured.EvaluatedAt, retained.EvaluatedAt);
+        Assert.Equal(JsonSerializer.Serialize(captured.Components), JsonSerializer.Serialize(retained.Components));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Rejected_conditional_NFL_support_cannot_resurrect_after_an_overwritten_observation_or_restart(bool overwrite)
+    {
+        await Seed("nfl");
+        Assert.NotNull((await Resolve()).Total);
+        var original = ProGameEvidence.Parse(game.ProEvidenceJson)!.NflPlayoffLeverage;
+        clock.Advance(TimeSpan.FromMinutes(1));
+        await Change(async db =>
+        {
+            var row = await db.Games.SingleAsync();
+            var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
+            evidence.ObservedAt = clock.GetUtcNow().UtcDateTime;
+            evidence.NflPlayoffLeverage!.HomeOdds = null;
+            evidence.NflPlayoffLeverage.ObservedAt = clock.GetUtcNow().UtcDateTime;
+            row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
+        });
+        if (!overwrite) Assert.Null((await Resolve()).Total);
+        await Change(async db =>
+        {
+            var row = await db.Games.SingleAsync();
+            var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
+            evidence.NflPlayoffLeverage = original;
+            row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
+        });
+        await app.DisposeAsync();
+        app = CreateHost();
+        Assert.Null((await Resolve()).Total);
     }
 
     [Fact]
@@ -179,7 +257,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
         using (var scope = app.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
         var original = await Resolve();
-        Assert.Equal(54.261473486063245, original.Total!.Value, 10);
+        Assert.Equal(54.25742943548387, original.Total!.Value, 10);
         await Change(db =>
         {
             db.Games.Add(new Game { Id = "review-result", Sport = game.Sport, SeasonYear = game.SeasonYear, SeasonType = 2,
@@ -225,12 +303,13 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
             var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
             evidence.ObservedAt = clock.GetUtcNow().UtcDateTime;
             evidence.CompletedGameIds = ["review-result"];
+            ProHypeContinuityInputs.RefreshLeverage(row, evidence);
             row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
         });
         using (var scope = app.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
         var replacement = await Resolve();
-        Assert.Equal(46.261473486063245, replacement.Total!.Value, 10);
+        Assert.Equal(46.25742943548387, replacement.Total!.Value, 10);
         clock.Advance(TimeSpan.FromMinutes(1));
         await Change(Withdraw);
         Assert.Null((await Resolve()).Total);
@@ -295,6 +374,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
             evidence.CompletedGameIds = ["unrelated-result"];
             evidence.ObservedAt = clock.GetUtcNow().UtcDateTime;
             evidence.HomeProgress.Completed = evidence.AwayProgress.Completed = 4;
+            ProHypeContinuityInputs.RefreshLeverage(row, evidence, .25);
             row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
             foreach (var rating in await db.TeamRatings.ToArrayAsync())
             {
@@ -517,7 +597,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
     [InlineData("competition")]
     public async Task Supporting_source_rejection_is_durable_and_does_not_resurrect_after_expiry(string kind)
     {
-        await Seed("nfl");
+        await Seed(kind == "qualification" ? "nba" : "nfl");
         Assert.NotNull((await Resolve()).Total);
         await Change(async db =>
         {
@@ -560,6 +640,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
         var row = await db.Games.SingleAsync(g => g.Id == game.Id);
         var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
         evidence.ObservedAt = clock.GetUtcNow().UtcDateTime;
+        ProHypeContinuityInputs.RefreshLeverage(row, evidence);
         row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
         foreach (var rating in await db.TeamRatings.ToArrayAsync()) rating.FetchedAt = clock.GetUtcNow().UtcDateTime;
         (await db.PregameOdds.SingleAsync()).FetchedAt = clock.GetUtcNow().UtcDateTime;
@@ -655,7 +736,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
     [InlineData("signature")]
     public async Task Persisted_lowercase_roles_and_legacy_revocation_keys_remain_effective_across_recreation(string legacy)
     {
-        await Seed("nfl");
+        await Seed("nba");
         using (var scope = app.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
         var original = await Resolve();
@@ -801,7 +882,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
     [Fact]
     public async Task An_explicit_verified_evidence_phase_remains_applicable_when_the_scoreboard_phase_is_not_set()
     {
-        await Seed("nfl");
+        await Seed("nba");
         await Change(async db => (await db.Games.SingleAsync()).SeasonType = null);
         var captured = await Resolve();
         Assert.NotNull(captured.Total);

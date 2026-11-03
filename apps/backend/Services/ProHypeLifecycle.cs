@@ -145,7 +145,8 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
                 foreach (var support in saved.SupportingEvidence.Where(r => r.Kind == ProEvidenceKind.Competition)) revoked.Add(EvidenceKey(support));
                 return true;
             }
-            return ChangedSupport(saved, assessment.Observations, ProEvidenceKind.Competition, before?.ProEvidenceJson is null, revoked);
+            return ChangedSupport(saved, assessment.Observations, ProEvidenceKind.Competition, before?.ProEvidenceJson is null, revoked)
+                | ChangedSupport(saved, assessment.Observations, ProEvidenceKind.Conditional, before?.ProEvidenceJson is null, revoked);
         }
         if (change.Kind == "pregame_odds")
         {
@@ -299,7 +300,8 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
         && saved.SupportingEvidence.Where(r => r.Kind == ProEvidenceKind.Ranking).Select(r => r.Source).Distinct().Count() == 1
         && saved.SupportingEvidence.Count(r => r.Kind == ProEvidenceKind.Ranking && ProHypePolicy.TeamKey(saved.Identity.Sport, r.Team) == saved.Identity.Home) == 1
         && saved.SupportingEvidence.Count(r => r.Kind == ProEvidenceKind.Ranking && ProHypePolicy.TeamKey(saved.Identity.Sport, r.Team) == saved.Identity.Away) == 1
-        && saved.SupportingEvidence.Count(r => r.Kind == ProEvidenceKind.Qualification) == (saved.Identity.Phase == 2 ? 2 : 0)
+        && saved.SupportingEvidence.Count(r => r.Kind == ProEvidenceKind.Qualification || r.Kind == ProEvidenceKind.Conditional) == (saved.Identity.Phase == 2 ? 2 : 0)
+        && (saved.Identity.Sport == "nfl" || saved.SupportingEvidence.All(r => r.Kind != ProEvidenceKind.Conditional))
         && ValidQualification(saved, saved.Identity.Home, saved.Components.HomeQualificationSource,
             saved.Components.HomeQualificationEvidenceKind, saved.Components.HomePlayoffOdds, saved.Components.HomeQualificationIsFinal)
         && ValidQualification(saved, saved.Identity.Away, saved.Components.AwayQualificationSource,
@@ -311,6 +313,17 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
             return string.IsNullOrEmpty(source) && kind == ProQualificationEvidenceKind.Unavailable && !probability.HasValue && !final;
         var support = saved.SupportingEvidence.Where(r => r.Kind == ProEvidenceKind.Qualification
             && ProHypePolicy.TeamKey(saved.Identity.Sport, r.Team) == team).ToArray();
+        var conditional = saved.SupportingEvidence.Where(r => r.Kind == ProEvidenceKind.Conditional && r.Team == team).ToArray();
+        if (saved.Identity.Sport == "nfl" && !final)
+        {
+            var evidence = saved.Components.NflPlayoffLeverage;
+            var odds = team == saved.Identity.Home ? evidence?.HomeOdds : evidence?.AwayOdds;
+            return support.Length == 0 && conditional.Length == 1 && evidence is not null
+                && string.IsNullOrEmpty(source) && kind == ProQualificationEvidenceKind.Unavailable && !probability.HasValue
+                && NflPlayoffLeveragePolicy.Valid(odds)
+                && conditional[0].Revision == ProEvidenceReference.Conditional(evidence, team, saved.EvaluatedAt, ProEvidenceState.Accepted).Revision;
+        }
+        if (conditional.Length != 0) return false;
         var expectedKind = source switch
         {
             "kalshi" => ProQualificationEvidenceKind.Kalshi,

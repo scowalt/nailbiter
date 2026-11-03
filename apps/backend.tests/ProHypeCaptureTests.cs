@@ -110,7 +110,7 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
         game.Id = id;
         game.WeekNumber = 1;
         game.ScheduledStart = start ?? ProHypeTests.Now.AddDays(6);
-        game.ProEvidenceJson = JsonSerializer.Serialize(ProHypeTests.Evidence(game));
+        game.ProEvidenceJson = JsonSerializer.Serialize(ProHypeContinuityInputs.Evidence(game));
         await Change(db =>
         {
             db.Games.Add(game);
@@ -246,7 +246,7 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
             {
                 var row = await db.Games.SingleAsync();
                 row.ScheduledStart = ProHypeTests.Now.AddDays(8);
-                row.ProEvidenceJson = JsonSerializer.Serialize(ProHypeTests.Evidence(row));
+                row.ProEvidenceJson = JsonSerializer.Serialize(ProHypeContinuityInputs.Evidence(row));
                 (await db.PregameOdds.SingleAsync()).ApplicableStart = row.ScheduledStart;
             });
             gate.Release();
@@ -389,6 +389,7 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
         evidence.ObservedAt = observedAt;
         evidence.CompletedGameIds = completed ?? [];
         evidence.HomeProgress.Completed = evidence.AwayProgress.Completed = 4;
+        ProHypeContinuityInputs.RefreshLeverage(row, evidence, .25);
         row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
         foreach (var rating in await db.TeamRatings.ToArrayAsync())
         {

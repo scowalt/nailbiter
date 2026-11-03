@@ -237,7 +237,7 @@ type HypeScoreService
                      |> Option.map (fun row -> ProEvidenceReference.Qualification(row, p.Reason, p.EvidenceAt |> Option.toNullable, p.ResolutionBlocked)))
         let qualifications = Seq.append (references game.HomeTeamAbbreviation homeSelection) (references game.AwayTeamAbbreviation awaySelection) |> Seq.toArray
         let assessment = ProHypePolicy.Assess(game, ProGameEvidence.Parse(game.ProEvidenceJson), rows, result, qualifications,
-                                             components.HomeQualificationSource, components.AwayQualificationSource, pregame, completed, now)
+                                             h, a, pregame, completed, now)
         ProCurrentHypeEvaluation(components, assessment)
 
     static let proComponents game ratings pregame completed now options selectionCache logger =
