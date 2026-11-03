@@ -8,7 +8,7 @@ if [[ ! "$sha" =~ ^[0-9a-f]{40}$ ]]; then
 fi
 test "$(git rev-parse HEAD)" = "$sha"
 image=${2:?The tested immutable image reference is required}
-if [[ ! "$image" =~ ^ghcr.io/scowalt/nailbiter-app/backend@sha256:[0-9a-f]{64}$ ]]; then
+if [[ ! "$image" =~ ^ghcr\.io/scowalt/nailbiter/backend@sha256:[0-9a-f]{64}$ ]]; then
   echo 'An immutable backend image digest is required' >&2
   exit 1
 fi

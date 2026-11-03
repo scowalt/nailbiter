@@ -11,11 +11,11 @@ export DOCKER_CONFIG
 DOCKER_CONFIG=$(mktemp -d)
 trap 'rm -rf "$DOCKER_CONFIG"' EXIT
 printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "${GITHUB_ACTOR:?The workflow actor is required}" --password-stdin
-image=ghcr.io/scowalt/nailbiter-app/backend
+image=ghcr.io/scowalt/nailbiter/backend
 docker tag nailbiter-backend:scan "$image:sha-$GITHUB_SHA"
 docker push "$image:sha-$GITHUB_SHA"
 digest=$(docker image inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$image:sha-$GITHUB_SHA" |
-  grep -E '^ghcr.io/scowalt/nailbiter-app/backend@sha256:[0-9a-f]{64}$')
+  grep -E '^ghcr\.io/scowalt/nailbiter/backend@sha256:[0-9a-f]{64}$')
 [ "$(printf '%s\n' "$digest" | wc -l)" -eq 1 ]
 printf '%s\n' "$digest" > .ci/backend-image.txt
 docker tag nailbiter-backend:scan "$image:latest"
