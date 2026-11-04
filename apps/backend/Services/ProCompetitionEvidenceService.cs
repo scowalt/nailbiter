@@ -155,6 +155,104 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
             evidence.HomeProgress.SeedingUnresolved = evidence.AwayProgress.SeedingUnresolved = true;
             evidence.HomeProgress.Reason = evidence.AwayProgress.Reason = "Complete-schedule strict two-team record bounds prove this result can exchange first/second positioning or home advantage while both teams qualify; no tiebreaker assumption";
         }
+        else if (evidence.Sport == "nhl" && !evidence.HomeProgress.SeedingUnresolved.HasValue
+            && !evidence.AwayProgress.SeedingUnresolved.HasValue && HasConstructiveNhlExchange(evidence, league))
+        {
+            evidence.HomeProgress.SeedingUnresolved = evidence.AwayProgress.SeedingUnresolved = true;
+            evidence.HomeProgress.Reason = evidence.AwayProgress.Reason = "Complete-schedule constructive regulation-result witnesses exchange strict first/second positioning or home advantage while both teams qualify; no tiebreaker assumption";
+        }
+    }
+
+    private sealed record NhlRemainingContest(string Id, int Home, int Away);
+
+    private static bool HasConstructiveNhlExchange(ProGameEvidence evidence, IReadOnlyCollection<Schedule> league)
+    {
+        var schedules = league.OrderBy(s => ProHypePolicy.TeamKey("nhl", s.Team), StringComparer.Ordinal).ToArray();
+        var indexes = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var i = 0; i < schedules.Length; i++)
+            if (!indexes.TryAdd(ProHypePolicy.TeamKey("nhl", schedules[i].Team), i)) return false;
+        if (!indexes.TryGetValue(ProHypePolicy.TeamKey("nhl", evidence.Home), out var home)
+            || !indexes.TryGetValue(ProHypePolicy.TeamKey("nhl", evidence.Away), out var away) || home == away) return false;
+        var points = new int[schedules.Length];
+        var finals = schedules.Select(_ => new HashSet<string>(StringComparer.Ordinal)).ToArray();
+        var remaining = new List<NhlRemainingContest>();
+        bool Teams(JsonElement e, out int h, out int a)
+        {
+            h = a = -1;
+            var competitions = Items(e, "competitions");
+            if (competitions.Length != 1 || Date(e, "date") is null) return false;
+            var members = Items(competitions[0], "competitors");
+            if (members.Length != 2 || members.Count(t => Text(t, "homeAway") == "home") != 1
+                || members.Count(t => Text(t, "homeAway") == "away") != 1) return false;
+            var hKey = Abbreviation(members.Single(t => Text(t, "homeAway") == "home"));
+            var aKey = Abbreviation(members.Single(t => Text(t, "homeAway") == "away"));
+            return hKey is not null && aKey is not null && indexes.TryGetValue(hKey, out h)
+                && indexes.TryGetValue(aKey, out a) && h != a;
+        }
+        foreach (var copies in schedules.SelectMany(s => s.Events.Select(e => (s.Team, Event: e)))
+            .GroupBy(x => Text(x.Event, "id")))
+        {
+            var pair = copies.ToArray();
+            if (string.IsNullOrEmpty(copies.Key) || pair.Length != 2 || !Teams(pair[0].Event, out var h, out var a)
+                || !Teams(pair[1].Event, out var otherH, out var otherA) || h != otherH || a != otherA
+                || !pair.Select(x => indexes[ProHypePolicy.TeamKey("nhl", x.Team)]).ToHashSet().SetEquals([h, a])) return false;
+            var e = pair[0].Event;
+            var competition = Items(e, "competitions")[0];
+            if (Final(competition))
+            {
+                if (Date(e, "date") > evidence.ObservedAt || Number(Get(competition, "status"), "period") is not int period || period < 3) return false;
+                var members = Items(competition, "competitors");
+                var hScore = ReadScore(members.Single(t => Text(t, "homeAway") == "home"));
+                var aScore = ReadScore(members.Single(t => Text(t, "homeAway") == "away"));
+                if (!hScore.HasValue || !aScore.HasValue || hScore == aScore) return false;
+                points[h] += hScore > aScore ? 2 : period > 3 ? 1 : 0;
+                points[a] += aScore > hScore ? 2 : period > 3 ? 1 : 0;
+                finals[h].Add(copies.Key); finals[a].Add(copies.Key);
+            }
+            else
+            {
+                if (!Unstarted("nhl", competition) || Date(e, "date") <= evidence.ObservedAt) return false;
+                remaining.Add(new(copies.Key, h, a));
+            }
+        }
+        for (var i = 0; i < schedules.Length; i++)
+            if (schedules[i].Points != points[i] || schedules[i].Completed != finals[i].Count
+                || schedules[i].CompletedIds is null || !finals[i].SetEquals(schedules[i].CompletedIds)) return false;
+        var target = remaining.SingleOrDefault(c => c.Id == evidence.GameId);
+        if (target is null || target.Home != home || target.Away != away) return false;
+        var others = remaining.Where(c => c.Id != target.Id).OrderBy(c => c.Id, StringComparer.Ordinal).ToArray();
+        bool HeadToHead(NhlRemainingContest c) => (c.Home == home && c.Away == away) || (c.Home == away && c.Away == home);
+        var meetings = others.Count(HeadToHead);
+        for (var strategy = 0; strategy < 2; strategy++)
+        for (var homeWins = 0; homeWins <= meetings; homeWins++)
+        {
+            var completion = (int[])points.Clone();
+            var meeting = 0;
+            foreach (var c in others)
+            {
+                var winner = HeadToHead(c) ? (meeting++ < homeWins ? home : away)
+                    : c.Home == home || c.Away == home ? home
+                    : c.Home == away || c.Away == away ? away
+                    : strategy == 0 || (c.Away - c.Home + schedules.Length) % schedules.Length <= schedules.Length / 2 ? c.Home : c.Away;
+                completion[winner] += 2;
+            }
+            var possibleLosses = others.Where(c => !HeadToHead(c)
+                && (c.Home == home || c.Away == home || c.Home == away || c.Away == away)).ToList();
+            while (Math.Abs(completion[home] - completion[away]) >= 2)
+            {
+                var leader = completion[home] > completion[away] ? home : away;
+                var loss = possibleLosses.Where(c => c.Home == leader || c.Away == leader)
+                    .MinBy(c => completion[c.Home == leader ? c.Away : c.Home]);
+                if (loss is null) break;
+                completion[leader] -= 2;
+                completion[loss.Home == leader ? loss.Away : loss.Home] += 2;
+                possibleLosses.Remove(loss);
+            }
+            var lower = Math.Min(completion[home], completion[away]);
+            if (completion[home] + 2 > completion[away] && completion[away] + 2 > completion[home]
+                && Enumerable.Range(0, schedules.Length).Where(i => i != home && i != away).All(i => completion[i] < lower)) return true;
+        }
+        return false;
     }
 
     private static string ResultFingerprint(JsonElement e)
