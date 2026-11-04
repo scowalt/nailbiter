@@ -28,6 +28,7 @@
     "apps/backend.tests/Fixtures/ProHype/mlb-pregame-401907973.json": "2421062499b1bd08e2ed2bf12329795ff07220597caccef7f0f311775b9970a2",
     "apps/backend.tests/Fixtures/ProHype/nba-board.json": "2b21fd71b420f2db2ed26aab4275b91796f29dc1f92961581f64b3a5185069ab",
     "apps/backend.tests/Fixtures/ProHype/nba-decider-board.json": "1d7a21591bed8076ab10d4ba37202406a4ca23230285fa38c4a33e29fbda128f",
+    "apps/backend.tests/Fixtures/ProHype/nba-seeding-contests.csv": "71b376e322e839289d3f72bcfa8ab1a59d52e89885a4b3fe7b93b3fe2159f636",
     "apps/backend.tests/Fixtures/ProHype/nfl-board.json": "536a4cbb02393e61aabe733755f133b92c07bf8d32c6174070aa89240ea6429b",
     "apps/backend.tests/Fixtures/ProHype/nfl-fpi.json": "cfa818ee16f6168355bbafd9315d933d892244b9712926bd516dd6d65e45be54",
     "apps/backend.tests/Fixtures/ProHype/nfl-pregame-401872985.json": "9f9c1a547ebe24d17b7511c6185bdfd6823760a93f1f0058d0aaf5d11d1f418e",

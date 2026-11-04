@@ -163,6 +163,124 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
         }
     }
 
+    private sealed record NbaRemainingContest(string Id, int Home, int Away, bool CanBalance);
+
+    private static bool HasBoundedNbaExchange(ProGameEvidence evidence, IReadOnlyCollection<Schedule> league)
+    {
+        if (evidence.Sport != "nba" || evidence.Season != 2027 || evidence.Phase != 2 || !evidence.VerifiedUnstarted
+            || evidence.Rejection != ProCompetitionRejection.None || !evidence.HomeProgress.ScheduleVerified || !evidence.AwayProgress.ScheduleVerified
+            || league.Count != 30 || league.Any(s => s.Season != 2027 || s.Phase != 2 || s.Length != 82 || s.Events.Length is < 80 or > 82)) return false;
+        var schedules = league.OrderBy(s => s.Team, StringComparer.Ordinal).ToArray();
+        var indexes = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var i = 0; i < schedules.Length; i++)
+            if (!indexes.TryAdd(schedules[i].Team, i)) return false;
+        if (!indexes.TryGetValue(evidence.Home, out var home) || !indexes.TryGetValue(evidence.Away, out var away) || home == away
+            || evidence.HomeProgress.Completed != schedules[home].Completed || evidence.AwayProgress.Completed != schedules[away].Completed
+            || evidence.HomeProgress.Scheduled != 82 || evidence.AwayProgress.Scheduled != 82) return false;
+        var missing = schedules.Select(s => s.Length - s.Events.Length).ToArray();
+        var points = new int[schedules.Length];
+        var finals = schedules.Select(_ => new HashSet<string>(StringComparer.Ordinal)).ToArray();
+        var remaining = new List<NbaRemainingContest>();
+        bool Ordinary(JsonElement competition) => Text(Get(competition, "type"), "abbreviation") == "STD"
+            && Get(competition, "notes").ValueKind == JsonValueKind.Array && Items(competition, "notes").Length == 0;
+        bool Teams(JsonElement e, out int h, out int a)
+        {
+            h = a = -1;
+            var competitions = Items(e, "competitions");
+            if (competitions.Length != 1 || Date(e, "date") is null || Number(Get(e, "season"), "year") != 2027
+                || Number(Get(e, "seasonType"), "type") != 2) return false;
+            var members = Items(competitions[0], "competitors");
+            if (members.Length != 2 || members.Count(t => Text(t, "homeAway") == "home") != 1
+                || members.Count(t => Text(t, "homeAway") == "away") != 1) return false;
+            var hKey = Abbreviation(members.Single(t => Text(t, "homeAway") == "home"));
+            var aKey = Abbreviation(members.Single(t => Text(t, "homeAway") == "away"));
+            return hKey is not null && aKey is not null && indexes.TryGetValue(hKey, out h) && indexes.TryGetValue(aKey, out a) && h != a;
+        }
+        foreach (var copies in schedules.SelectMany(s => s.Events.Select(e => (s.Team, Event: e))).GroupBy(x => Text(x.Event, "id")))
+        {
+            var pair = copies.ToArray();
+            if (string.IsNullOrEmpty(copies.Key) || pair.Length != 2 || !Teams(pair[0].Event, out var h, out var a)
+                || !Teams(pair[1].Event, out var otherH, out var otherA) || h != otherH || a != otherA
+                || !pair.Select(x => indexes[x.Team]).ToHashSet().SetEquals([h, a])
+                || ResultFingerprint(pair[0].Event) != ResultFingerprint(pair[1].Event)) return false;
+            var e = pair[0].Event;
+            var competition = Items(e, "competitions")[0];
+            var other = Items(pair[1].Event, "competitions")[0];
+            if (Get(competition, "notes").ToString() != Get(other, "notes").ToString()
+                || Text(Get(competition, "type"), "abbreviation") != Text(Get(other, "type"), "abbreviation")) return false;
+            if (Items(competition, "notes").Any(note => Text(note, "headline") is string label && label.Contains("NBA Cup", StringComparison.OrdinalIgnoreCase)
+                && label is not ("NBA Cup - Group Play" or "NBA Cup - Quarterfinals" or "NBA Cup - Semifinals"))) return false;
+            if (Final(competition))
+            {
+                if (Date(e, "date") > evidence.ObservedAt || Number(Get(competition, "status"), "period") is not int period || period < 4
+                    || Text(Get(Get(competition, "status"), "type"), "name") is not ("STATUS_FINAL" or "STATUS_FINAL_OVERTIME")) return false;
+                var members = Items(competition, "competitors");
+                var hScore = ReadScore(members.Single(t => Text(t, "homeAway") == "home"));
+                var aScore = ReadScore(members.Single(t => Text(t, "homeAway") == "away"));
+                if (!hScore.HasValue || !aScore.HasValue || hScore == aScore) return false;
+                points[hScore > aScore ? h : a]++;
+                finals[h].Add(copies.Key); finals[a].Add(copies.Key);
+            }
+            else
+            {
+                if (!Unstarted("nba", competition) || Date(e, "date") <= evidence.ObservedAt) return false;
+                var start = Date(e, "date")!.Value;
+                var ordinary = Ordinary(competition);
+                if (copies.Key == evidence.GameId)
+                {
+                    var date = TimeZoneInfo.ConvertTimeFromUtc(start, TimeZoneInfo.FindSystemTimeZoneById("America/New_York")).Date;
+                    var groupFriday = date >= new DateTime(2026, 10, 30) && date <= new DateTime(2026, 11, 27) && date.DayOfWeek == DayOfWeek.Friday;
+                    if (h != home || a != away || start != evidence.ScheduledStart || !ordinary || groupFriday
+                        || date == new DateTime(2026, 11, 24) || date == new DateTime(2026, 11, 25)
+                        || date >= new DateTime(2026, 12, 4) && date <= new DateTime(2026, 12, 11)) return false;
+                }
+                remaining.Add(new(copies.Key, h, a, ordinary && start >= new DateTime(2027, 1, 1, 0, 0, 0, DateTimeKind.Utc)));
+            }
+        }
+        for (var i = 0; i < schedules.Length; i++)
+            if (schedules[i].Points != points[i] || schedules[i].Completed != finals[i].Count || schedules[i].CompletedIds is null
+                || schedules[i].CompletedIds.Length != finals[i].Count || !finals[i].SetEquals(schedules[i].CompletedIds)) return false;
+        if (!remaining.Any(c => c.Id == evidence.GameId)) return false;
+        var others = remaining.Where(c => c.Id != evidence.GameId).OrderBy(c => c.Id, StringComparer.Ordinal).ToArray();
+        bool HeadToHead(NbaRemainingContest c) => (c.Home == home && c.Away == away) || (c.Home == away && c.Away == home);
+        var meetings = others.Count(HeadToHead);
+        for (var strategy = 0; strategy < 2; strategy++)
+        for (var homeWins = 0; homeWins <= meetings; homeWins++)
+        {
+            var baseline = (int[])points.Clone();
+            var meeting = 0;
+            foreach (var c in others)
+            {
+                var winner = HeadToHead(c) ? (meeting++ < homeWins ? home : away)
+                    : c.Home == home || c.Away == home ? home : c.Home == away || c.Away == away ? away
+                    : strategy == 0 || (c.Away - c.Home + schedules.Length) % schedules.Length <= schedules.Length / 2 ? c.Home : c.Away;
+                baseline[winner]++;
+            }
+            var everyCase = true;
+            for (var homeExtra = 0; homeExtra <= missing[home] && everyCase; homeExtra++)
+            for (var awayExtra = 0; awayExtra <= missing[away] && everyCase; awayExtra++)
+            {
+                var completion = (int[])baseline.Clone();
+                completion[home] += homeExtra; completion[away] += awayExtra;
+                var losses = others.Where(c => c.CanBalance && !HeadToHead(c)
+                    && (c.Home == home || c.Away == home || c.Home == away || c.Away == away)).ToList();
+                while (completion[home] != completion[away])
+                {
+                    var leader = completion[home] > completion[away] ? home : away;
+                    var loss = losses.Where(c => c.Home == leader || c.Away == leader)
+                        .MinBy(c => completion[c.Home == leader ? c.Away : c.Home] + missing[c.Home == leader ? c.Away : c.Home]);
+                    if (loss is null) break;
+                    completion[leader]--; completion[loss.Home == leader ? loss.Away : loss.Home]++;
+                    losses.Remove(loss);
+                }
+                everyCase = completion[home] == completion[away] && Enumerable.Range(0, schedules.Length)
+                    .Where(i => i != home && i != away).All(i => completion[i] + missing[i] < completion[home]);
+            }
+            if (everyCase) return true;
+        }
+        return false;
+    }
+
     private sealed record NhlRemainingContest(string Id, int Home, int Away);
 
     private static bool HasConstructiveNhlExchange(ProGameEvidence evidence, IReadOnlyCollection<Schedule> league)
@@ -340,7 +458,17 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
                 progress.Completed = schedule.Completed;
                 progress.ScheduleVerified = true;
             }
-            if (result.VerifiedUnstarted) ApplySeedingCertificates(result, eligible);
+            if (result.VerifiedUnstarted)
+            {
+                ApplySeedingCertificates(result, eligible);
+                if (game.Sport == "nba" && !result.HomeProgress.SeedingUnresolved.HasValue && !result.AwayProgress.SeedingUnresolved.HasValue
+                    && Text(Get(c, "type"), "abbreviation") == "STD" && Get(c, "notes").ValueKind == JsonValueKind.Array && Items(c, "notes").Length == 0
+                    && HasBoundedNbaExchange(result, eligible))
+                {
+                    result.HomeProgress.SeedingUnresolved = result.AwayProgress.SeedingUnresolved = true;
+                    result.HomeProgress.Reason = result.AwayProgress.Reason = "Strict NBA positioning witnesses cover every unpublished-slot win count while both teams qualify; NBA Cup results fixed, no invented matchups or tiebreaker assumption";
+                }
+            }
         }
         var label = string.Join("; ", Items(c, "notes").Select(x => Text(x, "headline")));
         if (result.Phase == 5 && game.Sport == "nba")

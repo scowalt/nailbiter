@@ -41,6 +41,7 @@
     <None Update="Fixtures/MoneyPuck/*.csv;Fixtures/MoneyPuck/*.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/NhlGuru/*.html" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../backend.fsharp.tests/Fixtures/kalshi-nhl-playoffs-2027.json" Link="Fixtures/NhlSeeding/qualification.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../backend.fsharp.tests/Fixtures/kalshi-nba-playoffs-2027.json" Link="Fixtures/NbaSeeding/qualification.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/MoneyPuckQualification/Synthetic/*" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="../backend/backend.csproj" />
     <None Include="../../docker-compose.yml" Link="docker-compose.yml" CopyToOutputDirectory="PreserveNewest" />

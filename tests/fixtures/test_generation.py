@@ -99,6 +99,31 @@ class SyntheticFixtureTests(unittest.TestCase):
             self.assertAlmostEqual(float(stakes), 0.07620367519342137, places=14)
             self.assertAlmostEqual(float(total), 54.05426437142408, places=12)
 
+    def test_nba_seeding_controls_leave_unpublished_games_unassigned_and_have_an_independent_oracle(self):
+        from collections import Counter
+        from decimal import Decimal, localcontext
+        from fractions import Fraction
+        rows = list(csv.DictReader(io.StringIO((ROOT / 'apps/backend.tests/Fixtures/ProHype/nba-seeding-contests.csv').read_text())))
+        self.assertEqual(len(rows), 1200)
+        self.assertEqual(len({row['id'] for row in rows}), 1200)
+        counts = Counter(team for row in rows for team in [row['home'], row['away']])
+        self.assertEqual(len(counts), 30)
+        self.assertEqual(set(counts.values()), {80})
+        target = [row for row in rows if row['home'] == 'BOS' and row['away'] == 'MIA']
+        self.assertEqual(len(target), 2)
+        strength_four, strength_nine = Fraction(265, 3), Fraction(215, 3)
+        quality = 2 * strength_four * strength_nine / (strength_four + strength_nine)
+        self.assertEqual(quality, Fraction(11395, 144))
+        closeness = 100 * (1 - abs(2 * Fraction(3, 5) - 1))
+        self.assertEqual(closeness, 80)
+        with localcontext() as ctx:
+            ctx.prec = 60
+            urgency = ((Decimal(27) / 82).exp() - 1) / (Decimal(3).exp() - 1)
+            stakes = 40 * urgency
+            total = Decimal('.3') * stakes + Decimal('.4') * Decimal(quality.numerator) / quality.denominator + Decimal('.3') * Decimal(closeness.numerator) / closeness.denominator
+            self.assertAlmostEqual(float(stakes), 0.8172695811369225, places=14)
+            self.assertAlmostEqual(float(total), 55.89795865211886, places=12)
+
     def test_chart_oracle_uses_exact_step_integrals_not_production_scorer(self):
         from fractions import Fraction
         csv_text = (ROOT / 'apps/backend.tests/Fixtures/Excitement/histories.csv').read_text()
