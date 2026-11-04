@@ -208,6 +208,7 @@ module LeaguePageRenderer =
                         for game in games do
                             gameRow game sport odds scores hypeScores teamRanks hypeCredits
                     ]
+                yield! QualificationCredit.renderQualityForGames games hypeScores hypeCredits
             ]
         ]
 
