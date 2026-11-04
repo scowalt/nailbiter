@@ -27,11 +27,21 @@ module internal QualificationCredit =
         ]
 
     let renderQuality id hasHype =
-        Elem.p [ Layout.cls "text-xs text-text-muted mt-2 px-4"; Attr.id id ] [
+        Elem.footer [ Layout.cls "text-xs text-text-secondary/70 mt-6"; Attr.id id ] [
             Text.raw (if hasHype then "Quality and hype use " else "Quality uses ")
-            Elem.a [ Attr.href NhlPowerRankingsGuruService.RankingsUrl; Layout.cls "underline hover:text-text-primary" ] [ Text.raw "Power Rankings Guru" ]
+            Elem.a [ Attr.href NhlPowerRankingsGuruService.RankingsUrl; Layout.cls "underline hover:text-text-primary"; Attr.style "text-decoration: underline; text-underline-offset: 3px" ] [ Text.raw "Power Rankings Guru" ]
             Text.raw " team-strength rankings."
         ]
+
+    let renderQualityForGames (games: seq<Game>) (hypeScores: IDictionary<string, Nullable<float>>) (hypeCredits: IDictionary<string, DerivedHypeCredit>) =
+        let usesGuru =
+            games |> Seq.exists (fun game ->
+                match hypeScores.TryGetValue game.Id, hypeCredits.TryGetValue game.Id with
+                | (true, score), (true, credit) ->
+                    game.Status = "scheduled" && not game.IsHistoricalImport && score.HasValue && Double.IsFinite score.Value
+                    && credit.QualitySource = NhlPowerRankingsGuruService.Source
+                | _ -> false)
+        [ if usesGuru then renderQuality "quality-credit" true ]
 
     let renderForGame (game: Game) (ranks: IDictionary<string, TeamRankInfo>) (hypeCredits: IDictionary<string, DerivedHypeCredit>) =
         let currentTeams = selectedTeams game ranks
@@ -40,10 +50,6 @@ module internal QualificationCredit =
             | true, credit -> credit.MoneyPuckTeams
             | _ -> []
         [
-            match hypeCredits.TryGetValue game.Id with
-            | true, credit when credit.QualitySource = NhlPowerRankingsGuruService.Source ->
-                renderQuality $"quality-credit-{game.Id}" true
-            | _ -> ()
             if not currentTeams.IsEmpty then
                 render $"qualification-credit-{game.Id}" currentTeams
             if not derivedTeams.IsEmpty then
@@ -279,6 +285,7 @@ module HomePageRenderer =
                                     ]
                                 ]
                     ]
+                yield! QualificationCredit.renderQualityForGames games hypeScores hypeCredits
             ]
         ]
 
