@@ -31,6 +31,10 @@ For the generated NSH/OTT probabilities **0.2518 / 0.6804**, ranks 2/1, zero com
 
 Literal assertions use that independently calculated result, not a value obtained by calling the production scorer. Mutated malformed/missing/nonfinite/corrected cases target these generated values, so the negative paths cannot silently become no-ops against changed fixtures. Tests prove the implemented lifecycle, not historical incident reconstruction, current provider conformance or sustained coverage.
 
+## Constructive NHL seeding regression
+
+The [NHL seeding witness](../nhl-seeding-evidence.md) extends proof coverage, not scoring policy. Generated 32-team/84-game contest controls exercise the real schedule parser/certifier; independent complete-result assignments establish a strict first/second exchange missed by the original bounds. Registered refresh → PostgreSQL → raw scorer → automatic capture → home/league/detail tests verify a literal unrounded total **54.05426437142408**, original clocks/credit across age and restart, cutoff and preserved MoneyPuck admission. A depth-rejected qualification market still prevents a score despite verified seeding. No provider request or captured observation is required, and actual live coverage is not inferred from the synthetic regression.
+
 ## Offline commands
 
 From the repository root with the pinned Mise toolchain and a local test Docker engine:

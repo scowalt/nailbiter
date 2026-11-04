@@ -33,6 +33,7 @@
     "apps/backend.tests/Fixtures/ProHype/nfl-pregame-401872985.json": "9f9c1a547ebe24d17b7511c6185bdfd6823760a93f1f0058d0aaf5d11d1f418e",
     "apps/backend.tests/Fixtures/ProHype/nhl-board.json": "22c38f8a349ef78bf900217109214204bac10729a73cea0e3d7d5b1c406ecc9b",
     "apps/backend.tests/Fixtures/ProHype/nhl-schedule.json": "abd46a1b97c83a1aeb2900ffb6c87b93f6cd9ec62d9c58429d9f1068c0efa12e",
+    "apps/backend.tests/Fixtures/ProHype/nhl-seeding-contests.csv": "522c373c49f747b94304c50c9c1990868c10ecdd88a6083ff92c16d31138813a",
     "apps/backend.tests/Fixtures/ProHype/nhl-stakes-401891819.json": "b83a3f6aba5a2d7186596fe1bae7f619a4644294ed24d6f46977e7e6af40b42b",
     "apps/backend.tests/Fixtures/ProHype/nhl-upcoming-board.json": "e0ae73acbf81bc560e3666792cefd92dbb507e66e69b696c16eabd5992495171",
     "apps/backend.tests/Fixtures/ProHype/postseason-rounds.json": "c54ee55d4ffc69419551eb2383489ad9f57bc6b2260706510b9452eb82dea767"

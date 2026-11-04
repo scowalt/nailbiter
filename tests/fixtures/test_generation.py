@@ -76,6 +76,29 @@ class SyntheticFixtureTests(unittest.TestCase):
         self.assertEqual(total, Fraction(29213125, 496000))
         self.assertEqual(round(total), 59)
 
+    def test_nhl_seeding_controls_are_complete_and_have_an_independent_page_oracle(self):
+        from collections import Counter
+        from decimal import Decimal, localcontext
+        from fractions import Fraction
+        rows = list(csv.DictReader(io.StringIO((ROOT / 'apps/backend.tests/Fixtures/ProHype/nhl-seeding-contests.csv').read_text())))
+        self.assertEqual(len(rows), 1344)
+        self.assertEqual(len({row['id'] for row in rows}), 1344)
+        counts = Counter(team for row in rows for team in [row['home'], row['away']])
+        self.assertEqual(len(counts), 32)
+        self.assertEqual(set(counts.values()), {84})
+        target = [row for row in rows if row['home'] == 'ANA' and row['away'] == 'LA']
+        self.assertEqual(len(target), 2)
+        self.assertEqual(target[0]['id'], 'synthetic-seeding-0033')
+        quality = 2 * Fraction(100 * 59, 64) * Fraction(100 * 35, 64) / (Fraction(100 * 59, 64) + Fraction(100 * 35, 64))
+        self.assertEqual(quality, Fraction(51625, 752))
+        with localcontext() as ctx:
+            ctx.prec = 50
+            urgency = ((Decimal(3) / 84).exp() - 1) / (Decimal(3).exp() - 1)
+            stakes = 40 * urgency
+            total = Decimal('0.35') * stakes + Decimal('0.35') * Decimal(quality.numerator) / quality.denominator + 30
+            self.assertAlmostEqual(float(stakes), 0.07620367519342137, places=14)
+            self.assertAlmostEqual(float(total), 54.05426437142408, places=12)
+
     def test_chart_oracle_uses_exact_step_integrals_not_production_scorer(self):
         from fractions import Fraction
         csv_text = (ROOT / 'apps/backend.tests/Fixtures/Excitement/histories.csv').read_text()
