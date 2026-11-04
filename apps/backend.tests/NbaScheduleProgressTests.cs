@@ -184,7 +184,7 @@ public sealed class NbaScheduleProgressTests
     }
 
     [Fact]
-    public void Provisional_matchups_cannot_supply_full_league_seeding_certificates()
+    public void Unverified_provisional_league_cannot_supply_seeding_certificates()
     {
         var all = Enumerable.Range(0, 30).Select(_ => new List<JsonElement>()).ToArray();
         var id = 0;

@@ -35,6 +35,10 @@ Literal assertions use that independently calculated result, not a value obtaine
 
 The [NHL seeding witness](../nhl-seeding-evidence.md) extends proof coverage, not scoring policy. Generated 32-team/84-game contest controls exercise the real schedule parser/certifier; independent complete-result assignments establish a strict first/second exchange missed by the original bounds. Registered refresh → PostgreSQL → raw scorer → automatic capture → home/league/detail tests verify a literal unrounded total **54.05426437142408**, original clocks/credit across age and restart, cutoff and preserved MoneyPuck admission. A depth-rejected qualification market still prevents a score despite verified seeding. No provider request or captured observation is required, and actual live coverage is not inferred from the synthetic regression.
 
+## NBA seeding with unpublished games
+
+The [NBA bounded proof](../nba-seeding-evidence.md) keeps 80 known contests per team separate from the 82-game denominator. Independent assignments verify all nine missing-slot win-count combinations without adding matchups. Registered BPI/qualification/competition refresh → PostgreSQL → raw scorer → automatic capture → home/league/detail tests assert the independent unrounded total **55.89795865211886**, original BPI source/tuple/clock across age and restart, exclusive cutoff and unchanged NHL provider admission. Cup/ambiguous targets and unusable qualification remain unavailable. Unsafe-source, official Eastern Cup-date, noncounting Cup-stage and all-cases-not-some controls remain separate from progress verification. Passing tests do not establish live-provider conformance or guarantee a future real game's recovery.
+
 ## Offline commands
 
 From the repository root with the pinned Mise toolchain and a local test Docker engine:

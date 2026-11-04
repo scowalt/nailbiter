@@ -133,6 +133,17 @@ def nhl_seeding_contests():
     emit(F + 'ProHype/nhl-seeding-contests.csv', '\n'.join(rows) + '\n')
 
 
+def nba_seeding_contests():
+    rows = ['id,home,away']
+    teams = TEAMS['nba']
+    for h, home in enumerate(teams):
+        for a in range(h + 1, len(teams)):
+            distance = min(a - h, len(teams) - (a - h))
+            for _ in range(3 if distance <= 11 else 2):
+                rows.append(f'synthetic-nba-seeding-{len(rows) - 1:04d},{home},{teams[a]}')
+    emit(F + 'ProHype/nba-seeding-contests.csv', '\n'.join(rows) + '\n')
+
+
 def nhl_guru_rankings():
     slugs = {
         'ANA': 'anaheim-ducks', 'BOS': 'boston-bruins', 'BUF': 'buffalo-sabres', 'CGY': 'calgary-flames',
@@ -360,7 +371,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
-    for generate in [qualification_fixtures, rankings, nhl_seeding_contests, nhl_guru_rankings, moneypuck_model, pro_schedules, mlb_preview, nfl_preview, nhl_stakes, mlb_reconciliation, chart_histories, nfl_leverage]:
+    for generate in [qualification_fixtures, rankings, nhl_seeding_contests, nba_seeding_contests, nhl_guru_rankings, moneypuck_model, pro_schedules, mlb_preview, nfl_preview, nhl_stakes, mlb_reconciliation, chart_histories, nfl_leverage]:
         generate()
     manifest = {path: hashlib.sha256(text.encode()).hexdigest() for path, text in sorted(OUTPUTS.items())}
     emit('tests/fixtures/manifest.json', {'provenance': 'Independently constructed by scripts/test-fixtures/generate.py; no provider responses used as inputs.', 'sha256': manifest})
