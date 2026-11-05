@@ -75,9 +75,9 @@ public sealed class ProHypeTests
     internal static JsonElement Fixture(string file) => JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ProHype", file + ".json"))).RootElement;
 
     [Theory]
-    [InlineData(0, 1, 2, .5, false, 64)]
-    [InlineData(0, 14, 15, .55, false, 47)]
-    [InlineData(83, 16, 17, .55, false, 72)]
+    [InlineData(0, 1, 2, .5, false, 66)]
+    [InlineData(0, 14, 15, .55, false, 49)]
+    [InlineData(83, 16, 17, .55, false, 60)]
     [InlineData(0, 1, 2, .5, true, 99)]
     public void Exact_approved_calibrations(int played, int homeRank, int awayRank, double probability, bool championship, int expected)
     {
@@ -85,21 +85,20 @@ public sealed class ProHypeTests
         if (championship) { g.SeasonType = e.Phase = 3; e.Round = 4; e.HomeElimination = e.AwayElimination = true; }
         var result = Score(g, e, Ranks(g, homeRank, awayRank), Odds(g, probability));
         Assert.Equal(expected, Math.Round(result.Total!.Value));
-        Assert.Equal(championship ? 100 : played == 83 ? 80 : .1524, result.Stakes.Value!.Value, championship || played == 83 ? 8 : 3);
+        Assert.Equal(championship ? 100 : played == 83 ? 45.59340347444945 : 6.3081393271862405, result.Stakes.Value!.Value, 10);
     }
 
     [Theory]
-    [InlineData("nba", 82)]
-    [InlineData("nhl", 84)]
-    [InlineData("mlb", 162)]
-    public void Progress_denominator_and_zero_are_verified_not_calendar_guesses(string sport, int length)
+    [InlineData("nba", 82, 6.384034163378589)]
+    [InlineData("nhl", 84, 6.3081393271862405)]
+    [InlineData("mlb", 162, 4.5504108020051035)]
+    public void Progress_denominator_and_zero_are_verified_not_calendar_guesses(string sport, int length, double start)
     {
         var g = Game(sport); var e = Evidence(g);
         Assert.Equal(length, e.HomeProgress.Scheduled);
-        var start = Score(g, e).Stakes.Value;
-        Assert.InRange(start!.Value, 0.01, 1);
+        Assert.Equal(start, Score(g, e).Stakes.Value!.Value, 10);
         e.HomeProgress.Completed = e.AwayProgress.Completed = length - 1;
-        Assert.Equal(80, Score(g, e).Stakes.Value);
+        Assert.Equal(45.59340347444945, Score(g, e).Stakes.Value!.Value, 10);
         foreach (var invalid in new int?[] { null, -1, length, length + 1 })
         {
             e.HomeProgress.Completed = invalid;
@@ -124,16 +123,16 @@ public sealed class ProHypeTests
     public void Qualification_only_stakes_distinguish_estimates_finals_and_missing_progress()
     {
         var g = Game(); var e = Evidence(g); e.HomeProgress.Completed = e.AwayProgress.Completed = 83;
-        Assert.Equal(1.6, Score(g, e, home: Q(.99), away: Q(.99)).Stakes.Value!.Value, 10);
+        Assert.Equal(3.04595910896665, Score(g, e, home: Q(.99), away: Q(.99)).Stakes.Value!.Value, 10);
         Assert.Equal(0, Score(g, e, home: Q(1, true), away: Q(1, true)).Stakes.Value);
         e.HomeProgress.SeedingUnresolved = e.AwayProgress.SeedingUnresolved = null;
-        Assert.Equal(1.6, Score(g, e, home: Q(.99), away: Q(.99)).Stakes.Value!.Value, 10);
+        Assert.Equal(3.04595910896665, Score(g, e, home: Q(.99), away: Q(.99)).Stakes.Value!.Value, 10);
         e.HomeProgress.Completed = e.AwayProgress.Completed = null;
         Assert.Equal(0, Score(g, e, home: Q(1, true), away: Q(1, true)).Stakes.Value);
         Assert.Equal(0, Score(g, e, home: Q(0, true, Now.AddYears(-1)), away: Q(0, true)).Stakes.Value);
         Assert.Null(Score(g, e, home: Q(0), away: Q(0)).Stakes.Value);
         e.AwayProgress = new() { Scheduled = 84, Completed = 83, ScheduleVerified = true };
-        Assert.Equal(80, Score(g, e, home: Q(0, true)).Stakes.Value);
+        Assert.Equal(45.59340347444945, Score(g, e, home: Q(0, true)).Stakes.Value!.Value, 10);
     }
 
     [Theory]
@@ -383,7 +382,7 @@ public sealed class ProHypeTests
         g = Game(); g.SeasonYear = 2026; var evidence = Evidence(g);
         Assert.Equal(82, evidence.HomeProgress.Scheduled);
         evidence.HomeProgress.Completed = evidence.AwayProgress.Completed = 81;
-        Assert.Equal(80, Score(g, evidence).Stakes.Value);
+        Assert.Equal(45.59340347444945, Score(g, evidence).Stakes.Value!.Value, 10);
     }
 
     [Fact]

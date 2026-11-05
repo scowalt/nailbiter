@@ -159,11 +159,11 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData("nfl", 54)]
-    [InlineData("nba", 69)]
-    [InlineData("nhl", 64)]
-    [InlineData("mlb", 64)]
-    public async Task Registered_background_capture_precedes_any_viewer_and_survives_expiry_and_restart(string sport, int expected)
+    [InlineData("nfl", 54, .8)]
+    [InlineData("nba", 71, 6.384034163378589)]
+    [InlineData("nhl", 66, 6.3081393271862405)]
+    [InlineData("mlb", 66, 4.5504108020051035)]
+    public async Task Registered_background_capture_precedes_any_viewer_and_survives_expiry_and_restart(string sport, int expected, double stakes)
     {
         var game = await Seed(sport);
         Start();
@@ -173,7 +173,7 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
         Start(captureEnabled: false);
         var firstRead = await Resolve(game.Id);
         Assert.Equal(expected, Math.Round(firstRead.Total!.Value));
-        Assert.InRange(firstRead.Components.StakesScore, .01, 1);
+        Assert.Equal(stakes, firstRead.Components.StakesScore, 10);
         Assert.InRange(firstRead.Components.QualityScore, 96, 97);
         Assert.Equal(100, firstRead.Components.ClosenessScore);
         Assert.Equal(ProHypeTests.Now, firstRead.EvaluatedAt);

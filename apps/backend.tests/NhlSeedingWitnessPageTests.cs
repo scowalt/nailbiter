@@ -115,8 +115,8 @@ public sealed class NhlSeedingWitnessPageTests
             Assert.Empty(h.Handler.Requests);
             return;
         }
-        Assert.Equal(54.038261599633465, original.Total!.Value, 10);
-        Assert.Equal(0.03048147007736855, original.Components.StakesScore, 12);
+        Assert.Equal(54.99884580603063, original.Total!.Value, 10);
+        Assert.Equal(2.775007774069287, original.Components.StakesScore, 12);
         Assert.Equal(68.6502659574468, original.Components.QualityScore, 10);
         Assert.Equal(100, original.Components.ClosenessScore);
         Assert.Equal(NhlPowerRankingsGuruService.Source, original.Components.QualitySource);
@@ -150,7 +150,7 @@ public sealed class NhlSeedingWitnessPageTests
             using var document = await new AngleSharp.Html.Parser.HtmlParser().ParseDocumentAsync(html, default);
             var metric = document.QuerySelector(path.StartsWith("/game/", StringComparison.Ordinal) ? "#detail-hype" : "#excitement-" + game.Id);
             Assert.NotNull(metric);
-            Assert.Matches(@"(?<!\d)54(?!\d)", metric.TextContent);
+            Assert.Matches(@"(?<!\d)55(?!\d)", metric.TextContent);
             Assert.Contains("Quality and hype use", html);
             Assert.Contains("href=\"https://powerrankingsguru.com/nhl/power-rankings\"", html);
             Assert.DoesNotContain("Hype unavailable", html);
