@@ -21,6 +21,14 @@ Complement the single **No Playoffs** column rather than adding rounded seed col
 
 Detail pages show away/home **Playoff chances by result**, **If win / If loss**, and explicit model/source credit. The Kalshi Playoff outlook stays separate. Valid individual scenarios/components remain visible when the total is unavailable; missing scenarios receive a team-specific explanation. Validation reasons, clocks and coverage IDs remain server-side.
 
+## Low-interest playoff display
+
+The owner selected the compact `<1%` label for low-interest NFL regular-season qualification markets on 2026-11-05. It is a display convention, not an exact probability or a claim of elimination. No range or longer visible qualifier is added; hover/accessibility descriptions explain the convention.
+
+Apply it only when the latest season/team/contract-verified Kalshi observation is strictly under one hour old, has an explicitly empty zero YES bid and a populated YES ask above one cent and at most two cents, and supplies no accepted numerical probability. Missing, stale, malformed, inactive, ambiguous or broader-priced markets remain unavailable. Valid quoted probabilities and confirmed finals retain priority. The collector preserves the rejected quote envelope in the existing evidence column during its ordinary refresh; no extra request or migration is needed.
+
+The presentation override stays separate from `PlayoffProbability`, qualification selection and final-outcome state. It never supplies a scoring representative, changes conditional NFL Stakes, fills seeding evidence or repairs unavailable hype. Other sports and source/admission controls are unchanged.
+
 ## Implemented source contract — not live conformance proof
 
 The collector supports ordinary HTTPS pages on `www.playoffstatus.com/nfl/`:

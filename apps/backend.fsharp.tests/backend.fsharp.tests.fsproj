@@ -16,6 +16,7 @@
     <Compile Include="KalshiDoubleheaderTests.fs" />
     <Compile Include="KalshiScheduleChangeTests.fs" />
     <Compile Include="NflPlayoffTests.fs" />
+    <Compile Include="NflLowInterestDisplayTests.fs" />
     <Compile Include="PlayoffPolicyTests.fs" />
     <Compile Include="NhlQualificationSelectionTests.fs" />
     <Compile Include="MoneyPuckQualificationPolicyTests.fs" />

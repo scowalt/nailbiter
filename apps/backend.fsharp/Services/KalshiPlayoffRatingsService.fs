@@ -114,9 +114,9 @@ module private PlayoffMarkets =
         | [market] when belongsTo eventTicker market -> probability now market
         | _ -> None
 
-    let evidence eventTicker season team now entries =
+    let evidence sport eventTicker season team now entries =
         let e = PlayoffQuoteEvidence(Version = 1, ValidationPolicy = "kalshi-qualification-v1", Provider = "kalshi",
-                                    Sport = "nhl", Team = team, Season = season, EventId = eventTicker,
+                                    Sport = sport, Team = team, Season = season, EventId = eventTicker,
                                     ObservedAt = Nullable now)
         match entries with
         | Some [market] when belongsTo eventTicker market ->
@@ -310,11 +310,19 @@ type KalshiPlayoffRatingsService
                                     row.PlayoffProbability <- value |> Option.map fst |> Option.toNullable
                                     row.PlayoffProbabilityIsFinal <- value |> Option.exists snd
                                     row.FetchedAt <- now
+                        if sport = "nfl" then
+                            let evidence = PlayoffMarkets.evidence sport eventTicker season team now (Map.tryFind team live)
+                            evidence.RefreshId <- refreshId
+                            let json =
+                                if evidence.State = "unavailable" && evidence.ReasonCode = "insufficient_depth" then JsonSerializer.Serialize(evidence)
+                                else null
+                            for row in db.TeamRatings.Local |> Seq.filter (fun r -> r.Sport = sport && r.Season = season && r.TeamAbbreviation = team && r.Source = "kalshi") do
+                                row.PlayoffEvidenceJson <- json
                         if sport = "nhl" then
                             let entries =
                                 Map.tryFind team live
                                 |> Option.orElseWith (fun () -> archive |> Option.bind (fun (markets, _) -> Map.tryFind team markets))
-                            let evidence = PlayoffMarkets.evidence eventTicker season team now entries
+                            let evidence = PlayoffMarkets.evidence sport eventTicker season team now entries
                             evidence.RefreshId <- refreshId
                             if not (Map.containsKey team live) && evidence.State = "estimate" then
                                 evidence.State <- "unavailable"

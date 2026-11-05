@@ -193,6 +193,31 @@ module PlayoffRatingPolicy =
                     elif request.Now - evidenceAt >= maxAge then { observed with Reason = "expired" }
                     else { observed with Probability = value; Reason = "accepted" }
 
+    let displayOnlyLowProbability (request: SelectionRequest) (ratings: seq<TeamRating>) =
+        if request.Sport <> "nfl" || request.Season < 1 || request.Season > 9998 then false
+        else
+            ratings
+            |> Seq.filter (fun r -> r.Sport = request.Sport && r.Season = request.Season && r.Source = kalshiSource
+                                    && teamKey request.Sport r.TeamAbbreviation = teamKey request.Sport request.Team)
+            |> latest
+            |> Option.exists (fun row ->
+                let e = PlayoffQuoteEvidence.Parse(row.PlayoffEvidenceJson)
+                let ticker = $"KXNFLPLAYOFF-{(request.Season + 1) % 100:D2}"
+                let suffix = match request.Team with | "JAX" -> ["JAX"; "JAC"] | "WSH" -> ["WSH"; "WAS"] | "LAR" -> ["LAR"; "LA"] | team -> [team]
+                row.SourceSeason = Nullable request.Season && not row.PlayoffProbability.HasValue && not row.PlayoffProbabilityIsFinal
+                && row.FetchedAt <= request.Now && request.Now - row.FetchedAt < maxAge
+                && not (isNull e) && e.Version = 1 && e.ValidationPolicy = "kalshi-qualification-v1"
+                && e.Provider = kalshiSource && e.Sport = request.Sport && e.Season = request.Season
+                && e.Team = request.Team && e.ContractVerified && e.EventId = ticker
+                && (suffix |> List.exists (fun team -> e.MarketId = ticker + "-" + team))
+                && e.State = "unavailable" && e.ReasonCode = "insufficient_depth" && not e.ResolutionBlocked
+                && e.ObservedAt.HasValue && e.ObservedAt.Value <> DateTime.MinValue && e.ObservedAt.Value <= request.Now
+                && not (afterPersistedTimestamp e.ObservedAt.Value row.FetchedAt) && request.Now - e.ObservedAt.Value < maxAge
+                && not (String.IsNullOrWhiteSpace e.RefreshId)
+                && e.Bid = Nullable 0M && e.BidSize = Nullable 0M && e.BidExplicitlyEmpty && not e.AskExplicitlyEmpty
+                && e.Ask.HasValue && e.Ask.Value > 0.01M && e.Ask.Value <= 0.02M
+                && e.AskSize.HasValue && e.AskSize.Value > 0M)
+
     let private assessPlayoffStatus (request: SelectionRequest) row =
         let empty = missing playoffStatusSource "missing_model"
         match row with
