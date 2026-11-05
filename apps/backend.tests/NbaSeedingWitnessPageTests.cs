@@ -109,9 +109,9 @@ public sealed class NbaSeedingWitnessPageTests
             Assert.Equal(mode == "cup" ? null : true, evidence.AwayProgress.SeedingUnresolved);
             Assert.Equal(NbaSeedingScenario.Now, evidence.ObservedAt);
             var raw = await scope.ServiceProvider.GetRequiredService<HypeScoreService>().GetHypeComponentsAsync(stored, null);
-            Assert.Equal(mode == "accepted", raw.IsComplete);
+            Assert.Equal(mode != "qualification", raw.IsComplete);
             await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
-            Assert.Equal(mode == "accepted", (await db.ProHypeSnapshots.AsNoTracking().SingleAsync()).SnapshotJson is not null);
+            Assert.Equal(mode != "qualification", (await db.ProHypeSnapshots.AsNoTracking().SingleAsync()).SnapshotJson is not null);
             var mp = await db.MoneyPuckRefreshOperations.AsNoTracking().SingleAsync();
             Assert.True(mp.Denied); Assert.False(mp.Active);
             Assert.Equal(h.Clock.Now.AddDays(3).Ticks, mp.NextAttemptAtTicks);
@@ -119,12 +119,12 @@ public sealed class NbaSeedingWitnessPageTests
             Assert.Equal(h.Clock.Now.AddDays(2).Ticks, (await db.NhlGuruRefreshOperations.AsNoTracking().SingleAsync()).NextAttemptAtTicks);
         }
         var original = await Resolve(h, game);
-        var available = mode == "accepted";
+        var available = mode != "qualification";
         var requests = handler.Requests.Count;
         if (available)
         {
-            Assert.Equal(55.89795865211886, original.Total!.Value, 10);
-            Assert.Equal(0.8172695811369225, original.Components.StakesScore, 12);
+            Assert.Equal(55.750850127514205, original.Total!.Value, 10);
+            Assert.Equal(0.32690783245476907, original.Components.StakesScore, 12);
             Assert.Equal(79.13194444444444, original.Components.QualityScore, 10);
             Assert.Equal(80, original.Components.ClosenessScore, 10);
             Assert.Equal("espn_bpi", original.Components.QualitySource);

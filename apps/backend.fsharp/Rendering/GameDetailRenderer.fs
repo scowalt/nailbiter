@@ -375,7 +375,7 @@ module GameDetailRenderer =
                                 Elem.p [ cls "text-xs text-text-secondary mt-3" ] [
                                     Text.raw "Model estimates from "
                                     Elem.a [ Attr.href backend.Scoring.NflPlayoffLeveragePolicy.ScheduleUrl; cls "underline hover:text-text-primary" ] [ Text.raw "PlayoffStatus" ]
-                                    Text.raw ". Stakes considers the larger swing and seeding consequences."
+                                    Text.raw ". Stakes uses the larger playoff qualification swing."
                                 ]
                             ]
                         if backend.Scoring.ProHypePolicy.Supports game.Sport && hypeComponents.StakesAvailable then

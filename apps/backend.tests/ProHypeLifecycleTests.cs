@@ -1,5 +1,6 @@
 using System.Data.Common;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using backend.Data;
 using backend.Models;
 using backend.Services;
@@ -210,6 +211,195 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
         Assert.Equal(captured.Components.QualityScore, retained.Components.QualityScore);
         Assert.Equal(captured.Components.ClosenessScore, retained.Components.ClosenessScore);
         Assert.Equal(captured.EvaluatedAt, retained.EvaluatedAt);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(3)]
+    public async Task Legacy_regular_season_seeding_scores_are_not_retained_under_the_qualification_only_formula(int? version)
+    {
+        await Seed();
+        await Change(async db =>
+        {
+            var row = await db.Games.SingleAsync();
+            var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
+            evidence.HomeProgress.Completed = evidence.AwayProgress.Completed = 83;
+            row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
+            foreach (var rating in await db.TeamRatings.Where(r => r.Source == "kalshi").ToArrayAsync())
+                rating.PlayoffProbability = .99;
+        });
+        var current = await Resolve();
+        Assert.Equal(1.6, current.Components.StakesScore, 10);
+        await Change(async db =>
+        {
+            var state = await db.ProHypeSnapshots.SingleAsync();
+            var legacy = JsonNode.Parse(state.SnapshotJson!)!;
+            if (version.HasValue) legacy["FormulaVersion"] = version.Value;
+            else legacy.AsObject().Remove("FormulaVersion");
+            legacy["Components"]!["StakesScore"] = 40;
+            legacy["Total"] = 77.89742943548387;
+            state.SnapshotJson = legacy.ToJsonString();
+        });
+        clock.Advance(TimeSpan.FromHours(3));
+        await app.DisposeAsync();
+        app = CreateHost();
+        var unavailable = await Resolve();
+        Assert.Null(unavailable.Total);
+        Assert.False(unavailable.Components.StakesAvailable);
+        await Change(async db =>
+        {
+            var row = await db.Games.SingleAsync();
+            var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
+            evidence.ObservedAt = clock.GetUtcNow().UtcDateTime;
+            row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
+            foreach (var rating in await db.TeamRatings.ToArrayAsync()) rating.FetchedAt = clock.GetUtcNow().UtcDateTime;
+            (await db.PregameOdds.SingleAsync()).FetchedAt = clock.GetUtcNow().UtcDateTime;
+        });
+        var recovered = await Resolve();
+        Assert.Equal(64.45742943548387, recovered.Total!.Value, 10);
+        Assert.Equal(1.6, recovered.Components.StakesScore, 10);
+        clock.Advance(TimeSpan.FromHours(2));
+        await app.DisposeAsync();
+        app = CreateHost();
+        var retained = await Resolve();
+        Assert.Equal(recovered.Total, retained.Total);
+        Assert.Equal(recovered.EvaluatedAt, retained.EvaluatedAt);
+        Assert.Equal(JsonSerializer.Serialize(recovered.Components), JsonSerializer.Serialize(retained.Components));
+    }
+
+    [Theory]
+    [InlineData("odds")]
+    [InlineData("ranking")]
+    [InlineData("competition")]
+    public async Task Legacy_formula_recalculation_cannot_skip_a_pending_rejected_source_observation(string source)
+    {
+        await Seed("nba");
+        Assert.NotNull((await Resolve()).Total);
+        await Change(async db =>
+        {
+            var state = await db.ProHypeSnapshots.SingleAsync();
+            var saved = JsonNode.Parse(state.SnapshotJson!)!;
+            saved.AsObject().Remove("FormulaVersion");
+            var competition = saved["SupportingEvidence"]!.AsArray().Single(r => r!["Kind"]!.GetValue<string>() == "competition")!;
+            competition["Revision"] = ProEvidenceReference.Fingerprint(ProGameEvidence.Parse((await db.Games.SingleAsync()).ProEvidenceJson)!);
+            state.SnapshotJson = saved.ToJsonString();
+        });
+        await Change(async db =>
+        {
+            if (source == "odds") (await db.PregameOdds.SingleAsync()).SourceSeason = null;
+            else if (source == "ranking") (await db.TeamRatings.FirstAsync(r => r.PowerRank != null)).SourceSeason = null;
+            else
+            {
+                var row = await db.Games.SingleAsync();
+                var context = ProGameEvidence.Parse(row.ProEvidenceJson)!;
+                context.Rejection = ProCompetitionRejection.IdentityMismatch;
+                row.ProEvidenceJson = JsonSerializer.Serialize(context);
+            }
+        });
+        await Change(async db =>
+        {
+            if (source == "odds") (await db.PregameOdds.SingleAsync()).SourceSeason = game.SeasonYear;
+            else if (source == "ranking") (await db.TeamRatings.FirstAsync(r => r.PowerRank != null)).SourceSeason = game.SeasonYear;
+            else (await db.Games.SingleAsync()).ProEvidenceJson = game.ProEvidenceJson;
+        });
+        await app.DisposeAsync();
+        app = CreateHost();
+        Assert.Null((await Resolve()).Total);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Legacy_raw_competition_revocations_still_block_a_new_formula_candidate(bool wholeSignature)
+    {
+        await Seed("nba");
+        Assert.NotNull((await Resolve()).Total);
+        await Change(async db =>
+        {
+            var state = await db.ProHypeSnapshots.SingleAsync();
+            var saved = JsonNode.Parse(state.SnapshotJson!)!;
+            var support = saved["SupportingEvidence"]!.AsArray();
+            var competition = support.Single(r => r!["Kind"]!.GetValue<string>() == "competition")!;
+            competition["Revision"] = ProEvidenceReference.Fingerprint(ProGameEvidence.Parse((await db.Games.SingleAsync()).ProEvidenceJson)!);
+            var key = "competition:" + competition["Source"]!.GetValue<string>() + ":" + competition["Team"]!.GetValue<string>() + ":" + competition["Revision"]!.GetValue<string>();
+            if (wholeSignature)
+            {
+                var evidence = support.Select(r => new { Kind = r!["Kind"]!.GetValue<string>(), Source = r["Source"]!.GetValue<string>(),
+                    Team = r["Team"]!.GetValue<string>(), Revision = r["Revision"]!.GetValue<string>() })
+                    .OrderBy(r => r.Kind).ThenBy(r => r.Source).ThenBy(r => r.Team);
+                key = ProEvidenceReference.Fingerprint(new { Identity = saved["Identity"], Evidence = evidence });
+            }
+            state.SnapshotJson = null;
+            state.RevokedEvidenceJson = JsonSerializer.Serialize(new[] { key });
+        });
+        await app.DisposeAsync();
+        app = CreateHost();
+        Assert.Null((await Resolve()).Total);
+    }
+
+    [Theory]
+    [InlineData("nfl")]
+    [InlineData("nba")]
+    [InlineData("nhl")]
+    [InlineData("mlb")]
+    public async Task Legacy_postseason_previews_keep_their_unchanged_formula_and_retention(string sport)
+    {
+        await Seed(sport);
+        await Change(async db =>
+        {
+            var row = await db.Games.SingleAsync();
+            var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
+            row.SeasonType = evidence.Phase = 3;
+            evidence.Round = 4;
+            evidence.HomeElimination = evidence.AwayElimination = true;
+            evidence.NflPlayoffLeverage = null;
+            row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
+        });
+        var captured = await Resolve();
+        Assert.Equal(100, captured.Components.StakesScore);
+        await Change(async db =>
+        {
+            var state = await db.ProHypeSnapshots.SingleAsync();
+            var legacy = JsonNode.Parse(state.SnapshotJson!)!;
+            legacy.AsObject().Remove("FormulaVersion");
+            state.SnapshotJson = legacy.ToJsonString();
+        });
+        clock.Advance(TimeSpan.FromHours(3));
+        await app.DisposeAsync();
+        app = CreateHost();
+        var retained = await Resolve();
+        Assert.Equal(captured.Total, retained.Total);
+        Assert.Equal(captured.EvaluatedAt, retained.EvaluatedAt);
+        Assert.Equal(JsonSerializer.Serialize(captured.Components), JsonSerializer.Serialize(retained.Components));
+    }
+
+    [Theory]
+    [InlineData("nfl")]
+    [InlineData("nba")]
+    [InlineData("nhl")]
+    [InlineData("mlb")]
+    public async Task Seeding_only_metadata_changes_cannot_revoke_a_qualification_only_preview(string sport)
+    {
+        await Seed(sport);
+        var captured = await Resolve();
+        Assert.NotNull(captured.Total);
+        clock.Advance(TimeSpan.FromHours(2));
+        await Change(async db =>
+        {
+            var row = await db.Games.SingleAsync();
+            var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
+            evidence.HomeProgress.SeedingUnresolved = evidence.AwayProgress.SeedingUnresolved = null;
+            evidence.HomeProgress.Reason = evidence.AwayProgress.Reason = "Unused seeding annotation withdrawn";
+            row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
+        });
+        await app.DisposeAsync();
+        app = CreateHost();
+        var retained = await Resolve();
+        Assert.Equal(captured.Total, retained.Total);
+        Assert.Equal(captured.EvaluatedAt, retained.EvaluatedAt);
+        Assert.Equal(JsonSerializer.Serialize(captured.Components), JsonSerializer.Serialize(retained.Components));
     }
 
     [Fact]

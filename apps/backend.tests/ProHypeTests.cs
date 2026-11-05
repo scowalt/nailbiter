@@ -121,26 +121,18 @@ public sealed class ProHypeTests
     }
 
     [Fact]
-    public void Seeding_applies_on_both_sides_of_clinching_and_unknown_is_not_zero()
+    public void Qualification_only_stakes_distinguish_estimates_finals_and_missing_progress()
     {
-        var g = Game(); var e = Evidence(g); e.HomeProgress.Completed = 83; e.AwayProgress.Completed = 83;
-        Assert.Equal(40, Score(g, e, home: Q(.99), away: Q(.99)).Stakes.Value);
-        Assert.Equal(40, Score(g, e, home: Q(1, true), away: Q(1, true)).Stakes.Value);
-        foreach (var q in new[] { Q(.99), Q(1, true) })
-        {
-            e.HomeProgress.SeedingUnresolved = null;
-            e.AwayProgress.SeedingUnresolved = true;
-            Assert.Equal(40, Score(g, e, home: q, away: q).Stakes.Value);  
-            e.AwayProgress.SeedingUnresolved = null;
-            Assert.Null(Score(g, e, home: q, away: q).Stakes.Value);
-        }
-        e.HomeProgress.SeedingUnresolved = e.AwayProgress.SeedingUnresolved = false;
+        var g = Game(); var e = Evidence(g); e.HomeProgress.Completed = e.AwayProgress.Completed = 83;
+        Assert.Equal(1.6, Score(g, e, home: Q(.99), away: Q(.99)).Stakes.Value!.Value, 10);
+        Assert.Equal(0, Score(g, e, home: Q(1, true), away: Q(1, true)).Stakes.Value);
+        e.HomeProgress.SeedingUnresolved = e.AwayProgress.SeedingUnresolved = null;
+        Assert.Equal(1.6, Score(g, e, home: Q(.99), away: Q(.99)).Stakes.Value!.Value, 10);
         e.HomeProgress.Completed = e.AwayProgress.Completed = null;
         Assert.Equal(0, Score(g, e, home: Q(1, true), away: Q(1, true)).Stakes.Value);
-        e.HomeProgress.SeedingUnresolved = null;
         Assert.Equal(0, Score(g, e, home: Q(0, true, Now.AddYears(-1)), away: Q(0, true)).Stakes.Value);
-        Assert.Null(Score(g, e, home: Q(0), away: Q(0)).Stakes.Value);  
-        e.AwayProgress = new() { Scheduled = 84, Completed = 83, SeedingUnresolved = true };
+        Assert.Null(Score(g, e, home: Q(0), away: Q(0)).Stakes.Value);
+        e.AwayProgress = new() { Scheduled = 84, Completed = 83, ScheduleVerified = true };
         Assert.Equal(80, Score(g, e, home: Q(0, true)).Stakes.Value);
     }
 

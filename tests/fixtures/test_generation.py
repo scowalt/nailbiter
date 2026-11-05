@@ -94,10 +94,10 @@ class SyntheticFixtureTests(unittest.TestCase):
         with localcontext() as ctx:
             ctx.prec = 50
             urgency = ((Decimal(3) / 84).exp() - 1) / (Decimal(3).exp() - 1)
-            stakes = 40 * urgency
+            stakes = 80 * urgency * (1 - abs(2 * Decimal('.9') - 1))
             total = Decimal('0.35') * stakes + Decimal('0.35') * Decimal(quality.numerator) / quality.denominator + 30
-            self.assertAlmostEqual(float(stakes), 0.07620367519342137, places=14)
-            self.assertAlmostEqual(float(total), 54.05426437142408, places=12)
+            self.assertAlmostEqual(float(stakes), 0.03048147007736855, places=14)
+            self.assertAlmostEqual(float(total), 54.038261599633465, places=12)
 
     def test_nba_seeding_controls_leave_unpublished_games_unassigned_and_have_an_independent_oracle(self):
         from collections import Counter
@@ -119,10 +119,10 @@ class SyntheticFixtureTests(unittest.TestCase):
         with localcontext() as ctx:
             ctx.prec = 60
             urgency = ((Decimal(27) / 82).exp() - 1) / (Decimal(3).exp() - 1)
-            stakes = 40 * urgency
+            stakes = 80 * urgency * (1 - abs(2 * Decimal('.9') - 1))
             total = Decimal('.3') * stakes + Decimal('.4') * Decimal(quality.numerator) / quality.denominator + Decimal('.3') * Decimal(closeness.numerator) / closeness.denominator
-            self.assertAlmostEqual(float(stakes), 0.8172695811369225, places=14)
-            self.assertAlmostEqual(float(total), 55.89795865211886, places=12)
+            self.assertAlmostEqual(float(stakes), 0.32690783245476907, places=14)
+            self.assertAlmostEqual(float(total), 55.750850127514205, places=12)
 
     def test_chart_oracle_uses_exact_step_integrals_not_production_scorer(self):
         from fractions import Fraction

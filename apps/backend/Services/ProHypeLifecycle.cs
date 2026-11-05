@@ -22,6 +22,7 @@ public interface IProHypeLifecycle
 public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> databaseOptions, HypeScoreService scorer, TimeProvider clock,
     IOptions<PlayoffRatingsOptions> options, IServiceScopeFactory scopes) : IProHypeLifecycle
 {
+    private const int RegularSeasonFormulaVersion = 2;
     private readonly IModel model = Mapping(databaseOptions);
 
     private static IModel Mapping(DbContextOptions<ExcitementDbContext> databaseOptions)
@@ -38,7 +39,7 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
             game.HomeTeamId, game.AwayTeamId, game.ScheduledStart);
     }
     private sealed record Saved(Identity Identity, double Total, HypeComponents Components, DateTime EvaluatedAt,
-        ProEvidenceReference[] SupportingEvidence);
+        ProEvidenceReference[] SupportingEvidence, int FormulaVersion = 0);
 
     public async Task CaptureAsync(CancellationToken ct = default)
     {
@@ -103,7 +104,7 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
         });
         if (saved is not null)
         {
-            var evidenceRevoked = false;
+            var evidenceRevoked = WasRevoked(saved, game, revoked);
             foreach (var change in changes) evidenceRevoked |= Revokes(change, saved, game, revoked);
             evidenceRevoked |= RevokedCurrent(saved, evaluation.Assessment, game, revoked);
             if (saved.Identity != Identity.Of(game) || !Upcoming(game, now) || state.ConfirmedStarted || evidenceRevoked)
@@ -112,12 +113,13 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
                 saved = null;
             }
         }
+        if (saved?.Identity.Phase == 2 && saved.FormulaVersion != RegularSeasonFormulaVersion) saved = null;
         if (Upcoming(game, now) && (!captureHorizon.HasValue || game.ScheduledStart < captureHorizon)
             && !state.ConfirmedStarted && evaluatedAt.Ticks >= state.LastEvaluationTicks && Complete(total, evaluation.Components))
         {
-            var candidate = new Saved(Identity.Of(game), total, SnapshotComponents(game, evaluation), now, evaluation.Assessment.SupportingEvidence);
-            if (!revoked.Contains(Signature(candidate)) && !candidate.SupportingEvidence.Any(r => revoked.Contains(EvidenceKey(r)))
-                && (saved is null || Signature(candidate) != Signature(saved))) saved = candidate;
+            var candidate = new Saved(Identity.Of(game), total, SnapshotComponents(game, evaluation), now, evaluation.Assessment.SupportingEvidence,
+                phase == 2 ? RegularSeasonFormulaVersion : 0);
+            if (!WasRevoked(candidate, game, revoked) && (saved is null || Signature(candidate) != Signature(saved))) saved = candidate;
         }
         state.LastEvaluationTicks = Math.Max(state.LastEvaluationTicks, evaluatedAt.Ticks);
         state.EvidenceRevision = revision.Revision;
@@ -145,8 +147,9 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
                 foreach (var support in saved.SupportingEvidence.Where(r => r.Kind == ProEvidenceKind.Competition)) revoked.Add(EvidenceKey(support));
                 return true;
             }
-            return ChangedSupport(saved, assessment.Observations, ProEvidenceKind.Competition, before?.ProEvidenceJson is null, revoked)
-                | ChangedSupport(saved, assessment.Observations, ProEvidenceKind.Conditional, before?.ProEvidenceJson is null, revoked);
+            var observations = ObservationsForSaved(saved, after, assessment);
+            return ChangedSupport(saved, observations, ProEvidenceKind.Competition, before?.ProEvidenceJson is null, revoked)
+                | ChangedSupport(saved, observations, ProEvidenceKind.Conditional, before?.ProEvidenceJson is null, revoked);
         }
         if (change.Kind == "pregame_odds")
         {
@@ -184,9 +187,10 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
             return Revoke(saved.SupportingEvidence.Where(r => r.Kind == ProEvidenceKind.Qualification && r.Source == "moneypuck_qualification"), revoked);
         if (Revoke(VetoedSupport(current.Observations, saved), revoked)) return true;
         var rejected = false;
+        var observations = ObservationsForSaved(saved, game, current);
         foreach (var support in saved.SupportingEvidence)
         {
-            var latest = current.Observations.FirstOrDefault(r => r.Kind == support.Kind && r.Source == support.Source
+            var latest = observations.FirstOrDefault(r => r.Kind == support.Kind && r.Source == support.Source
                 && ProHypePolicy.TeamKey(game.Sport, r.Team) == ProHypePolicy.TeamKey(game.Sport, support.Team));
             if (latest is null && support.Kind == ProEvidenceKind.Odds) continue;
             if (latest is null || latest.State == ProEvidenceState.Rejected || RejectedPublication(support, latest) || ChangedExpiredPublication(saved, support, latest)
@@ -265,8 +269,30 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
             && observations.Any(r => r.Kind == ProEvidenceKind.Qualification && r.Source == "kalshi" && r.BlocksSelection
                 && ProHypePolicy.TeamKey(saved.Identity.Sport, s.Team) == ProHypePolicy.TeamKey(saved.Identity.Sport, r.Team)));
     private static string EvidenceKey(ProEvidenceReference reference) => $"{reference.Kind.StoredName()}:{reference.Source}:{reference.Team}:{reference.Revision}";
-    private static string Signature(Saved saved) => ProEvidenceReference.Fingerprint(new { saved.Identity,
-        Evidence = saved.SupportingEvidence.Select(r => new { Kind = r.Kind.StoredName(), r.Source, r.Team, r.Revision }).OrderBy(r => r.Kind).ThenBy(r => r.Source).ThenBy(r => r.Team) });
+    private static ProEvidenceReference[] RawCompetitionReferences(ProEvidenceReference[] references, Game game)
+    {
+        var context = ProGameEvidence.Parse(game.ProEvidenceJson);
+        if (context?.Phase != 2) return references;
+        var revision = ProEvidenceReference.Fingerprint(context);
+        return references.Select(r => r.Kind == ProEvidenceKind.Competition ? r with { Revision = revision } : r).ToArray();
+    }
+    private static ProEvidenceReference[] ObservationsForSaved(Saved saved, Game game, ProHypeAssessment assessment) =>
+        saved.Identity.Phase == 2 && saved.FormulaVersion < RegularSeasonFormulaVersion
+            ? RawCompetitionReferences(assessment.Observations, game) : assessment.Observations;
+    private static bool WasRevoked(Saved saved, Game game, HashSet<string> revoked)
+    {
+        var legacy = saved with { SupportingEvidence = RawCompetitionReferences(saved.SupportingEvidence, game) };
+        return revoked.Contains(Signature(saved)) || revoked.Contains(Signature(saved, false)) || revoked.Contains(Signature(legacy, false))
+            || saved.SupportingEvidence.Concat(legacy.SupportingEvidence).Any(r => revoked.Contains(EvidenceKey(r)));
+    }
+    private static string Signature(Saved saved, bool includeFormula = true)
+    {
+        var evidence = saved.SupportingEvidence.Select(r => new { Kind = r.Kind.StoredName(), r.Source, r.Team, r.Revision })
+            .OrderBy(r => r.Kind).ThenBy(r => r.Source).ThenBy(r => r.Team);
+        return includeFormula && saved.Identity.Phase == 2
+            ? ProEvidenceReference.Fingerprint(new { saved.Identity, saved.FormulaVersion, Evidence = evidence })
+            : ProEvidenceReference.Fingerprint(new { saved.Identity, Evidence = evidence });
+    }
     private T? Row<T>(string? json) where T : class
     {
         if (json is null) return null;
