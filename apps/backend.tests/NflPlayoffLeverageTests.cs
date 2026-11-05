@@ -153,6 +153,48 @@ public sealed class NflPlayoffLeverageTests
     }
 
     [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Regular_season_NFL_stakes_use_only_qualification_even_at_the_last_game(bool? seeding)
+    {
+        var game = Game(); var context = await Captured(game);
+        context.HomeProgress.Completed = context.AwayProgress.Completed = 16;
+        context.HomeProgress.SeedingUnresolved = context.AwayProgress.SeedingUnresolved = seeding;
+        var result = Score(game, context);
+        Assert.NotNull(result.Stakes.Value);
+        Assert.Equal(20, result.Stakes.Value.Value, 8);
+        Assert.Equal(58.89742943548387, result.Total!.Value, 10);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Qualification_intervals_still_require_an_exact_game_maximum_without_a_seeding_term(bool dominated)
+    {
+        var game = Game(); var context = await Captured(game);
+        context.HomeProgress.Completed = context.AwayProgress.Completed = 16;
+        context.HomeProgress.SeedingUnresolved = context.AwayProgress.SeedingUnresolved = true;
+        var evidence = context.NflPlayoffLeverage!;
+        evidence.HomeOdds = evidence.HomeOdds! with { WinLower = .5, WinUpper = .625, LossLower = .375, LossUpper = .375 };
+        var awayWin = dominated ? .375 : .125;
+        evidence.AwayOdds = evidence.AwayOdds! with { WinLower = awayWin, WinUpper = awayWin, LossLower = 0, LossUpper = 0 };
+        var result = Score(game, context);
+        if (dominated)
+        {
+            Assert.Equal(30, result.Stakes.Value);
+            Assert.NotNull(result.Total);
+        }
+        else
+        {
+            Assert.Null(result.Stakes.Value);
+            Assert.Null(result.Total);
+            Assert.NotNull(result.Quality.Value);
+            Assert.NotNull(result.Closeness.Value);
+        }
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Integral_decimal_schedule_scores_preserve_verified_NFL_forecasts_and_hype(bool numeric)
@@ -198,7 +240,7 @@ public sealed class NflPlayoffLeverageTests
     }
 
     [Fact]
-    public async Task NFL_leverage_is_not_multiplied_by_urgency_but_verified_progress_and_seeding_still_matter()
+    public async Task NFL_leverage_is_not_multiplied_by_urgency_and_still_requires_verified_progress()
     {
         var game = Game(); var context = await Captured(game);
         context.HomeProgress.SeedingUnresolved = context.AwayProgress.SeedingUnresolved = false;
@@ -214,11 +256,11 @@ public sealed class NflPlayoffLeverageTests
         }
         context.HomeProgress.Completed = context.AwayProgress.Completed = 16;
         context.HomeProgress.SeedingUnresolved = context.AwayProgress.SeedingUnresolved = true;
-        Assert.Equal(40, Score(game, context).Stakes.Value);
+        Assert.Equal(20, Score(game, context).Stakes.Value!.Value, 8);
         context.HomeProgress.SeedingUnresolved = null;
-        Assert.Equal(40, Score(game, context).Stakes.Value);
+        Assert.Equal(20, Score(game, context).Stakes.Value!.Value, 8);
         context.AwayProgress.SeedingUnresolved = null;
-        Assert.Null(Score(game, context).Stakes.Value);
+        Assert.Equal(20, Score(game, context).Stakes.Value!.Value, 8);
     }
 
     [Theory]
@@ -456,7 +498,7 @@ public sealed class NflPlayoffLeverageTests
     }
 
     [Fact]
-    public async Task Trusted_finals_and_seeding_are_preserved_and_extreme_forecasts_never_become_final_outcomes()
+    public async Task Trusted_finals_contribute_zero_and_extreme_forecasts_never_become_final_outcomes()
     {
         var game = Game(); var context = await Captured(game);
         context.NflPlayoffLeverage!.HomeOdds = null;
@@ -471,7 +513,7 @@ public sealed class NflPlayoffLeverageTests
         context = await Captured(game);
         context.NflPlayoffLeverage!.HomeOdds = context.NflPlayoffLeverage.HomeOdds! with { WinLower = 1, WinUpper = 1, LossLower = 1, LossUpper = 1 };
         context.NflPlayoffLeverage.AwayOdds = context.NflPlayoffLeverage.AwayOdds! with { WinLower = 0, WinUpper = 0, LossLower = 0, LossUpper = 0 };
-        Assert.Null(Score(game, context).Stakes.Value);
+        Assert.Equal(0, Score(game, context).Stakes.Value);
         context.HomeProgress.SeedingUnresolved = context.AwayProgress.SeedingUnresolved = false;
         Assert.Equal(0, Score(game, context).Stakes.Value);
         game.SeasonType = context.Phase = 1;

@@ -1134,7 +1134,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
             var hype = scope.ServiceProvider.GetRequiredService<HypeScoreService>();
             var components = await hype.GetHypeComponentsAsync(game, null);
             Assert.Equal(.09, components.HomePlayoffOdds); Assert.Equal(.15, components.AwayPlayoffOdds);
-            Assert.Equal(hasCompleteScoringInputs, components.StakesAvailable);
+            Assert.True(components.StakesAvailable);
             Assert.Equal(hasCompleteScoringInputs, components.QualityAvailable);
             Assert.True(components.ClosenessAvailable);
             Assert.Equal(hasCompleteScoringInputs, components.IsComplete);
@@ -1142,12 +1142,12 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
             Assert.Equal(hasCompleteScoringInputs, score.HasValue);
             if (hasCompleteScoringInputs)
             {
-                Assert.Equal(.0762036751934215, components.StakesScore, 12);
+                Assert.Equal(.04572220511605282, components.StakesScore, 12);
                 Assert.Equal(96.849798, components.QualityScore, 5);
                 Assert.Equal(100, components.ClosenessScore);
                 Assert.Equal(64, Math.Round(score!.Value));
             }
-            if (!hasCompleteScoringInputs) Assert.Contains("seeding", components.StakesExplanation, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("qualification-only", components.StakesExplanation, StringComparison.OrdinalIgnoreCase);
         }
 
         var beforePages = requests;
@@ -1162,7 +1162,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
             Assert.Equal(!hasCompleteScoringInputs, text.Contains("Hype unavailable", StringComparison.Ordinal));
             if (!hasCompleteScoringInputs && path.StartsWith("/game/", StringComparison.Ordinal))
             {
-                Assert.Contains("Stakes need verified competition and playoff context.", text);
+                Assert.DoesNotContain("Stakes need verified competition and playoff context.", text);
                 Assert.Contains("Current team-strength rankings are unavailable.", text);
             }
         }
@@ -1354,8 +1354,8 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
         Assert.Contains("Stakes0", detail);  
         Assert.Contains("QualityUnavailable", detail);
         Assert.Contains("Closeness80", detail);
-        Assert.Contains("Exact Stakes: verified terms dominate", stored.StakesExplanation);
-        Assert.Contains("seeding remains unknown", stored.StakesExplanation);
+        Assert.Contains("qualification-only", stored.StakesExplanation);
+        Assert.DoesNotContain("seeding", stored.StakesExplanation);
         Assert.Contains("1/84 completed", stored.StakesExplanation);
         Assert.Contains("0/84 completed", stored.StakesExplanation);
         Assert.Contains("2026-10-01", stored.StakesExplanation);
@@ -1379,7 +1379,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
         detail = await BodyText(await client.GetAsync("/game/" + game.Id));
         Assert.DoesNotContain("Hype unavailable", detail);
         Assert.Contains("Quality44", detail);
-        Assert.Contains("seeding remains unknown", stored.StakesExplanation);
+        Assert.Contains("qualification-only", stored.StakesExplanation);
         foreach (var path in new[] { "/", "/nhl?date=2026-10-01" })
         {
             using var doc = await new AngleSharp.Html.Parser.HtmlParser().ParseDocumentAsync(await client.GetStringAsync(path), CancellationToken.None);

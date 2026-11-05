@@ -23,14 +23,20 @@ public sealed partial class NflPlayoffPageTests
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public async Task NflPlayoffLeverage_synthetic_forecasts_flow_through_registered_collector_persistence_public_scoring_and_all_pages(bool decimalScores, bool unrelatedKickoff)
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, true)]
+    public async Task NflPlayoffLeverage_synthetic_forecasts_flow_through_registered_collector_persistence_public_scoring_and_all_pages(bool decimalScores, bool unrelatedKickoff, bool smallSwing)
     {
         clock.Now = new DateTimeOffset(2026, 10, 18, 12, 0, 0, TimeSpan.Zero);
         var game = NflPlayoffLeverageTests.Game(); game.Id = "control-7-DET-GB";
         var source = new NflPlayoffLeverageTests.Handler { ServerDate = clock.Now.UtcDateTime };
+        if (smallSwing) source.Transform = (path, body) => path.EndsWith("packerswhatif.html")
+            ? body.Replace(">18%<", ">41%<").Replace(">32%<", ">42%<")
+            : path.EndsWith("lionswhatif.html") ? body.Replace(">26%<", ">44%<").Replace(">36%<", ">45%<") : body;
+        var expectedStakes = smallSwing ? 1.6 : 20;
+        var expectedHype = smallSwing ? 51 : 59;
         var schedules = NflPlayoffLeverageTests.Schedules(score => decimalScores ? score + ".0" : score);
         if (unrelatedKickoff)
         {
@@ -91,8 +97,13 @@ public sealed partial class NflPlayoffPageTests
             var hype = scope.ServiceProvider.GetRequiredService<HypeScoreService>();
             var components = await hype.GetHypeComponentsAsync(game, null);
             Assert.True(components.IsComplete, components.StakesExplanation);
-            Assert.Equal(20, components.StakesScore, 8);
-            Assert.Equal(59, Math.Round(hype.CalculateFinalScore("nfl", components)));
+            Assert.Equal(expectedStakes, components.StakesScore, 8);
+            Assert.Equal(expectedHype, Math.Round(hype.CalculateFinalScore("nfl", components)));
+            if (smallSwing)
+            {
+                Assert.Null(evidence.HomeProgress.SeedingUnresolved);
+                Assert.Null(evidence.AwayProgress.SeedingUnresolved);
+            }
             Assert.Equal(.62, components.HomePlayoffOdds); Assert.Equal(.62, components.AwayPlayoffOdds);
             var direct = hype.CalculateFromEvidence(game, await db.TeamRatings.Where(r => r.Sport == "nfl").ToListAsync(), odds, [], clock.Now.UtcDateTime);
             Assert.Equal(components.StakesScore, direct.StakesScore);
@@ -111,27 +122,29 @@ public sealed partial class NflPlayoffPageTests
             using var doc = await new HtmlParser().ParseDocumentAsync(rendered);
             if (path.StartsWith("/game/"))
             {
-                Assert.Contains("Stakes20", string.Concat(doc.QuerySelector("#detail-hype")!.TextContent.Where(c => !char.IsWhiteSpace(c))));
+                Assert.Contains(smallSwing ? "Stakes2" : "Stakes20", string.Concat(doc.QuerySelector("#detail-hype")!.TextContent.Where(c => !char.IsWhiteSpace(c))));
                 var forecast = doc.QuerySelector("#nfl-playoff-leverage")!;
                 Assert.Contains("GB", forecast.TextContent); Assert.Contains("DET", forecast.TextContent);
-                Assert.Contains("82%", forecast.TextContent); Assert.Contains("57%", forecast.TextContent);
-                Assert.Contains("74%", forecast.TextContent); Assert.Contains("54%", forecast.TextContent);
+                Assert.Contains(smallSwing ? "59%" : "82%", forecast.TextContent); Assert.Contains("57%", forecast.TextContent);
+                Assert.Contains(smallSwing ? "56%" : "74%", forecast.TextContent); Assert.Contains("54%", forecast.TextContent);
                 Assert.Contains("Model estimates from", forecast.TextContent);
                 Assert.Contains("PlayoffStatus", forecast.TextContent);
+                Assert.Contains("Stakes uses the larger playoff qualification swing.", forecast.TextContent);
+                Assert.DoesNotContain("seeding", forecast.TextContent, StringComparison.OrdinalIgnoreCase);
                 var outlook = doc.QuerySelector("#detail-comparison")!.Children.Single(row =>
                     row.Children.Length == 3 && row.Children[1].TextContent == "Playoff outlook");
                 Assert.Matches(@"^62\s*%$", outlook.Children[0].TextContent);
                 var rows = forecast.QuerySelectorAll(".grid");
                 Assert.Contains("GB", rows[0].Children[0].TextContent);
-                Assert.Contains("82%", rows[1].Children[0].TextContent);
+                Assert.Contains(smallSwing ? "59%" : "82%", rows[1].Children[0].TextContent);
                 Assert.Contains("DET", rows[0].Children[2].TextContent);
-                Assert.Contains("74%", rows[1].Children[2].TextContent);
+                Assert.Contains(smallSwing ? "56%" : "74%", rows[1].Children[2].TextContent);
             }
             else
             {
                 var card = doc.QuerySelector($"a[href='/game/{game.Id}']")!;
                 Assert.NotNull(card); Assert.DoesNotContain("Hype unavailable", card.TextContent);
-                Assert.Matches(@"Hype\s*59", card.TextContent);
+                Assert.Matches($@"Hype\s*{expectedHype}", card.TextContent);
             }
             var html = doc.DocumentElement.OuterHtml;
             Assert.DoesNotContain("SchedulePublishedAt", html); Assert.DoesNotContain("CompletedGameIds", html);

@@ -132,7 +132,7 @@ A game in which a loss ends at least one team's path to that season's championsh
 A game in which the winner advances or wins the championship and the loser is eliminated. A championship-deciding winner-take-all game is distinct from a game where only one team can clinch the title.
 
 **Stakes**:
-The competitive consequences of a game's result for playoff qualification, seeding, or championship advancement. Stakes are distinct from team strength or the appeal of a marquee matchup.
+The competitive consequences of a game's result for playoff qualification or championship advancement. Stakes are distinct from team strength or the appeal of a marquee matchup.
 
 **Matchup quality**:
 The strength of the teams in a matchup, distinct from the game's competitive consequences or expected closeness. A matchup between strong teams can have high quality even early in the season when its stakes are low.

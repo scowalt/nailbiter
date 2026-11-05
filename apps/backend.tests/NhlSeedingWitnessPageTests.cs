@@ -115,8 +115,8 @@ public sealed class NhlSeedingWitnessPageTests
             Assert.Empty(h.Handler.Requests);
             return;
         }
-        Assert.Equal(54.05426437142408, original.Total!.Value, 10);
-        Assert.Equal(0.07620367519342137, original.Components.StakesScore, 12);
+        Assert.Equal(54.038261599633465, original.Total!.Value, 10);
+        Assert.Equal(0.03048147007736855, original.Components.StakesScore, 12);
         Assert.Equal(68.6502659574468, original.Components.QualityScore, 10);
         Assert.Equal(100, original.Components.ClosenessScore);
         Assert.Equal(NhlPowerRankingsGuruService.Source, original.Components.QualitySource);

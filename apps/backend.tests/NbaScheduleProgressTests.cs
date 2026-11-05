@@ -83,9 +83,9 @@ public sealed class NbaScheduleProgressTests
         var odds = ProHypeTests.Odds(game); odds.FetchedAt = Now;
         var result = ProHypePolicy.Calculate(game, context, ranks, qualification, qualification, odds, context.CompletedGameIds, Now);
         Assert.NotNull(result.Total);
-        Assert.Contains("dominate all unknown seeding", result.Stakes.Explanation);
+        Assert.Contains("qualification-only", result.Stakes.Explanation);
         var nearCertain = qualification with { Probability = .99 };
-        Assert.Null(ProHypePolicy.Calculate(game, context, ranks, nearCertain, nearCertain, odds, context.CompletedGameIds, Now).Total);
+        Assert.NotNull(ProHypePolicy.Calculate(game, context, ranks, nearCertain, nearCertain, odds, context.CompletedGameIds, Now).Total);
     }
 
     [Theory]
