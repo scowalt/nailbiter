@@ -37,9 +37,14 @@ module LeaguePageRenderer =
 
         let homeWinProb = latestOdds |> Option.map (fun o -> o.HomeWinProbability) |> Option.defaultValue 0.5
         let liveClass = if isLive then " border-status-live/30 bg-status-live/5" else ""
+        let displayOverride team =
+            match teamRanks.TryGetValue($"{game.Sport}:{PlayoffRatingPolicy.gameSeason game}:{game.SeasonType.GetValueOrDefault()}:{team}") with
+            | true, rank -> rank.PlayoffDisplayOverride.IsSome
+            | _ -> false
+        let responsiveRows = game.Sport = "cfb" || (game.Sport = "nfl" && (displayOverride game.HomeTeamAbbreviation || displayOverride game.AwayTeamAbbreviation))
 
         let card = Elem.a [ Attr.href $"/game/{game.Id}"; cls $"block bg-bg-card border border-border rounded-lg p-4 hover:border-border-hover transition-colors group{liveClass}" ] [
-            Elem.div [ cls (if game.Sport = "cfb" then "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" else "flex items-center justify-between") ] [
+            Elem.div [ cls (if responsiveRows then "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" else "flex items-center justify-between") ] [
                 Elem.div [ cls "flex items-center gap-3 min-w-0 flex-1"; Attr.id $"scores-{game.Id}" ] [
                     Elem.div [ cls "flex items-center gap-2 min-w-0" ] [
                         match awayLogoUrl with
@@ -53,7 +58,7 @@ module LeaguePageRenderer =
                             match teamRanks.TryGetValue($"{game.Sport}:{PlayoffRatingPolicy.gameSeason game}:{game.SeasonType.GetValueOrDefault()}:{game.AwayTeamAbbreviation}") with
                             | true, rank ->
                                 match rank.DisplayRank with
-                                | Some text -> Elem.span [ cls "text-xs text-text-muted/70" ] [ Text.enc text ]
+                                | Some text -> Elem.span [ cls (if rank.PlayoffDisplayOverride.IsSome then "text-xs text-text-secondary/70" else "text-xs text-text-muted/70"); yield! FormatHelpers.playoffDisplayConventionAttributes rank.PlayoffDisplayOverride.IsSome ] [ Text.enc text ]
                                 | None -> ()
                             | _ -> ()
                         ]
@@ -74,7 +79,7 @@ module LeaguePageRenderer =
                             match teamRanks.TryGetValue($"{game.Sport}:{PlayoffRatingPolicy.gameSeason game}:{game.SeasonType.GetValueOrDefault()}:{game.HomeTeamAbbreviation}") with
                             | true, rank ->
                                 match rank.DisplayRank with
-                                | Some text -> Elem.span [ cls "text-xs text-text-muted/70" ] [ Text.enc text ]
+                                | Some text -> Elem.span [ cls (if rank.PlayoffDisplayOverride.IsSome then "text-xs text-text-secondary/70" else "text-xs text-text-muted/70"); yield! FormatHelpers.playoffDisplayConventionAttributes rank.PlayoffDisplayOverride.IsSome ] [ Text.enc text ]
                                 | None -> ()
                             | _ -> ()
                         ]
@@ -83,7 +88,7 @@ module LeaguePageRenderer =
                         ]
                     ]
                 ]
-                Elem.div [ cls (if game.Sport = "cfb" then "flex items-center justify-between gap-3 sm:flex-shrink-0 sm:ml-4" else "flex items-center gap-3 flex-shrink-0 ml-4") ] [
+                Elem.div [ cls (if responsiveRows then "flex items-center justify-between gap-3 sm:flex-shrink-0 sm:ml-4" else "flex items-center gap-3 flex-shrink-0 ml-4") ] [
                     Elem.span [ cls $"text-xs font-medium px-1.5 py-0.5 rounded {statusClass}"; Attr.id $"status-{game.Id}" ] [
                         Text.raw statusLabel
                     ]

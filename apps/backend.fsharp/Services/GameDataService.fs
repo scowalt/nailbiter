@@ -515,6 +515,9 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
             let playoffSnapshot : PlayoffRatingPolicy.Snapshot option =
                 PlayoffRatingPolicy.selectionToSnapshot playoffSelection
             let playoffOdds = playoffSnapshot |> Option.bind (fun s -> s.Probability)
+            let displayOverride =
+                let request : PlayoffRatingPolicy.SelectionRequest = { Sport = sport; Season = season; Team = team; Now = now; Options = playoffOptions }
+                if seasonType = Nullable 2 && playoffOdds.IsNone && PlayoffRatingPolicy.displayOnlyLowProbability request teamRatings then Some "<1%" else None
             let playoffSeed =
                 standings |> Seq.tryFind (fun s -> s.TeamAbbreviation = team)
                 |> Option.bind (fun s -> s.ConferenceRank |> Option.ofNullable)
@@ -531,13 +534,14 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
                         parts.Add(if sport = "cfb" then $"CFP {outlook}" elif isFinal then outlook
                                   elif playoffSelection.Source = Some PlayoffRatingPolicy.moneyPuckQualificationSource then $"{outlook} playoff odds (model estimate)"
                                   else $"{outlook} playoff odds")
+                    | None when displayOverride.IsSome -> parts.Add($"{displayOverride.Value} playoff odds")
                     | None when sport = "cfb" -> parts.Add("CFP unavailable")
                     | None when hasPlayoffs -> parts.Add("Playoff odds unavailable")
                     | _ -> ()
                     if parts.Count > 0 then Some(String.Join(" | ", parts)) else None
             if hasPlayoffs || powerRank.IsSome || playoffOdds.IsSome || playoffSeed.IsSome then
                 result[team] <-
-                    { PowerRank = powerRank; PlayoffOdds = playoffOdds
+                    { PowerRank = powerRank; PlayoffOdds = playoffOdds; PlayoffDisplayOverride = displayOverride
                       PlayoffFetchedAt = playoffSnapshot |> Option.map (fun s -> s.FetchedAt)
                       PlayoffIsFinal = playoffSnapshot |> Option.exists (fun s -> s.IsFinal)
                       PlayoffIsAssumed = playoffSnapshot |> Option.exists (fun s -> s.IsAssumed)

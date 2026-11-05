@@ -19,6 +19,12 @@ module FormatHelpers =
         elif prob > 0.99 then ">99%"
         else $"{prob:P0}"
 
+    let playoffDisplayConventionAttributes displayOnly =
+        [ if displayOnly then
+              let explanation = "Low-interest display convention, not an exact probability."
+              Attr.title explanation
+              Attr.create "aria-description" explanation ]
+
     let apRank (rank: Nullable<int>) =
         [ if rank.HasValue && rank.Value >= 1 && rank.Value <= 25 then
             Elem.sup [ Attr.class' "ml-0.5 text-[0.65em] leading-none"

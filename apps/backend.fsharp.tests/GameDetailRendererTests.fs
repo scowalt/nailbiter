@@ -15,7 +15,7 @@ let private game phase =
          AwayTeam = "Buffalo Sabres", AwayTeamAbbreviation = "BUF", HomeTeam = "Columbus Blue Jackets", HomeTeamAbbreviation = "CBJ")
 
 let private rank power odds =
-    Some { PowerRank = Some power; PlayoffOdds = odds; PlayoffFetchedAt = Some(DateTime(2026, 10, 1, 17, 34, 0, DateTimeKind.Utc))
+    Some { PowerRank = Some power; PlayoffOdds = odds; PlayoffDisplayOverride = None; PlayoffFetchedAt = Some(DateTime(2026, 10, 1, 17, 34, 0, DateTimeKind.Utc))
            PlayoffIsFinal = false; PlayoffIsAssumed = false; PlayoffSource = "kalshi"; PlayoffEvidenceKind = backend.Scoring.ProQualificationEvidenceKind.Kalshi; PlayoffSeed = None; DisplayRank = None }
 
 let private components () =
