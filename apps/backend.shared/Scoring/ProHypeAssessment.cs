@@ -47,13 +47,17 @@ public sealed record ProEvidenceReference(ProEvidenceKind Kind, string Source, s
 {
     public static string Fingerprint(object value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value))));
     public static ProEvidenceReference Conditional(NflPlayoffLeverageEvidence? evidence, string team, DateTime fallback,
-        ProEvidenceState state) => new(ProEvidenceKind.Conditional, NflPlayoffLeveragePolicy.Source, team,
-            Fingerprint(new { evidence?.Version, evidence?.Source, evidence?.GameId, evidence?.Season, evidence?.Home, evidence?.Away,
-                evidence?.ScheduledStart, evidence?.ObservedAt, evidence?.SchedulePublishedAt, evidence?.PublicationLabel,
-                evidence?.ScheduleVerified, evidence?.CompletedGameIds,
-                Odds = team == evidence?.Home ? evidence.HomeOdds : evidence?.AwayOdds }),
+        ProEvidenceState state)
+    {
+        var revision = Fingerprint(new { evidence?.Version, evidence?.Source, evidence?.GameId, evidence?.Season, evidence?.Home, evidence?.Away,
+            evidence?.ScheduledStart, evidence?.ObservedAt, evidence?.SchedulePublishedAt, evidence?.PublicationLabel,
+            evidence?.ScheduleVerified, evidence?.CompletedGameIds,
+            Odds = team == evidence?.Home ? evidence.HomeOdds : evidence?.AwayOdds });
+        if (evidence?.Version == 2) revision = Fingerprint(new { revision, evidence.CorroboratedKickoff });
+        return new(ProEvidenceKind.Conditional, NflPlayoffLeveragePolicy.Source, team, revision,
             evidence?.ObservedAt ?? fallback, team == evidence?.Home ? evidence.HomeOdds?.PublishedAt : evidence?.AwayOdds?.PublishedAt,
             state, "conditional_qualification", []);
+    }
     public static ProEvidenceReference Qualification(TeamRating row, string reason, DateTime? evidenceAt, bool blocksSelection) =>
         new(ProEvidenceKind.Qualification, row.Source, row.TeamAbbreviation, Fingerprint(new { row.FetchedAt, row.SourceSeason, row.PlayoffProbability,
             row.PlayoffProbabilityIsFinal, row.PlayoffEvidenceJson }), row.FetchedAt, evidenceAt,

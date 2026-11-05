@@ -23,11 +23,13 @@ public sealed partial class NflPlayoffPageTests
     }
 
     [Theory]
-    [InlineData(false, false, false)]
-    [InlineData(true, false, false)]
-    [InlineData(true, true, false)]
-    [InlineData(false, false, true)]
-    public async Task NflPlayoffLeverage_synthetic_forecasts_flow_through_registered_collector_persistence_public_scoring_and_all_pages(bool decimalScores, bool unrelatedKickoff, bool smallSwing)
+    [InlineData(false, false, false, false)]
+    [InlineData(true, false, false, false)]
+    [InlineData(true, true, false, false)]
+    [InlineData(false, false, true, false)]
+    [InlineData(false, false, false, true)]
+    [InlineData(false, false, true, true)]
+    public async Task NflPlayoffLeverage_synthetic_forecasts_flow_through_registered_collector_persistence_public_scoring_and_all_pages(bool decimalScores, bool unrelatedKickoff, bool smallSwing, bool corroboratedKickoff)
     {
         clock.Now = new DateTimeOffset(2026, 10, 18, 12, 0, 0, TimeSpan.Zero);
         var game = NflPlayoffLeverageTests.Game(); game.Id = "control-7-DET-GB";
@@ -38,6 +40,11 @@ public sealed partial class NflPlayoffPageTests
         var expectedStakes = smallSwing ? 1.6 : 20;
         var expectedHype = smallSwing ? 51 : 59;
         var schedules = NflPlayoffLeverageTests.Schedules(score => decimalScores ? score + ".0" : score);
+        if (corroboratedKickoff)
+        {
+            game.ScheduledStart = game.ScheduledStart.AddMinutes(20);
+            schedules = NflCorroboratedKickoffTests.Schedules(game);
+        }
         if (unrelatedKickoff)
         {
             var changedId = schedules.SelectMany(s => s.Events).First(e => e.GetProperty("week").GetProperty("number").GetInt32() == 10).GetProperty("id").GetString();
@@ -93,6 +100,12 @@ public sealed partial class NflPlayoffPageTests
             var evidence = ProGameEvidence.Parse(game.ProEvidenceJson)!;
             Assert.True(evidence.VerifiedUnstarted, evidence.Reason);
             Assert.True(evidence.NflPlayoffLeverage!.ScheduleVerified, evidence.NflPlayoffLeverage.Reason);
+            if (corroboratedKickoff)
+            {
+                Assert.Equal(2, evidence.NflPlayoffLeverage.Version);
+                Assert.Equal(game.ScheduledStart, evidence.NflPlayoffLeverage.CorroboratedKickoff!.EspnScheduledStart);
+                Assert.Equal(game.ScheduledStart.AddMinutes(-20), evidence.NflPlayoffLeverage.CorroboratedKickoff.SourceScheduledStart);
+            }
             Assert.Equal(6, evidence.HomeProgress.Completed); Assert.Equal(6, evidence.AwayProgress.Completed);
             var hype = scope.ServiceProvider.GetRequiredService<HypeScoreService>();
             var components = await hype.GetHypeComponentsAsync(game, null);
@@ -109,6 +122,11 @@ public sealed partial class NflPlayoffPageTests
             Assert.Equal(components.StakesScore, direct.StakesScore);
             Assert.Equal(components.QualityScore, direct.QualityScore);
             Assert.Equal(components.ClosenessScore, direct.ClosenessScore);
+            var lifecycle = scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>();
+            await lifecycle.CaptureAsync();
+            var captured = await lifecycle.ResolveAsync(game.Id);
+            Assert.Equal(hype.CalculateFinalScore("nfl", components), captured.Total);
+            Assert.Equal(evidence.NflPlayoffLeverage.CorroboratedKickoff, captured.Components.NflPlayoffLeverage!.CorroboratedKickoff);
         }
         Assert.Equal(3, source.Requests.Count);
         foreach (var path in new[] { "/", "/nfl?week=7&season=2026&type=2", "/game/" + game.Id })
@@ -149,6 +167,7 @@ public sealed partial class NflPlayoffPageTests
             var html = doc.DocumentElement.OuterHtml;
             Assert.DoesNotContain("SchedulePublishedAt", html); Assert.DoesNotContain("CompletedGameIds", html);
             Assert.DoesNotContain("complete schedule results", html);
+            ProHypeOutputAssertions.NoDiagnostics(html, "corroboratedKickoff", "sourceScheduledStart", "espnScheduledStart", "homeNextGameId", "awayNextGameId");
         }
         Assert.Equal(3, source.Requests.Count);
         string previous;

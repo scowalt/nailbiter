@@ -7,6 +7,19 @@ public static class NflPlayoffLeveragePolicy
     public const string Source = "playoffstatus_nfl_conditional_v1";
     public const string ScheduleUrl = "https://www.playoffstatus.com/nfl/nflschedule.html";
     public static readonly TimeSpan PublicationMaxAge = TimeSpan.FromDays(7);
+    public static readonly TimeSpan MaxKickoffDifference = TimeSpan.FromMinutes(30);
+    private static readonly TimeZoneInfo Eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+
+    public static bool ValidCorroboratedKickoff(Game game, NflCorroboratedKickoff? match) => match is not null &&
+        !string.IsNullOrWhiteSpace(game.Id) && game.WeekNumber is >= 1 and <= 18 && match.Week == game.WeekNumber &&
+        match.SourceScheduledStart.Kind == DateTimeKind.Utc && match.SourceScheduledStart != default &&
+        match.EspnScheduledStart.Kind == DateTimeKind.Utc && match.EspnScheduledStart == game.ScheduledStart &&
+        match.SourceScheduledStart != game.ScheduledStart &&
+        (match.SourceScheduledStart - game.ScheduledStart).Duration() <= MaxKickoffDifference &&
+        DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(match.SourceScheduledStart, Eastern)) ==
+            DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(game.ScheduledStart, Eastern)) &&
+        match.HomeGameId == game.Id && match.AwayGameId == game.Id &&
+        match.HomeNextGameId == game.Id && match.AwayNextGameId == game.Id;
 
     public static bool Published(DateTime publication, DateTime observed, DateTime now) =>
         publication.Kind == DateTimeKind.Utc && publication != default && publication <= observed &&
@@ -18,12 +31,13 @@ public static class NflPlayoffLeveragePolicy
         var e = context?.NflPlayoffLeverage;
         if (game.Sport != "nfl" || game.SeasonType != 2 || game.SeasonYear is not int season ||
             game.Status != "scheduled" || game.IsHistoricalImport || game.ActualStart.HasValue || game.ScheduledStart <= now ||
-            ProHypePolicy.ScheduledLength("nfl", season) != 17 || e is null || e.Version != 1 || e.Source != Source ||
+            ProHypePolicy.ScheduledLength("nfl", season) != 17 || e is null || e.Version is not (1 or 2) || e.Source != Source ||
             e.GameId != game.Id || e.Season != season || e.Home != game.HomeTeamAbbreviation || e.Away != game.AwayTeamAbbreviation ||
             e.ScheduledStart != game.ScheduledStart || !e.ScheduleVerified || string.IsNullOrWhiteSpace(e.PublicationLabel) ||
             e.ObservedAt.Kind != DateTimeKind.Utc || !ProHypePolicy.Fresh(e.ObservedAt, now, 1) ||
             !Published(e.SchedulePublishedAt, e.ObservedAt, now) || e.CompletedGameIds is null ||
             context!.CompletedGameIds is null) return null;
+        if (e.Version == 1 ? e.CorroboratedKickoff is not null : !ValidCorroboratedKickoff(game, e.CorroboratedKickoff)) return null;
         var covered = e.CompletedGameIds.ToHashSet(StringComparer.Ordinal);
         if (!context.CompletedGameIds.All(covered.Contains) || !(knownCompletedIds ?? []).All(covered.Contains)) return null;
         NflConditionalPlayoffOdds? Team(NflConditionalPlayoffOdds? odds) =>

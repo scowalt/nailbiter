@@ -168,6 +168,67 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task Corroborated_NFL_snapshots_keep_original_clocks_but_cannot_outlive_an_overwritten_match_rejection(bool reject)
+    {
+        await Seed("nfl");
+        game.WeekNumber = 1;
+        await Change(async db =>
+        {
+            var row = await db.Games.SingleAsync();
+            row.WeekNumber = 1;
+            var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
+            evidence.NflPlayoffLeverage!.Version = 2;
+            evidence.NflPlayoffLeverage.CorroboratedKickoff = new()
+            {
+                Week = 1, SourceScheduledStart = game.ScheduledStart.AddMinutes(-20), EspnScheduledStart = game.ScheduledStart,
+                HomeGameId = game.Id, AwayGameId = game.Id, HomeNextGameId = game.Id, AwayNextGameId = game.Id
+            };
+            row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
+        });
+        var captured = await Resolve();
+        Assert.NotNull(captured.Total);
+        Assert.Equal(2, captured.Components.NflPlayoffLeverage!.Version);
+        var original = JsonSerializer.Serialize(captured.Components.NflPlayoffLeverage);
+        if (reject)
+        {
+            await Change(async db =>
+            {
+                var row = await db.Games.SingleAsync();
+                var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
+                evidence.NflPlayoffLeverage!.CorroboratedKickoff!.HomeNextGameId += "-other";
+                row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
+            });
+            await Change(async db =>
+            {
+                var row = await db.Games.SingleAsync();
+                var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
+                evidence.NflPlayoffLeverage = JsonSerializer.Deserialize<NflPlayoffLeverageEvidence>(original);
+                row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
+            });
+        }
+        clock.Advance(TimeSpan.FromHours(2));
+        await Change(async db =>
+        {
+            var row = await db.Games.SingleAsync();
+            var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
+            evidence.ObservedAt = clock.GetUtcNow().UtcDateTime;
+            row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
+        });
+        await app.DisposeAsync();
+        app = CreateHost();
+        var restored = await Resolve();
+        if (reject) Assert.Null(restored.Total);
+        else
+        {
+            Assert.Equal(captured.Total, restored.Total);
+            Assert.Equal(captured.EvaluatedAt, restored.EvaluatedAt);
+            Assert.Equal(JsonSerializer.Serialize(captured.Components), JsonSerializer.Serialize(restored.Components));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task Rejected_conditional_NFL_support_cannot_resurrect_after_an_overwritten_observation_or_restart(bool overwrite)
     {
         await Seed("nfl");
