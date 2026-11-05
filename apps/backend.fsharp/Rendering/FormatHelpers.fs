@@ -123,6 +123,28 @@ module FormatHelpers =
             Text.raw fallback
         ]
 
+    let broadcastLabel (networks: string[]) =
+        let usable =
+            if isNull networks then [||]
+            else networks |> Array.filter (String.IsNullOrWhiteSpace >> not) |> Array.map (fun n -> n.Trim())
+        match usable with
+        | [||] -> None
+        | [| only |] -> Some only
+        | many -> Some $"{many[0]} +{many.Length - 1}"
+
+    let broadcastNodes (game: backend.Models.Game) =
+        match game.Status with
+        | "scheduled" | "in_progress" ->
+            match broadcastLabel game.BroadcastNetworks with
+            | Some label ->
+                let title = String.Join(", ", game.BroadcastNetworks |> Array.filter (String.IsNullOrWhiteSpace >> not))
+                [ Elem.span [ Attr.class' "nb-broadcast-sep"; Attr.create "aria-hidden" "true" ] [ Text.raw " · " ]
+                  Elem.span [ Attr.class' "nb-broadcast whitespace-nowrap"; Attr.id $"broadcast-{game.Id}"; Attr.title $"TV: {title}" ] [
+                      Elem.span [ Attr.class' "sr-only" ] [ Text.raw "TV: " ]
+                      Text.enc label ] ]
+            | None -> []
+        | _ -> []
+
     let formatScheduledTimeFromIso (isoString: string) =
         match DateTime.TryParse(isoString) with
         | true, dt -> formatScheduledTime dt

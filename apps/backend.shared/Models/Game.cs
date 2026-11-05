@@ -51,6 +51,7 @@ public class Game
     public long? MlbGamePk { get; set; }
     public DateOnly? MlbOfficialDate { get; set; }
     public string? HighlightsIdentityEvidenceJson { get; set; }
+    public string[]? BroadcastNetworks { get; set; }
 
     public List<OddsSnapshot> OddsSnapshots { get; set; } = [];
     public PregameOdds? PregameOdds { get; set; }

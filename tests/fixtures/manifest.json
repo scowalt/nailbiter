@@ -9,6 +9,7 @@
     "apps/backend.fsharp.tests/Fixtures/kalshi-nba-playoffs-2027.json": "6f6fb972ff70e0d26e0c8183090da43b69c735493c6365e7d2e61f786b4dbbcc",
     "apps/backend.fsharp.tests/Fixtures/kalshi-nfl-playoffs-2026.json": "851577fa2a5f6ee5999b63ed0d487f7efc3fd87a5e7a801adabf1fea8cc57e82",
     "apps/backend.fsharp.tests/Fixtures/kalshi-nhl-playoffs-2027.json": "1690e568edea83e7e05af16816c6e07a699049d59f1cc669269ab16f4d00d2eb",
+    "apps/backend.tests/Fixtures/Broadcasts/mlb-board.json": "f1ce9893b96aad59537d7282523c262764133e8af93445bc56643bbd3096335a",
     "apps/backend.tests/Fixtures/Excitement/context.json": "8ffa1648cb53dfe24b0014725d48e194a93a03c175a976c4964f350dd14f5fdb",
     "apps/backend.tests/Fixtures/Excitement/histories.csv": "590d831763b985a75926d4a6c0bf2e61f2d18b4ce0ee867ea1b54d73c60273d5",
     "apps/backend.tests/Fixtures/MoneyPuck/rankings_current.csv": "e177e60b1da75ecea00d9ac5a5c1f2394b314536200c6482a550cbb67dde9473",

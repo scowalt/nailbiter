@@ -6,6 +6,7 @@ open backend.GraphQL.Types
 module Layout =
 
     let private scriptReleaseVersion = "2026-10-07-highlights-consent"
+    let private styleReleaseVersion = "2026-11-05-tv-channels"
     let private iconVersion = "swing-1"
 
     let cls = Attr.``class'``
@@ -101,7 +102,7 @@ module Layout =
                 Elem.link [ Attr.rel "icon"; Attr.create "type" "image/svg+xml"; Attr.create "sizes" "any"; Attr.href $"/favicon.svg?v={iconVersion}" ]
                 Elem.link [ Attr.rel "apple-touch-icon"; Attr.create "type" "image/png"; Attr.create "sizes" "180x180"; Attr.href $"/apple-touch-icon.png?v={iconVersion}" ]
                 Elem.link [ Attr.rel "manifest"; Attr.href $"/site.webmanifest?v={iconVersion}" ]
-                Elem.link [ Attr.rel "stylesheet"; Attr.href "/css/global.css" ]
+                Elem.link [ Attr.rel "stylesheet"; Attr.href $"/css/global.css?v={styleReleaseVersion}" ]
                 Elem.script [ Attr.create "type" "module"; Attr.src "https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.4/bundles/datastar.js" ] []
                 Elem.script [ Attr.create "type" "module"; Attr.src $"/js/nailbiter-components.js?v={scriptReleaseVersion}" ] []
                 Elem.script [ Attr.create "type" "module"; Attr.src $"/js/live-sync.js?v={scriptReleaseVersion}" ] []

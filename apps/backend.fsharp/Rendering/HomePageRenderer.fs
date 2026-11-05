@@ -142,7 +142,10 @@ module HomePageRenderer =
                             Text.enc statusLabel
                         ]
                     ]
-                    Elem.div [ cls "home-card-time" ] [ FormatHelpers.scheduledTimeNode game.ScheduledStart ]
+                    Elem.div [ cls "home-card-time" ] [
+                        FormatHelpers.scheduledTimeNode game.ScheduledStart
+                        yield! FormatHelpers.broadcastNodes game
+                    ]
                 ]
                 if isPregame then
                     Elem.div [ cls "home-card-hype"; Attr.id $"excitement-{game.Id}" ] [

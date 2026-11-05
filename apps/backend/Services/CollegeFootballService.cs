@@ -215,6 +215,8 @@ public sealed class CollegeFootballService(
         game.ScoreboardUpdatedAt = now; game.HomeColor = CollegeFootballPolicy.Color(h.At("color").Text()); game.AwayColor = CollegeFootballPolicy.Color(a.At("color").Text());
         game.CompetitionEvidence = string.Join(" | ", competition.At("notes").Items().Select(n => n.At("headline").Text()));
         game.CollegeCompetition = CollegeFootballPolicy.Classify(game.SeasonType ?? 0, game.CompetitionEvidence, competition.At("type", "id").Text());
+        var networks = backend.Services.Espn.EspnBroadcasts.networks(competition.At("broadcasts"), competition.At("geoBroadcasts"));
+        if (!networks.IsEmpty) game.BroadcastNetworks = networks.ToArray();
         if (!game.IsHistoricalImport && (state == "pre" || state == "in"))
         {
             membership.TryGetValue(homeId, out var ht); membership.TryGetValue(awayId, out var at);

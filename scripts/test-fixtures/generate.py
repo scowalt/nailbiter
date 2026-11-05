@@ -367,11 +367,42 @@ def nfl_leverage():
         emit(prefix + slugs[team] + 'whatif.html', document(name + ' What If?', '\n'.join(content)))
 
 
+def broadcasts():
+    def tv(market, *names):
+        return {'market': market, 'names': list(names)}
+
+    def geo(kind, market, name):
+        return {'type': {'id': '1', 'shortName': kind}, 'market': {'id': '1', 'type': market}, 'media': {'shortName': name}, 'lang': 'en', 'region': 'us'}
+
+    scenarios = [
+        ('synthetic-tv-national', 'ATL', 'PHI', 'Prime Video', [tv('national', 'Prime Video')], None),
+        ('synthetic-tv-regional-extras', 'BOS', 'NYY', 'ESPN+ +2',
+         [tv('home', 'Fixture Sports Northeast'), tv('national', 'ESPN+'), tv('away', 'Fixture Network South'), tv('national', 'espn+')], None),
+        ('synthetic-tv-geo-fallback', 'CHC', 'MIL', 'TBS +1', [],
+         [geo('Radio', 'National', 'Fixture Radio'), geo('TV', 'Home', 'Fixture Sports Lakes'), geo('TV', 'National', 'TBS')]),
+        ('synthetic-tv-missing', 'SEA', 'TEX', None, None, None),
+        ('synthetic-tv-malformed', 'SD', 'LAD', 'FS1',
+         [{'market': 'national', 'names': [7, '', '  ', 'x' * 41, 'FS1']}, {'market': 'home', 'names': 'Fixture Not An Array'}, 'not-an-object'], None),
+        ('synthetic-tv-object', 'MIN', 'DET', None, {'market': 'national', 'names': ['Fixture Object']}, {'media': 'not-an-array'}),
+    ]
+    events, expected = [], {}
+    for i, (identity, home, away, label, listing, geo_listing) in enumerate(scenarios):
+        item = event(identity, home, away, stamp(instant('2026-10-01T22:00:00Z') + timedelta(minutes=15 * i)), 2026)
+        competition = item['competitions'][0]
+        if listing is not None:
+            competition['broadcasts'] = listing
+        if geo_listing is not None:
+            competition['geoBroadcasts'] = geo_listing
+        events.append(item)
+        expected[identity] = label
+    emit(F + 'Broadcasts/mlb-board.json', {'synthetic': True, 'expectedLabels': expected, 'board': envelope('mlb', 'scoreboard?dates=20261001&limit=1000', board(events))})
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
-    for generate in [qualification_fixtures, rankings, nhl_seeding_contests, nba_seeding_contests, nhl_guru_rankings, moneypuck_model, pro_schedules, mlb_preview, nfl_preview, nhl_stakes, mlb_reconciliation, chart_histories, nfl_leverage]:
+    for generate in [qualification_fixtures, rankings, nhl_seeding_contests, nba_seeding_contests, nhl_guru_rankings, moneypuck_model, pro_schedules, mlb_preview, nfl_preview, nhl_stakes, mlb_reconciliation, chart_histories, nfl_leverage, broadcasts]:
         generate()
     manifest = {path: hashlib.sha256(text.encode()).hexdigest() for path, text in sorted(OUTPUTS.items())}
     emit('tests/fixtures/manifest.json', {'provenance': 'Independently constructed by scripts/test-fixtures/generate.py; no provider responses used as inputs.', 'sha256': manifest})

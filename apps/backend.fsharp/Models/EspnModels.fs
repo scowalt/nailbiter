@@ -117,7 +117,73 @@ type EspnCompetition =
       [<JsonPropertyName("type")>] Type: EspnCompetitionType
       [<JsonPropertyName("notes")>] Notes: ResizeArray<EspnNote>
       [<JsonPropertyName("series")>] Series: JsonElement
+      [<JsonPropertyName("broadcasts")>] Broadcasts: JsonElement
+      [<JsonPropertyName("geoBroadcasts")>] GeoBroadcasts: JsonElement
       [<JsonPropertyName("status")>] Status: EspnStatus }
+
+module EspnBroadcasts =
+    let maxNetworks = 8
+    let private maxNameLength = 40
+
+    let private property (element: JsonElement) (name: string) =
+        let mutable value = Unchecked.defaultof<JsonElement>
+        if element.ValueKind = JsonValueKind.Object && element.TryGetProperty(name, &value) then Some value else None
+
+    let private text (element: JsonElement option) =
+        match element with
+        | Some value when value.ValueKind = JsonValueKind.String -> Some (value.GetString())
+        | _ -> None
+
+    let private usableName (name: string) =
+        let trimmed = if isNull name then "" else name.Trim()
+        if trimmed.Length = 0 || trimmed.Length > maxNameLength || trimmed |> Seq.exists Char.IsControl then None
+        else Some trimmed
+
+    let private marketRank (market: string option) =
+        match market |> Option.map (fun m -> m.Trim().ToLowerInvariant()) with
+        | Some "national" -> 0
+        | Some "home" -> 1
+        | Some "away" -> 2
+        | _ -> 3
+
+    let private items (element: JsonElement) =
+        if element.ValueKind = JsonValueKind.Array then element.EnumerateArray() |> Seq.toList else []
+
+    let private fromBroadcasts (broadcasts: JsonElement) =
+        items broadcasts
+        |> List.collect (fun entry ->
+            let rank = marketRank (text (property entry "market"))
+            match property entry "names" with
+            | Some names when names.ValueKind = JsonValueKind.Array ->
+                names.EnumerateArray()
+                |> Seq.choose (fun name -> if name.ValueKind = JsonValueKind.String then usableName (name.GetString()) else None)
+                |> Seq.map (fun name -> rank, name)
+                |> Seq.toList
+            | _ -> [])
+
+    let private fromGeoBroadcasts (geoBroadcasts: JsonElement) =
+        items geoBroadcasts
+        |> List.choose (fun entry ->
+            let kind = property entry "type" |> Option.bind (fun t -> text (property t "shortName"))
+            let isRadio = kind |> Option.exists (fun k -> k.Trim().Equals("Radio", StringComparison.OrdinalIgnoreCase))
+            let market = property entry "market" |> Option.bind (fun m -> text (property m "type"))
+            let name = property entry "media" |> Option.bind (fun m -> text (property m "shortName")) |> Option.bind usableName
+            match name with
+            | Some name when not isRadio -> Some (marketRank market, name)
+            | _ -> None)
+
+    let networks (broadcasts: JsonElement) (geoBroadcasts: JsonElement) : string list =
+        let primary = fromBroadcasts broadcasts
+        let candidates = if primary.IsEmpty then fromGeoBroadcasts geoBroadcasts else primary
+        candidates
+        |> List.indexed
+        |> List.sortBy (fun (index, (rank, _)) -> rank, index)
+        |> List.map (fun (_, (_, name)) -> name)
+        |> List.distinctBy (fun name -> name.ToUpperInvariant())
+        |> List.truncate maxNetworks
+
+    let ofCompetition (competition: EspnCompetition) =
+        if isNull (box competition) then [] else networks competition.Broadcasts competition.GeoBroadcasts
 
 type EspnWeek =
     { [<JsonPropertyName("number")>] Number: int }
