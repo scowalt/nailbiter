@@ -23,20 +23,24 @@ public sealed partial class NflPlayoffPageTests
     }
 
     [Theory]
-    [InlineData(false, false, false, false)]
-    [InlineData(true, false, false, false)]
-    [InlineData(true, true, false, false)]
-    [InlineData(false, false, true, false)]
-    [InlineData(false, false, false, true)]
-    [InlineData(false, false, true, true)]
-    public async Task NflPlayoffLeverage_synthetic_forecasts_flow_through_registered_collector_persistence_public_scoring_and_all_pages(bool decimalScores, bool unrelatedKickoff, bool smallSwing, bool corroboratedKickoff)
+    [InlineData(false, false, false, false, false)]
+    [InlineData(true, false, false, false, false)]
+    [InlineData(true, true, false, false, false)]
+    [InlineData(false, false, true, false, false)]
+    [InlineData(false, false, false, true, false)]
+    [InlineData(false, false, true, true, false)]
+    [InlineData(false, false, false, false, true)]
+    [InlineData(false, false, false, true, true)]
+    [InlineData(false, false, true, true, true)]
+    public async Task NflPlayoffLeverage_synthetic_forecasts_flow_through_registered_collector_persistence_public_scoring_and_all_pages(bool decimalScores, bool unrelatedKickoff, bool smallSwing, bool corroboratedKickoff, bool sfNickname)
     {
         clock.Now = new DateTimeOffset(2026, 10, 18, 12, 0, 0, TimeSpan.Zero);
         var game = NflPlayoffLeverageTests.Game(); game.Id = "control-7-DET-GB";
         var source = new NflPlayoffLeverageTests.Handler { ServerDate = clock.Now.UtcDateTime };
         if (smallSwing) source.Transform = (path, body) => path.EndsWith("packerswhatif.html")
             ? body.Replace(">18%<", ">41%<").Replace(">32%<", ">42%<")
-            : path.EndsWith("lionswhatif.html") ? body.Replace(">26%<", ">44%<").Replace(">36%<", ">45%<") : body;
+            : path.EndsWith("lionswhatif.html") || path.EndsWith("forty-ninerswhatif.html")
+                ? body.Replace(">26%<", ">44%<").Replace(">36%<", ">45%<") : body;
         var expectedStakes = smallSwing ? 1.6 : 20;
         var expectedHype = smallSwing ? 51 : 59;
         var schedules = NflPlayoffLeverageTests.Schedules(score => decimalScores ? score + ".0" : score);
@@ -56,7 +60,13 @@ public sealed partial class NflPlayoffPageTests
                 return JsonSerializer.SerializeToElement(copy);
             }).ToArray() }).ToArray();
         }
-        var boardEvent = JsonNode.Parse(schedules.Single(s => s.Team == "DET").Events.Single(e => e.GetProperty("id").GetString() == game.Id).GetRawText())!;
+        if (sfNickname)
+        {
+            NflForecastTitleTests.UseSanFrancisco(game);
+            schedules = NflForecastTitleTests.SwapSchedules(schedules);
+            NflForecastTitleTests.UseNicknamePage(source);
+        }
+        var boardEvent = JsonNode.Parse(schedules.Single(s => s.Team == game.HomeTeamAbbreviation).Events.Single(e => e.GetProperty("id").GetString() == game.Id).GetRawText())!;
         boardEvent["season"]!["type"] = 2;
         var espn = new NflScheduleWire(request =>
         {
@@ -88,7 +98,7 @@ public sealed partial class NflPlayoffPageTests
             var ranks = NflPlayoffLeverageTests.Ranks(game);
             foreach (var row in ranks) row.FetchedAt = clock.Now.UtcDateTime;
             db.TeamRatings.AddRange(ranks);
-            foreach (var team in new[] { "DET", "GB" }) db.TeamRatings.Add(new TeamRating
+            foreach (var team in new[] { game.HomeTeamAbbreviation, game.AwayTeamAbbreviation }) db.TeamRatings.Add(new TeamRating
             {
                 Sport = "nfl", TeamAbbreviation = team, Source = "kalshi", SourceSeason = 2026, Season = 2026,
                 PlayoffProbability = .62, FetchedAt = clock.Now.UtcDateTime
@@ -142,7 +152,7 @@ public sealed partial class NflPlayoffPageTests
             {
                 Assert.Contains(smallSwing ? "Stakes2" : "Stakes20", string.Concat(doc.QuerySelector("#detail-hype")!.TextContent.Where(c => !char.IsWhiteSpace(c))));
                 var forecast = doc.QuerySelector("#nfl-playoff-leverage")!;
-                Assert.Contains("GB", forecast.TextContent); Assert.Contains("DET", forecast.TextContent);
+                Assert.Contains("GB", forecast.TextContent); Assert.Contains(game.HomeTeamAbbreviation, forecast.TextContent);
                 Assert.Contains(smallSwing ? "59%" : "82%", forecast.TextContent); Assert.Contains("57%", forecast.TextContent);
                 Assert.Contains(smallSwing ? "56%" : "74%", forecast.TextContent); Assert.Contains("54%", forecast.TextContent);
                 Assert.Contains("Model estimates from", forecast.TextContent);
@@ -155,7 +165,7 @@ public sealed partial class NflPlayoffPageTests
                 var rows = forecast.QuerySelectorAll(".grid");
                 Assert.Contains("GB", rows[0].Children[0].TextContent);
                 Assert.Contains(smallSwing ? "59%" : "82%", rows[1].Children[0].TextContent);
-                Assert.Contains("DET", rows[0].Children[2].TextContent);
+                Assert.Contains(game.HomeTeamAbbreviation, rows[0].Children[2].TextContent);
                 Assert.Contains(smallSwing ? "56%" : "74%", rows[1].Children[2].TextContent);
             }
             else

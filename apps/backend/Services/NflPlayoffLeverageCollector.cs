@@ -232,7 +232,9 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
     {
         if (!Complete(page)) return null;
         using var doc = new HtmlParser().ParseDocument(page.Html);
-        if (Text(doc.QuerySelector("title")) != team.Name + " What If?" || Label(doc) != league.Label || Week(doc) != league.Week) return null;
+        var title = Text(doc.QuerySelector("title"));
+        var identified = title == team.Name + " What If?" || team.Abbreviation == "SF" && title == "San Francisco Forty-Niners What If?";
+        if (!identified || Label(doc) != league.Label || Week(doc) != league.Week) return null;
         var headings = doc.QuerySelectorAll(".mncntnt h3").Where(h => Text(h).StartsWith("Next Game - ", StringComparison.Ordinal)).ToArray();
         if (headings.Length != 1) return null;
         var label = Regex.Replace(Text(headings[0]), @"^Next Game - | \([\d\u2011\-]+\)$", "").Replace("Forty-Niners49ers", "Forty-Niners");
