@@ -87,6 +87,7 @@ public sealed class NflPlayoffLeverageTests
     {
         public List<string> Requests { get; } = [];
         public Func<string, string, string> Transform { get; set; } = (_, body) => body;
+        public Func<string, string> FixtureName { get; set; } = name => name;
         public HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
         public DateTime? Publication { get; set; } = Published;
         public bool MissingDate { get; set; }
@@ -97,7 +98,7 @@ public sealed class NflPlayoffLeverageTests
             ct.ThrowIfCancellationRequested();
             var path = request.RequestUri!.AbsolutePath; Requests.Add(path);
             if (Throw) throw new HttpRequestException("offline transport control");
-            var name = Path.GetFileName(path);
+            var name = FixtureName(Path.GetFileName(path));
             Assert.Contains(name, new[] { "nflschedule.html", "lionswhatif.html", "packerswhatif.html" });
             var response = new HttpResponseMessage(Status) { Content = new StringContent(Transform(path, Fixture(name))) };
             response.Content.Headers.LastModified = Publication;
