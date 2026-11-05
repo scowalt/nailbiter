@@ -205,8 +205,13 @@ module GameDetailRenderer =
                                 Elem.span [ cls "text-text-muted text-lg" ] [ Text.raw "VS" ]
                                 Elem.span [ cls "text-text-muted text-sm" ] [
                                     FormatHelpers.scheduledTimeNode game.ScheduledStart
+                                    yield! FormatHelpers.broadcastNodes game
                                 ]
                             else
+                                if isLive then
+                                    match FormatHelpers.broadcastNodes game with
+                                    | [] -> ()
+                                    | nodes -> Elem.span [ cls "text-text-muted text-sm" ] (List.tail nodes)
                                 Elem.div [ Attr.id "detail-clock" ] [
                                     if game.Sport = "cfb" && isLive then
                                         Elem.span [ cls "text-sm text-status-live" ] [ Text.enc (FormatHelpers.formatGameClock game.Period game.GameClock game.Sport) ]

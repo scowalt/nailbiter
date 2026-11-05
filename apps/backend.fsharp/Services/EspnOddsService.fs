@@ -310,6 +310,7 @@ type EspnOddsService
 
                 let allowOrdinaryDiscovery =
                     isNull game || game.Status <> "final" || not (isNull game.EspnCompletionEvidenceJson)
+                let broadcastNetworks = EspnBroadcasts.ofCompetition competition
 
                 if isNull game then
                     let mutable homeScore = 0
@@ -332,7 +333,8 @@ type EspnOddsService
                             SeasonYear = seasonYear,
                             SeasonType = seasonType,
                             WeekNumber = weekNumber,
-                            WeekLabel = weekLabel
+                            WeekLabel = weekLabel,
+                            BroadcastNetworks = (if broadcastNetworks.IsEmpty then null else List.toArray broadcastNetworks)
                         )
 
                     db.Games.Add(newGame) |> ignore
@@ -409,6 +411,9 @@ type EspnOddsService
 
                     if (isNull game.WeekLabel || game.WeekLabel = "") && not (isNull weekLabel) && weekLabel <> "" then
                         game.WeekLabel <- weekLabel
+
+                    if not broadcastNetworks.IsEmpty then
+                        game.BroadcastNetworks <- List.toArray broadcastNetworks
 
                 if supportsSeries then
                     let observedGame = if isNull game then db.Games.Local |> Seq.find (fun g -> g.Id = gameId) else game

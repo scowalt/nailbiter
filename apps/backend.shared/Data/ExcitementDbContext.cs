@@ -172,6 +172,7 @@ public class ExcitementDbContext : DbContext
             entity.Property(e => e.MlbGamePk).HasColumnName("mlb_game_pk");
             entity.Property(e => e.MlbOfficialDate).HasColumnName("mlb_official_date");
             entity.Property(e => e.HighlightsIdentityEvidenceJson).HasColumnName("highlights_identity_evidence_json");
+            entity.Property(e => e.BroadcastNetworks).HasColumnName("broadcast_networks");
             entity.HasIndex(e => e.MlbGamePk).IsUnique();
 
             entity.HasIndex(e => e.Sport);

@@ -119,7 +119,12 @@ module LeaguePageRenderer =
                     if game.Status = "scheduled" || game.Status = "final" then
                         Elem.span [ cls "text-text-muted text-sm" ] [
                             FormatHelpers.scheduledTimeNode game.ScheduledStart
+                            yield! FormatHelpers.broadcastNodes game
                         ]
+                    elif isLive then
+                        match FormatHelpers.broadcastNodes game with
+                        | [] -> ()
+                        | nodes -> Elem.span [ cls "text-text-muted text-sm" ] (List.tail nodes)
                     Elem.span [ cls "text-text-muted group-hover:text-text-primary transition-colors" ] [
                         Text.raw "→"
                     ]

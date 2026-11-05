@@ -1,0 +1,524 @@
+{
+  "synthetic": true,
+  "expectedLabels": {
+    "synthetic-tv-national": "Prime Video",
+    "synthetic-tv-regional-extras": "ESPN+ +2",
+    "synthetic-tv-geo-fallback": "TBS +1",
+    "synthetic-tv-missing": null,
+    "synthetic-tv-malformed": "FS1",
+    "synthetic-tv-object": null
+  },
+  "board": {
+    "synthetic": true,
+    "url": "https://site.web.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates=20261001&limit=1000",
+    "body": {
+      "synthetic": true,
+      "events": [
+        {
+          "id": "synthetic-tv-national",
+          "name": "PHI at ATL synthetic scenario",
+          "shortName": "PHI @ ATL",
+          "date": "2026-10-01T22:00:00.0000000Z",
+          "season": {
+            "year": 2026,
+            "type": 2
+          },
+          "seasonType": {
+            "type": 2
+          },
+          "week": {
+            "number": 6
+          },
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitions": [
+            {
+              "id": "synthetic-tv-national",
+              "date": "2026-10-01T22:00:00.0000000Z",
+              "status": {
+                "type": {
+                  "name": "STATUS_SCHEDULED",
+                  "state": "pre",
+                  "completed": false
+                },
+                "period": 0,
+                "displayClock": "0:00"
+              },
+              "competitors": [
+                {
+                  "id": "15",
+                  "homeAway": "home",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "15",
+                    "abbreviation": "ATL",
+                    "displayName": "Synthetic ATL",
+                    "name": "ATL"
+                  }
+                },
+                {
+                  "id": "22",
+                  "homeAway": "away",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "22",
+                    "abbreviation": "PHI",
+                    "displayName": "Synthetic PHI",
+                    "name": "PHI"
+                  }
+                }
+              ],
+              "broadcasts": [
+                {
+                  "market": "national",
+                  "names": [
+                    "Prime Video"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "synthetic-tv-regional-extras",
+          "name": "NYY at BOS synthetic scenario",
+          "shortName": "NYY @ BOS",
+          "date": "2026-10-01T22:15:00.0000000Z",
+          "season": {
+            "year": 2026,
+            "type": 2
+          },
+          "seasonType": {
+            "type": 2
+          },
+          "week": {
+            "number": 6
+          },
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitions": [
+            {
+              "id": "synthetic-tv-regional-extras",
+              "date": "2026-10-01T22:15:00.0000000Z",
+              "status": {
+                "type": {
+                  "name": "STATUS_SCHEDULED",
+                  "state": "pre",
+                  "completed": false
+                },
+                "period": 0,
+                "displayClock": "0:00"
+              },
+              "competitors": [
+                {
+                  "id": "102",
+                  "homeAway": "home",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "102",
+                    "abbreviation": "BOS",
+                    "displayName": "Synthetic BOS",
+                    "name": "BOS"
+                  }
+                },
+                {
+                  "id": "302",
+                  "homeAway": "away",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "302",
+                    "abbreviation": "NYY",
+                    "displayName": "Synthetic NYY",
+                    "name": "NYY"
+                  }
+                }
+              ],
+              "broadcasts": [
+                {
+                  "market": "home",
+                  "names": [
+                    "Fixture Sports Northeast"
+                  ]
+                },
+                {
+                  "market": "national",
+                  "names": [
+                    "ESPN+"
+                  ]
+                },
+                {
+                  "market": "away",
+                  "names": [
+                    "Fixture Network South"
+                  ]
+                },
+                {
+                  "market": "national",
+                  "names": [
+                    "espn+"
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "synthetic-tv-geo-fallback",
+          "name": "MIL at CHC synthetic scenario",
+          "shortName": "MIL @ CHC",
+          "date": "2026-10-01T22:30:00.0000000Z",
+          "season": {
+            "year": 2026,
+            "type": 2
+          },
+          "seasonType": {
+            "type": 2
+          },
+          "week": {
+            "number": 6
+          },
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitions": [
+            {
+              "id": "synthetic-tv-geo-fallback",
+              "date": "2026-10-01T22:30:00.0000000Z",
+              "status": {
+                "type": {
+                  "name": "STATUS_SCHEDULED",
+                  "state": "pre",
+                  "completed": false
+                },
+                "period": 0,
+                "displayClock": "0:00"
+              },
+              "competitors": [
+                {
+                  "id": "301",
+                  "homeAway": "home",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "301",
+                    "abbreviation": "CHC",
+                    "displayName": "Synthetic CHC",
+                    "name": "CHC"
+                  }
+                },
+                {
+                  "id": "8",
+                  "homeAway": "away",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "8",
+                    "abbreviation": "MIL",
+                    "displayName": "Synthetic MIL",
+                    "name": "MIL"
+                  }
+                }
+              ],
+              "broadcasts": [],
+              "geoBroadcasts": [
+                {
+                  "type": {
+                    "id": "1",
+                    "shortName": "Radio"
+                  },
+                  "market": {
+                    "id": "1",
+                    "type": "National"
+                  },
+                  "media": {
+                    "shortName": "Fixture Radio"
+                  },
+                  "lang": "en",
+                  "region": "us"
+                },
+                {
+                  "type": {
+                    "id": "1",
+                    "shortName": "TV"
+                  },
+                  "market": {
+                    "id": "1",
+                    "type": "Home"
+                  },
+                  "media": {
+                    "shortName": "Fixture Sports Lakes"
+                  },
+                  "lang": "en",
+                  "region": "us"
+                },
+                {
+                  "type": {
+                    "id": "1",
+                    "shortName": "TV"
+                  },
+                  "market": {
+                    "id": "1",
+                    "type": "National"
+                  },
+                  "media": {
+                    "shortName": "TBS"
+                  },
+                  "lang": "en",
+                  "region": "us"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "synthetic-tv-missing",
+          "name": "TEX at SEA synthetic scenario",
+          "shortName": "TEX @ SEA",
+          "date": "2026-10-01T22:45:00.0000000Z",
+          "season": {
+            "year": 2026,
+            "type": 2
+          },
+          "seasonType": {
+            "type": 2
+          },
+          "week": {
+            "number": 6
+          },
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitions": [
+            {
+              "id": "synthetic-tv-missing",
+              "date": "2026-10-01T22:45:00.0000000Z",
+              "status": {
+                "type": {
+                  "name": "STATUS_SCHEDULED",
+                  "state": "pre",
+                  "completed": false
+                },
+                "period": 0,
+                "displayClock": "0:00"
+              },
+              "competitors": [
+                {
+                  "id": "124",
+                  "homeAway": "home",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "124",
+                    "abbreviation": "SEA",
+                    "displayName": "Synthetic SEA",
+                    "name": "SEA"
+                  }
+                },
+                {
+                  "id": "302",
+                  "homeAway": "away",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "302",
+                    "abbreviation": "TEX",
+                    "displayName": "Synthetic TEX",
+                    "name": "TEX"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "synthetic-tv-malformed",
+          "name": "LAD at SD synthetic scenario",
+          "shortName": "LAD @ SD",
+          "date": "2026-10-01T23:00:00.0000000Z",
+          "season": {
+            "year": 2026,
+            "type": 2
+          },
+          "seasonType": {
+            "type": 2
+          },
+          "week": {
+            "number": 6
+          },
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitions": [
+            {
+              "id": "synthetic-tv-malformed",
+              "date": "2026-10-01T23:00:00.0000000Z",
+              "status": {
+                "type": {
+                  "name": "STATUS_SCHEDULED",
+                  "state": "pre",
+                  "completed": false
+                },
+                "period": 0,
+                "displayClock": "0:00"
+              },
+              "competitors": [
+                {
+                  "id": "301",
+                  "homeAway": "home",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "301",
+                    "abbreviation": "SD",
+                    "displayName": "Synthetic SD",
+                    "name": "SD"
+                  }
+                },
+                {
+                  "id": "19",
+                  "homeAway": "away",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "19",
+                    "abbreviation": "LAD",
+                    "displayName": "Synthetic LAD",
+                    "name": "LAD"
+                  }
+                }
+              ],
+              "broadcasts": [
+                {
+                  "market": "national",
+                  "names": [
+                    7,
+                    "",
+                    "  ",
+                    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                    "FS1"
+                  ]
+                },
+                {
+                  "market": "home",
+                  "names": "Fixture Not An Array"
+                },
+                "not-an-object"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "synthetic-tv-object",
+          "name": "DET at MIN synthetic scenario",
+          "shortName": "DET @ MIN",
+          "date": "2026-10-01T23:15:00.0000000Z",
+          "season": {
+            "year": 2026,
+            "type": 2
+          },
+          "seasonType": {
+            "type": 2
+          },
+          "week": {
+            "number": 6
+          },
+          "status": {
+            "type": {
+              "name": "STATUS_SCHEDULED",
+              "state": "pre",
+              "completed": false
+            },
+            "period": 0,
+            "displayClock": "0:00"
+          },
+          "competitions": [
+            {
+              "id": "synthetic-tv-object",
+              "date": "2026-10-01T23:15:00.0000000Z",
+              "status": {
+                "type": {
+                  "name": "STATUS_SCHEDULED",
+                  "state": "pre",
+                  "completed": false
+                },
+                "period": 0,
+                "displayClock": "0:00"
+              },
+              "competitors": [
+                {
+                  "id": "114",
+                  "homeAway": "home",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "114",
+                    "abbreviation": "MIN",
+                    "displayName": "Synthetic MIN",
+                    "name": "MIN"
+                  }
+                },
+                {
+                  "id": "110",
+                  "homeAway": "away",
+                  "score": "0",
+                  "winner": false,
+                  "team": {
+                    "id": "110",
+                    "abbreviation": "DET",
+                    "displayName": "Synthetic DET",
+                    "name": "DET"
+                  }
+                }
+              ],
+              "broadcasts": {
+                "market": "national",
+                "names": [
+                  "Fixture Object"
+                ]
+              },
+              "geoBroadcasts": {
+                "media": "not-an-array"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
