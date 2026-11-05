@@ -10,6 +10,19 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def estimated_swing_stakes(probability, remaining):
+    import math
+    low, high = -40.0, 40.0
+    for _ in range(200):
+        middle = (low + high) / 2
+        if math.erfc(-middle / math.sqrt(2)) / 2 < probability:
+            low = middle
+        else:
+            high = middle
+    z = (low + high) / 2
+    return 80 * math.exp(-z * z / 2) / math.sqrt(2 * math.pi) / math.sqrt(.55 ** 2 * (remaining - 1) + .7 ** 2)
+
+
 class SyntheticFixtureTests(unittest.TestCase):
     def test_generator_is_offline_and_reproducible(self):
         subprocess.run(['python3', str(ROOT / 'scripts/test-fixtures/generate.py'), '--check'], check=True)
@@ -78,7 +91,6 @@ class SyntheticFixtureTests(unittest.TestCase):
 
     def test_nhl_seeding_controls_are_complete_and_have_an_independent_page_oracle(self):
         from collections import Counter
-        from decimal import Decimal, localcontext
         from fractions import Fraction
         rows = list(csv.DictReader(io.StringIO((ROOT / 'apps/backend.tests/Fixtures/ProHype/nhl-seeding-contests.csv').read_text())))
         self.assertEqual(len(rows), 1344)
@@ -91,17 +103,13 @@ class SyntheticFixtureTests(unittest.TestCase):
         self.assertEqual(target[0]['id'], 'synthetic-seeding-0033')
         quality = 2 * Fraction(100 * 59, 64) * Fraction(100 * 35, 64) / (Fraction(100 * 59, 64) + Fraction(100 * 35, 64))
         self.assertEqual(quality, Fraction(51625, 752))
-        with localcontext() as ctx:
-            ctx.prec = 50
-            urgency = ((Decimal(3) / 84).exp() - 1) / (Decimal(3).exp() - 1)
-            stakes = 80 * urgency * (1 - abs(2 * Decimal('.9') - 1))
-            total = Decimal('0.35') * stakes + Decimal('0.35') * Decimal(quality.numerator) / quality.denominator + 30
-            self.assertAlmostEqual(float(stakes), 0.03048147007736855, places=14)
-            self.assertAlmostEqual(float(total), 54.038261599633465, places=12)
+        stakes = estimated_swing_stakes(.9, 84)
+        total = .35 * stakes + .35 * float(quality) + 30
+        self.assertAlmostEqual(stakes, 2.775007774069287, places=12)
+        self.assertAlmostEqual(total, 54.99884580603063, places=12)
 
     def test_nba_seeding_controls_leave_unpublished_games_unassigned_and_have_an_independent_oracle(self):
         from collections import Counter
-        from decimal import Decimal, localcontext
         from fractions import Fraction
         rows = list(csv.DictReader(io.StringIO((ROOT / 'apps/backend.tests/Fixtures/ProHype/nba-seeding-contests.csv').read_text())))
         self.assertEqual(len(rows), 1200)
@@ -116,13 +124,10 @@ class SyntheticFixtureTests(unittest.TestCase):
         self.assertEqual(quality, Fraction(11395, 144))
         closeness = 100 * (1 - abs(2 * Fraction(3, 5) - 1))
         self.assertEqual(closeness, 80)
-        with localcontext() as ctx:
-            ctx.prec = 60
-            urgency = ((Decimal(27) / 82).exp() - 1) / (Decimal(3).exp() - 1)
-            stakes = 80 * urgency * (1 - abs(2 * Decimal('.9') - 1))
-            total = Decimal('.3') * stakes + Decimal('.4') * Decimal(quality.numerator) / quality.denominator + Decimal('.3') * Decimal(closeness.numerator) / closeness.denominator
-            self.assertAlmostEqual(float(stakes), 0.32690783245476907, places=14)
-            self.assertAlmostEqual(float(total), 55.750850127514205, places=12)
+        stakes = estimated_swing_stakes(.9, 74)
+        total = .3 * stakes + .4 * float(quality) + .3 * float(closeness)
+        self.assertAlmostEqual(stakes, 2.955106581196874, places=12)
+        self.assertAlmostEqual(total, 56.53930975213684, places=12)
 
     def test_chart_oracle_uses_exact_step_integrals_not_production_scorer(self):
         from fractions import Fraction

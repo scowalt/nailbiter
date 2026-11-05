@@ -134,6 +134,12 @@ A game in which the winner advances or wins the championship and the loser is el
 **Stakes**:
 The competitive consequences of a game's result for playoff qualification or championship advancement. Stakes are distinct from team strength or the appeal of a marquee matchup.
 
+**Playoff swing**:
+The difference between a team's playoff probability if it wins a particular game and if it loses that game. It describes one game's consequence, not the team's overall playoff probability.
+
+**Estimated playoff swing**:
+Nailbiter's own estimate of a playoff swing from a team's playoff probability and games remaining, used where no published win/loss forecast exists. It is not a forecast of the team's playoff probability after a win or a loss.
+
 **Matchup quality**:
 The strength of the teams in a matchup, distinct from the game's competitive consequences or expected closeness. A matchup between strong teams can have high quality even early in the season when its stakes are low.
 

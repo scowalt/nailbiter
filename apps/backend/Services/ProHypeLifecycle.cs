@@ -22,7 +22,8 @@ public interface IProHypeLifecycle
 public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> databaseOptions, HypeScoreService scorer, TimeProvider clock,
     IOptions<PlayoffRatingsOptions> options, IServiceScopeFactory scopes) : IProHypeLifecycle
 {
-    private const int RegularSeasonFormulaVersion = 2;
+    private const int RegularSeasonFormulaVersion = 3;
+    private const int SeedingFreeCompetitionFormulaVersion = 2;
     private readonly IModel model = Mapping(databaseOptions);
 
     private static IModel Mapping(DbContextOptions<ExcitementDbContext> databaseOptions)
@@ -277,7 +278,7 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
         return references.Select(r => r.Kind == ProEvidenceKind.Competition ? r with { Revision = revision } : r).ToArray();
     }
     private static ProEvidenceReference[] ObservationsForSaved(Saved saved, Game game, ProHypeAssessment assessment) =>
-        saved.Identity.Phase == 2 && saved.FormulaVersion < RegularSeasonFormulaVersion
+        saved.Identity.Phase == 2 && saved.FormulaVersion < SeedingFreeCompetitionFormulaVersion
             ? RawCompetitionReferences(assessment.Observations, game) : assessment.Observations;
     private static bool WasRevoked(Saved saved, Game game, HashSet<string> revoked)
     {

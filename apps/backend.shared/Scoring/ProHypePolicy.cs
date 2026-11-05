@@ -289,13 +289,13 @@ public static class ProHypePolicy
                     return new(null, null, note + "Verified season schedule/completed games unavailable or contradictory");
                 if (!progress.ScheduleVerified)
                     return new(null, null, note + "Consistent team schedule not yet verified; awaiting competition refresh");
-                var urgency = (Math.Exp(3.0 * (g + 1) / n) - 1) / (Math.Exp(3) - 1);
                 var (qualificationLower, qualificationUpper) = game.Sport == "nfl"
                     ? NflPlayoffLeveragePolicy.Stakes(conditional!)
-                    : (80 * urgency * (1 - Math.Abs(2 * qualification.Probability!.Value - 1)),
-                       80 * urgency * (1 - Math.Abs(2 * qualification.Probability.Value - 1)));
+                    : (80 * PlayoffSwingEstimate.Swing(qualification.Probability!.Value, n - g),
+                       80 * PlayoffSwingEstimate.Swing(qualification.Probability.Value, n - g));
                 return new(qualificationLower, qualificationUpper,
-                    note + $"{g}/{n} completed; qualification-only regular-season Stakes");
+                    note + $"{g}/{n} completed; qualification-only regular-season Stakes"
+                    + (game.Sport == "nfl" ? "" : " from estimated playoff swing"));
             }
             var h = Team(home, evidence.HomeProgress, game.HomeTeamAbbreviation, nflLeverage?.HomeOdds);
             var a = Team(away, evidence.AwayProgress, game.AwayTeamAbbreviation, nflLeverage?.AwayOdds);

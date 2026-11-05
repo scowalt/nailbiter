@@ -1142,10 +1142,10 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
             Assert.Equal(hasCompleteScoringInputs, score.HasValue);
             if (hasCompleteScoringInputs)
             {
-                Assert.Equal(.04572220511605282, components.StakesScore, 12);
+                Assert.Equal(3.686743952474407, components.StakesScore, 12);
                 Assert.Equal(96.849798, components.QualityScore, 5);
                 Assert.Equal(100, components.ClosenessScore);
-                Assert.Equal(64, Math.Round(score!.Value));
+                Assert.Equal(65, Math.Round(score!.Value));
             }
             Assert.Contains("qualification-only", components.StakesExplanation, StringComparison.OrdinalIgnoreCase);
         }
@@ -1341,7 +1341,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
         var direct = hype.CalculateFromEvidence(game, rows, odds, Array.Empty<string>(), clock.Now.UtcDateTime);
         var stored = await hype.GetHypeComponentsAsync(game, null);
         Assert.True(stored.StakesAvailable, stored.StakesExplanation);
-        Assert.Equal(.21724933056900575, stored.StakesScore, 12);
+        Assert.Equal(5.89172483871624, stored.StakesScore, 12);
         Assert.Equal(stored.StakesScore, direct.StakesScore);
         Assert.Equal(.35, direct.HomePlayoffOdds);
         Assert.Equal(.8, direct.AwayPlayoffOdds);
@@ -1351,7 +1351,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
 
         var detail = await BodyText(await client.GetAsync("/game/" + game.Id));
         Assert.Contains("Hype unavailable", detail);
-        Assert.Contains("Stakes0", detail);  
+        Assert.Contains("Stakes6", detail);
         Assert.Contains("QualityUnavailable", detail);
         Assert.Contains("Closeness80", detail);
         Assert.Contains("qualification-only", stored.StakesExplanation);
@@ -1375,7 +1375,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
         stored = await hype.GetHypeComponentsAsync(game, null);
         Assert.True(stored.IsComplete);
         Assert.Equal(44, Math.Round(stored.QualityScore));
-        Assert.Equal(40, Math.Round((await hype.CalculateHypeScoreAsync(game, null))!.Value));
+        Assert.Equal(42, Math.Round((await hype.CalculateHypeScoreAsync(game, null))!.Value));
         detail = await BodyText(await client.GetAsync("/game/" + game.Id));
         Assert.DoesNotContain("Hype unavailable", detail);
         Assert.Contains("Quality44", detail);

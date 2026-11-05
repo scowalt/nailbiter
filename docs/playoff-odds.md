@@ -32,7 +32,7 @@ For college football, qualification means entry into the CFP, not bowl eligibili
 
 ## Seasons and market identity
 
-Qualification displays use each game's `SeasonYear`, with the existing scheduled-date convention when absent. Pro-league hype is stricter: missing verified season identity makes affected components unavailable; calendar dates never establish its urgency or select another season's evidence.
+Qualification displays use each game's `SeasonYear`, with the existing scheduled-date convention when absent. Pro-league hype is stricter: missing verified season identity makes affected components unavailable; calendar dates never establish its season progress or select another season's evidence.
 The importer makes sure that the event, series, season subtitle, and team market identify the expected qualification contract.
 A mismatched response cannot supply another season's probability.
 

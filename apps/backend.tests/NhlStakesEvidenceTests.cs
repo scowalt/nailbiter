@@ -81,7 +81,7 @@ public sealed class NhlStakesEvidenceTests
         var pair = Schedules().Where(s => s.Team is "NYR" or "TB").ToArray();
         var evidence = Evidence(game, pair);
         var result = ProHypePolicy.Calculate(game, evidence, [], Q(.35), Q(.8), null, [], Now);
-        Assert.Equal(.21724933056900575, result.Stakes.Value!.Value, 12);
+        Assert.Equal(5.89172483871624, result.Stakes.Value!.Value, 12);
         Assert.Null(evidence.HomeProgress.SeedingUnresolved);
         evidence = Evidence(game, pair.Where(s => s.Team == "NYR").ToArray());
         Assert.Null(ProHypePolicy.Calculate(game, evidence, [], Q(.35), Q(.8), null, [], Now).Stakes.Value);
@@ -110,7 +110,7 @@ public sealed class NhlStakesEvidenceTests
         Assert.Equal(0, evidence.HomeProgress.Completed);
         Assert.Equal(1, evidence.AwayProgress.Completed);
         var result = ProHypePolicy.Calculate(game, evidence, [], Q(.8), Q(.35), null, [], Now);
-        Assert.Equal(.21724933056900575, result.Stakes.Value!.Value, 12);
+        Assert.Equal(5.89172483871624, result.Stakes.Value!.Value, 12);
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public sealed class NhlStakesEvidenceTests
         Assert.Null(evidence.AwayProgress.SeedingUnresolved);
         var result = ProHypePolicy.Calculate(game, evidence, [], Q(.35), Q(.8), null, [], Now);
         Assert.True(result.Stakes.Value.HasValue, result.Stakes.Explanation);
-        Assert.Equal(.21724933056900575, result.Stakes.Value.Value, 12);
+        Assert.Equal(5.89172483871624, result.Stakes.Value.Value, 12);
         Assert.Null(result.Quality.Value);  
         Assert.Null(result.Total);
     }

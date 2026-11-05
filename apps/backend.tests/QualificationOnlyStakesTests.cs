@@ -37,7 +37,7 @@ public sealed class QualificationOnlyStakesTests
         if (sport == "nfl") evidence.NflPlayoffLeverage = NflPlayoffLeverageTests.SyntheticEvidence(game, Now, swing: .02);
         var result = Score(game, evidence, Q(.99), Q(.99));
         Assert.NotNull(result.Total);
-        Assert.Equal(1.6, result.Stakes.Value!.Value, 10);
+        Assert.Equal(sport == "nfl" ? 1.6 : 3.04595910896665, result.Stakes.Value!.Value, 10);
         Assert.DoesNotContain("seeding", result.Stakes.Explanation, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(sport is "nba" or "mlb" ? 96.63793103448276 : 96.84979838709677, result.Quality.Value!.Value, 10);
         Assert.Equal(100, result.Closeness.Value);
@@ -45,14 +45,14 @@ public sealed class QualificationOnlyStakesTests
 
     [Theory]
     [InlineData(0, 0)]
-    [InlineData(.01, 1.6)]
-    [InlineData(.25, 40)]
-    [InlineData(.365, 58.4)]
-    [InlineData(.5, 80)]
-    [InlineData(.75, 40)]
-    [InlineData(.249999999999999, 39.99999999999984)]
-    [InlineData(.750000000000001, 39.99999999999984)]
-    [InlineData(.99, 1.6)]
+    [InlineData(.01, 3.04595910896665)]
+    [InlineData(.25, 36.317322592469374)]
+    [InlineData(.365, 42.95732706774892)]
+    [InlineData(.5, 45.59340347444945)]
+    [InlineData(.75, 36.317322592469374)]
+    [InlineData(.249999999999999, 36.317322592469296)]
+    [InlineData(.750000000000001, 36.317322592469296)]
+    [InlineData(.99, 3.04595910896665)]
     [InlineData(1, 0)]
     public void Valid_scalar_probabilities_keep_their_full_qualification_term_including_extremes(double probability, double expected)
     {
@@ -61,7 +61,7 @@ public sealed class QualificationOnlyStakesTests
         evidence.HomeProgress.Completed = evidence.AwayProgress.Completed = 83;
         evidence.HomeProgress.SeedingUnresolved = evidence.AwayProgress.SeedingUnresolved = null;
         var result = Score(game, evidence, Q(probability), Q(probability));
-        Assert.Equal(expected, result.Stakes.Value!.Value, 12);
+        Assert.Equal(expected, result.Stakes.Value!.Value, 11);
         Assert.NotNull(result.Total);
         Assert.True(result.Quality.Value.HasValue && result.Closeness.Value.HasValue);
         Assert.Contains("qualification-only", result.Stakes.Explanation);
@@ -79,7 +79,7 @@ public sealed class QualificationOnlyStakesTests
         var evidence = ProHypeTests.Evidence(game);
         Assert.Equal(length, evidence.HomeProgress.Scheduled);
         evidence.HomeProgress.Completed = length - 1;
-        Assert.Equal(80, Score(game, evidence, Q(.5), Q(.99)).Stakes.Value);
+        Assert.Equal(45.59340347444945, Score(game, evidence, Q(.5), Q(.99)).Stakes.Value!.Value, 10);
     }
 
     [Theory]
@@ -105,6 +105,20 @@ public sealed class QualificationOnlyStakesTests
         }
     }
 
+    [Theory]
+    [InlineData("nba", 62, 12.778938307019486)]
+    [InlineData("nhl", 64, 12.778938307019486)]
+    [InlineData("mlb", 122, 9.104755493543080)]
+    public void Long_season_stakes_follow_games_remaining_not_the_fraction_of_the_season_played(string sport, int completed, double expected)
+    {
+        var game = ProHypeTests.Game(sport);
+        var evidence = ProHypeTests.Evidence(game);
+        evidence.HomeProgress.Completed = evidence.AwayProgress.Completed = completed;
+        var result = Score(game, evidence, Q(.5), Q(.5));
+        Assert.Equal(expected, result.Stakes.Value!.Value, 10);
+        Assert.Contains("estimated playoff swing", result.Stakes.Explanation);
+    }
+
     [Fact]
     public void The_larger_qualification_contribution_uses_each_teams_own_progress_and_is_symmetric()
     {
@@ -112,7 +126,7 @@ public sealed class QualificationOnlyStakesTests
         var evidence = ProHypeTests.Evidence(game);
         evidence.AwayProgress.Completed = 83;
         var result = Score(game, evidence);
-        Assert.Equal(32.8, result.Stakes.Value!.Value, 10);
+        Assert.Equal(32.47149697414086, result.Stakes.Value!.Value, 10);
         (evidence.HomeProgress, evidence.AwayProgress) = (evidence.AwayProgress, evidence.HomeProgress);
         Assert.Equal(result.Stakes.Value, Score(game, evidence, Q(.795), Q(.365)).Stakes.Value);
     }
