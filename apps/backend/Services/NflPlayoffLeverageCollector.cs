@@ -181,6 +181,44 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
         return null;
     }
 
+    private static NflCorroboratedKickoff? CorroborateKickoff(Game game, Contest source,
+        IReadOnlyCollection<ProCompetitionEvidenceService.Schedule> schedules)
+    {
+        if (source.Start is not DateTime sourceStart || source.Date !=
+            DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(game.ScheduledStart, Eastern))) return null;
+        string? Confirm(string team)
+        {
+            var schedule = schedules.Single(s => Canonical(s.Team) == Canonical(team));
+            var target = schedule.Events.SingleOrDefault(e => e.GetProperty("id").GetString() == game.Id);
+            if (target.ValueKind != System.Text.Json.JsonValueKind.Object ||
+                !target.TryGetProperty("timeValid", out var valid) || valid.ValueKind != System.Text.Json.JsonValueKind.True ||
+                target.GetProperty("season").GetProperty("year").GetInt32() != game.SeasonYear ||
+                target.GetProperty("seasonType").GetProperty("type").GetInt32() != 2 ||
+                target.GetProperty("week").GetProperty("number").GetInt32() != game.WeekNumber ||
+                DateTimeOffset.Parse(target.GetProperty("date").GetString()!, CultureInfo.InvariantCulture).UtcDateTime != game.ScheduledStart)
+                return null;
+            var competition = target.GetProperty("competitions").EnumerateArray().Single();
+            var status = competition.GetProperty("status");
+            var state = status.GetProperty("type");
+            var teams = competition.GetProperty("competitors").EnumerateArray().ToArray();
+            if (!EspnPregameStatus.IsUnstarted("nfl", state.GetProperty("name").GetString(), state.GetProperty("state").GetString(),
+                state.GetProperty("completed").GetBoolean(), status.GetProperty("period").GetInt32()) ||
+                teams.Any(t => t.TryGetProperty("score", out _) && ProCompetitionEvidenceService.ReadScore(t) != 0) ||
+                Canonical(teams.Single(t => t.GetProperty("homeAway").GetString() == "home").GetProperty("team").GetProperty("abbreviation").GetString()!) != Canonical(game.HomeTeamAbbreviation) ||
+                Canonical(teams.Single(t => t.GetProperty("homeAway").GetString() == "away").GetProperty("team").GetProperty("abbreviation").GetString()!) != Canonical(game.AwayTeamAbbreviation)) return null;
+            var next = schedule.Events.Where(e => !schedule.CompletedIds.Contains(e.GetProperty("id").GetString()!))
+                .OrderBy(e => DateTimeOffset.Parse(e.GetProperty("date").GetString()!, CultureInfo.InvariantCulture)).FirstOrDefault();
+            return next.ValueKind == System.Text.Json.JsonValueKind.Object && next.GetProperty("id").GetString() == game.Id ? game.Id : null;
+        }
+        if (Confirm(game.HomeTeamAbbreviation) is not string home || Confirm(game.AwayTeamAbbreviation) is not string away) return null;
+        var match = new NflCorroboratedKickoff
+        {
+            Week = game.WeekNumber.GetValueOrDefault(), SourceScheduledStart = sourceStart, EspnScheduledStart = game.ScheduledStart,
+            HomeGameId = home, AwayGameId = away, HomeNextGameId = home, AwayNextGameId = away
+        };
+        return NflPlayoffLeveragePolicy.ValidCorroboratedKickoff(game, match) ? match : null;
+    }
+
     private static (double Lower, double Upper)? Probability(string value)
     {
         if (value == "<1%") return (0, .01);
@@ -263,10 +301,17 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
                 if (league is null || verified.Problem is not null) { observation.Reason = verified.Problem!; continue; }
                 var home = Teams.SingleOrDefault(t => t.Abbreviation == Canonical(observation.Home));
                 var away = Teams.SingleOrDefault(t => t.Abbreviation == Canonical(observation.Away));
-                var match = league.Games.Where(g => g.Home == home?.Abbreviation && g.Away == away?.Abbreviation && g.Start == game.ScheduledStart && g.Week == game.WeekNumber && !g.HomeScore.HasValue).ToArray();
+                var match = league.Games.Where(g => g.Home == home?.Abbreviation && g.Away == away?.Abbreviation && g.Week == game.WeekNumber && !g.HomeScore.HasValue).ToArray();
                 if (home is null || away is null || match.Length != 1 || new[] { home, away }.Any(t =>
                     league.Games.Where(g => !g.HomeScore.HasValue && (g.Home == t.Abbreviation || g.Away == t.Abbreviation)).OrderBy(g => g.Date).FirstOrDefault() != match[0]))
                 { observation.Reason = "This is not both teams' verified next game on the NFL source schedule"; continue; }
+                if (match[0].Start != game.ScheduledStart)
+                {
+                    observation.CorroboratedKickoff = CorroborateKickoff(game, match[0], schedules);
+                    if (observation.CorroboratedKickoff is null)
+                    { observation.Reason = "Kickoff mismatch lacks a corroborated verified next game in both ESPN schedules"; continue; }
+                    observation.Version = 2;
+                }
                 var homeUrl = $"https://www.playoffstatus.com/nfl/{home.Slug}whatif.html";
                 var awayUrl = $"https://www.playoffstatus.com/nfl/{away.Slug}whatif.html";
                 observation.HomeOdds = ParseTeam(await Fetch(homeUrl), home, away, league, homeUrl);
