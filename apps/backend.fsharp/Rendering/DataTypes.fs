@@ -23,6 +23,7 @@ type HypeComponents() =
     member val StakesScore = 0.0 with get, set
     member val QualityScore = 0.0 with get, set
     member val ClosenessScore = 0.0 with get, set
+    member val CfpRelevance = 1.0 with get, set
     member val NflPlayoffLeverage: backend.Models.NflPlayoffLeverageEvidence = Unchecked.defaultof<_> with get, set
     member val HomeTeamElo: Nullable<float> = Nullable<float>() with get, set
     member val AwayTeamElo: Nullable<float> = Nullable<float>() with get, set
