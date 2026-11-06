@@ -467,6 +467,31 @@ public sealed class CollegeFootballTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Close_game_between_teams_out_of_CFP_contention_gets_almost_no_hype_from_closeness()
+    {
+        provider.Events.Add(Provider.Event("1", "2483", "ORE", "68", "BOIS")); provider.List("26SEP16", "ORE", "BSU"); await Run();
+        using var scope = app.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+        foreach (var team in new[] { "ORE", "BOIS" }) db.TeamRatings.Add(new TeamRating
+        {
+            Sport = "cfb",
+            TeamAbbreviation = team,
+            Source = "kalshi",
+            Season = 2026,
+            SourceSeason = 2026,
+            PlayoffProbability = .005,
+            FetchedAt = clock.Now.UtcDateTime
+        });
+        await db.SaveChangesAsync(); var game = Assert.Single(await Games());
+        var hype = scope.ServiceProvider.GetRequiredService<HypeScoreService>();
+        var components = await hype.GetHypeComponentsAsync(game, null);
+        Assert.Equal(100, components.ClosenessScore);
+        var score = (await hype.CalculateHypeScoreAsync(game, null)).GetValueOrDefault(double.NaN);
+        Assert.InRange(score - (components.StakesScore * .45 + components.QualityScore * .35), 0, .5);
+        var text = await Text("/game/1");
+        Assert.Contains("Closeness100", text); Assert.Contains("Hype counts 1% of Closeness", text);
+    }
+
+    [Fact]
     public async Task Invalid_roster_season_is_not_evidence_of_current_membership()
     {
         provider.WrongSeason = true;

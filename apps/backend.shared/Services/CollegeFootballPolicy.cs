@@ -47,15 +47,25 @@ public static class CollegeFootballPolicy
         if (game.CollegeCompetition == "cfp") return 100;
         if (game.CollegeCompetition == "conference_championship") return 80;
         if (game.CollegeCompetition == "bowl") return 0;
-        if (game.CollegeCompetition != "regular" || !Probability(homeQualification) || !Probability(awayQualification)) return null;
+        if (CfpRelevance(game, homeQualification, awayQualification) is not double relevance) return null;
         var year = game.SeasonYear ?? SeasonAt(game.ScheduledStart);
         var progress = Math.Clamp((game.ScheduledStart - new DateTime(year, 8, 22)).TotalDays / 106, 0, 1);
         var urgency = (Math.Exp(3 * progress) - 1) / (Math.Exp(3) - 1);
         var h = homeQualification!.Value;
         var a = awayQualification!.Value;
-        var bubble = ((1 - Math.Abs(h - .5) * 2) + (1 - Math.Abs(a - .5) * 2)) / 2;
-        return Math.Clamp((40 * bubble + 30 * Math.Min(h, a)) * urgency + 20 * progress, 0, 90);
+        return Math.Clamp((40 * Bubble(h, a) + 30 * Math.Min(h, a)) * urgency + 20 * progress * relevance, 0, 90);
     }
+
+    public static double? CfpRelevance(Game game, double? homeQualification, double? awayQualification)
+    {
+        if (game.CollegeCompetition is "cfp" or "conference_championship" or "bowl") return 1;
+        if (game.CollegeCompetition != "regular" || !Probability(homeQualification) || !Probability(awayQualification)) return null;
+        var h = homeQualification!.Value;
+        var a = awayQualification!.Value;
+        return Math.Max(Bubble(h, a), Math.Min(h, a));
+    }
+
+    private static double Bubble(double h, double a) => ((1 - Math.Abs(h - .5) * 2) + (1 - Math.Abs(a - .5) * 2)) / 2;
 
     public static bool Probability(double? value) => value is double p && double.IsFinite(p) && p >= 0 && p <= 1;
     public static bool Fresh(DateTime? timestamp, DateTime now, TimeSpan age) =>

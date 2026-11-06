@@ -109,5 +109,32 @@ public sealed class CollegePolicyTests
         game.CollegeCompetition = "cfp"; Assert.Equal(100, CollegeFootballPolicy.Stakes(game, null, null));
         game.CollegeCompetition = "conference_championship"; Assert.Equal(80, CollegeFootballPolicy.Stakes(game, null, null));
         game.CollegeCompetition = "bowl"; Assert.Equal(0, CollegeFootballPolicy.Stakes(game, null, null));
+        foreach (var competition in new[] { "cfp", "conference_championship", "bowl" })
+        {
+            game.CollegeCompetition = competition; Assert.Equal(1, CollegeFootballPolicy.CfpRelevance(game, null, null));
+        }
+    }
+
+    [Fact]
+    public void Late_season_stakes_come_from_CFP_qualification_not_the_calendar()
+    {
+        var game = new Game
+        {
+            Id = "test",
+            Sport = "cfb",
+            HomeTeam = "ECU",
+            AwayTeam = "USF",
+            HomeTeamAbbreviation = "ECU",
+            AwayTeamAbbreviation = "USF",
+            CollegeCompetition = "regular",
+            SeasonYear = 2026,
+            ScheduledStart = new DateTime(2026, 11, 7, 0, 30, 0, DateTimeKind.Utc)
+        };
+        Assert.InRange(CollegeFootballPolicy.Stakes(game, .005, .005)!.Value, 0, 1);
+        Assert.Equal(.01, CollegeFootballPolicy.CfpRelevance(game, .005, .005)!.Value, 6);
+        Assert.Equal(.475, CollegeFootballPolicy.CfpRelevance(game, .53, .005)!.Value, 6);
+        Assert.Equal(.57, CollegeFootballPolicy.CfpRelevance(game, .92, .57)!.Value, 6);
+        Assert.True(CollegeFootballPolicy.Stakes(game, .53, .005) > CollegeFootballPolicy.Stakes(game, .005, .005) + 10);
+        Assert.Null(CollegeFootballPolicy.CfpRelevance(game, .5, null));
     }
 }
