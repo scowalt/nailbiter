@@ -176,11 +176,17 @@ type HypeScoreService
             let stakes = CollegeFootballPolicy.Stakes(game, homeQualification, awayQualification)
             c.StakesAvailable <- stakes.HasValue
             c.StakesScore <- stakes.GetValueOrDefault()
+            c.CfpRelevance <- CollegeFootballPolicy.CfpRelevance(game, homeQualification, awayQualification).GetValueOrDefault(1.0)
             if CollegeFootballPolicy.UsablePregameOdds(game, pregame, now) then
                 c.ClosenessAvailable <- true
                 c.ClosenessScore <- calculateCloseness pregame.HomeWinProbability
-                if GameWinnerProbabilityPolicy.IsBound(pregame.Source) then
-                    c.ClosenessExplanation <- "Closeness uses a near-certain market bound, not an exact quoted probability."
+                let counted = int (Math.Round(c.CfpRelevance * 100.0))
+                c.ClosenessExplanation <-
+                    [ if GameWinnerProbabilityPolicy.IsBound(pregame.Source) then
+                          "Closeness uses a near-certain market bound, not an exact quoted probability."
+                      if counted < 100 then
+                          $"Hype counts {counted}%% of Closeness, matching how much the result can affect CFP qualification." ]
+                    |> String.concat " "
         c
 
     static let proEvaluation (game: Game) (ratings: seq<TeamRating>) (pregame: PregameOdds) completed now (options: PlayoffRatingsOptions) (selectionCache: PlayoffRatingPolicy.PlayoffSelectionCache) (logger: ILogger<HypeScoreService>) =
@@ -527,7 +533,7 @@ type HypeScoreService
                 |> Option.ofNullable |> Option.defaultValue Double.NaN
         elif sport = "cfb" then
             if not components.IsComplete then Double.NaN
-            else components.StakesScore * 0.45 + components.QualityScore * 0.35 + components.ClosenessScore * 0.20
+            else components.StakesScore * 0.45 + components.QualityScore * 0.35 + components.ClosenessScore * components.CfpRelevance * 0.20
         else
         let struct (stakesWeight, qualityWeight, closenessWeight) =
             match weights.TryGetValue(sport.ToLower()) with
