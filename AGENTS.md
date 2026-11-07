@@ -4,7 +4,6 @@ The canonical public development, issue/PR, CI and CD repository is `scowalt/nai
 
 ## Source and review
 
-- Use Git Town for branch operations where available; use a standard Git feature branch if its terminal interaction fails.
 - Make changes through reviewed PRs. Push/create PRs only when the current task authorizes GitHub writes. Preserve required checks and protection; never merge directly to main or bypass failures.
 - Preserve application behavior, data, backups, provider flags and deployment identity unless the task explicitly approves those changes.
 - Keep frontend, marketing and backend independently buildable. Runtime pins are in `.mise.toml` and `apps/backend/global.json`.
