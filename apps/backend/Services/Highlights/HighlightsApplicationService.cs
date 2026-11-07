@@ -336,8 +336,11 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
         && current.AwayTeamAbbreviation == original.AwayTeamAbbreviation && current.HomeTeamId == original.HomeTeamId
         && current.AwayTeamId == original.AwayTeamId && current.SeasonYear == original.SeasonYear && current.ScheduledStart == original.ScheduledStart;
 
-    private Task<Game?> LockAsync(string id, CancellationToken cancellationToken) => db.Games
-        .FromSqlInterpolated($"SELECT * FROM games WHERE id = {id} FOR UPDATE").SingleOrDefaultAsync(cancellationToken);
+    private async Task<Game?> LockAsync(string id, CancellationToken cancellationToken)
+    {
+        await db.LockProHypeFenceAsync(cancellationToken);
+        return await db.Games.FromSqlInterpolated($"SELECT * FROM games WHERE id = {id} FOR UPDATE").SingleOrDefaultAsync(cancellationToken);
+    }
 
     private async Task<bool> LockVideoChoiceAsync(string gameId, string videoId, CancellationToken cancellationToken)
     {

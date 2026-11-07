@@ -34,6 +34,9 @@ public class ExcitementDbContext : DbContext
     public DbSet<IndyCarRaceResult> IndyCarRaceResults => Set<IndyCarRaceResult>();
     public DbSet<IndyCarRaceSnapshot> IndyCarRaceSnapshots => Set<IndyCarRaceSnapshot>();
 
+    public async Task LockProHypeFenceAsync(CancellationToken ct) => await Database.ExecuteSqlRawAsync(
+        "LOCK TABLE games IN ROW EXCLUSIVE MODE; SELECT id FROM pro_hype_revision WHERE id = 1 FOR UPDATE", ct);
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<ProHypeSnapshot>(entity =>
