@@ -1,3 +1,5 @@
+using backend.Data;
+
 namespace backend.Services;
 
 public sealed class ProHypeCaptureBackgroundService(IServiceScopeFactory scopes, TimeProvider clock,
@@ -10,7 +12,10 @@ public sealed class ProHypeCaptureBackgroundService(IServiceScopeFactory scopes,
             try
             {
                 await using var scope = scopes.CreateAsyncScope();
-                await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync(stoppingToken);
+                var services = scope.ServiceProvider;
+                await services.GetRequiredService<IProHypeLifecycle>().CaptureAsync(stoppingToken);
+                await StartHypes.CaptureCollegeAsync(services.GetRequiredService<ExcitementDbContext>(),
+                    services.GetRequiredService<HypeScoreService>(), clock.GetUtcNow().UtcDateTime, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception ex) { logger.LogError(ex, "Pro hype capture failed"); }

@@ -33,12 +33,12 @@ module internal QualificationCredit =
             Text.raw " team-strength rankings."
         ]
 
-    let renderQualityForGames (games: seq<Game>) (hypeScores: IDictionary<string, Nullable<float>>) (hypeCredits: IDictionary<string, DerivedHypeCredit>) =
+    let renderQualityForGames (showsHype: Game -> bool) (games: seq<Game>) (hypeScores: IDictionary<string, Nullable<float>>) (hypeCredits: IDictionary<string, DerivedHypeCredit>) =
         let usesGuru =
             games |> Seq.exists (fun game ->
                 match hypeScores.TryGetValue game.Id, hypeCredits.TryGetValue game.Id with
                 | (true, score), (true, credit) ->
-                    game.Status = "scheduled" && not game.IsHistoricalImport && score.HasValue && Double.IsFinite score.Value
+                    showsHype game && not game.IsHistoricalImport && score.HasValue && Double.IsFinite score.Value
                     && credit.QualitySource = NhlPowerRankingsGuruService.Source
                 | _ -> false)
         [ if usesGuru then renderQuality "quality-credit" true ]
@@ -90,6 +90,20 @@ module HomePageRenderer =
         match hypeScores.TryGetValue(game.Id) with
         | true, h when h.HasValue && Double.IsFinite h.Value -> h
         | _ -> Nullable<float>()
+
+    let private finite (score: Nullable<float>) =
+        if score.HasValue && Double.IsFinite score.Value then Some score.Value else None
+
+    let private liveRank (scores: IDictionary<string, Nullable<float>>) hypeScores (game: Game) =
+        let excitement =
+            match scores.TryGetValue game.Id with
+            | true, score -> finite score
+            | _ -> None
+        match excitement, finite (availableHype game hypeScores) with
+        | Some e, Some h -> Some ((e + h) / 2.0)
+        | Some value, None
+        | None, Some value -> Some value
+        | None, None -> None
 
     let private homeSection (game: Game) hypeScores =
         match game.Status with
@@ -245,19 +259,28 @@ module HomePageRenderer =
                         if series.IsSome then Elem.div [ cls "metric-trend" ] [ sparkline ]
                         else sparkline
                     ]
-                    Elem.div [ yield Attr.id $"excitement-{game.Id}"
-                               if series.IsSome then yield cls "excitement-aside" ] [
-                        if game.Sport = "cfb" && not excitementScore.HasValue then
-                            Elem.span [ cls "unavailable-note" ] [ Text.raw "Excitement unavailable" ]
-                        if excitementScore.HasValue then
-                            let level = FormatHelpers.getExcitementLevel excitementScore
-                            let levelClass = FormatHelpers.excitementLevelClass level
-                            Elem.div [ cls "metric-block" ] [
-                                Elem.span [ cls "metric-label" ] [ Text.raw "Excitement" ]
-                                Elem.span [ cls $"metric-value {levelClass}" ] [
-                                    Text.raw $"{Math.Round(excitementScore.Value)}"
+                    Elem.div [ cls "observed-scores" ] [
+                        if hypeScore.HasValue then
+                            Elem.div [ cls "metric-block"; Attr.id $"hype-{game.Id}" ] [
+                                Elem.span [ cls "metric-label" ] [ Text.raw "Hype" ]
+                                Elem.span [ cls $"metric-value {FormatHelpers.getHypeLevel hypeScore |> FormatHelpers.hypeLevelClass}" ] [
+                                    Text.raw $"{Math.Round(hypeScore.Value)}"
                                 ]
                             ]
+                        Elem.div [ yield Attr.id $"excitement-{game.Id}"
+                                   if series.IsSome then yield cls "excitement-aside" ] [
+                            if game.Sport = "cfb" && not excitementScore.HasValue then
+                                Elem.span [ cls "unavailable-note" ] [ Text.raw "Excitement unavailable" ]
+                            if excitementScore.HasValue then
+                                let level = FormatHelpers.getExcitementLevel excitementScore
+                                let levelClass = FormatHelpers.excitementLevelClass level
+                                Elem.div [ cls "metric-block" ] [
+                                    Elem.span [ cls "metric-label" ] [ Text.raw "Excitement" ]
+                                    Elem.span [ cls $"metric-value {levelClass}" ] [
+                                        Text.raw $"{Math.Round(excitementScore.Value)}"
+                                    ]
+                                ]
+                        ]
                     ]
                 ]
         ]
@@ -277,6 +300,9 @@ module HomePageRenderer =
                         for key, label in
                             [ "live", "Live now"; "best", "Best games"; "good", "Good games"; "more", "More games"; "other", "Other games" ] do
                             let cards = games |> Seq.filter (fun g -> homeSection g hypeScores = key) |> Seq.toList
+                            let cards =
+                                if key <> "live" then cards
+                                else cards |> List.sortBy (fun g -> liveRank scores hypeScores g |> Option.map (~-) |> Option.defaultValue infinity)
                             if not cards.IsEmpty then
                                 Elem.section [ cls "home-section"; Attr.id $"home-section-{key}"; Attr.create "aria-labelledby" $"home-heading-{key}"; Attr.create "data-single-game" (if cards.Length = 1 then "true" else "false") ] [
                                     Elem.h2 [ cls "home-section-title"; Attr.id $"home-heading-{key}" ] [ Text.raw label ]
@@ -286,7 +312,7 @@ module HomePageRenderer =
                                     ]
                                 ]
                     ]
-                yield! QualificationCredit.renderQualityForGames games hypeScores hypeCredits
+                yield! QualificationCredit.renderQualityForGames (fun g -> g.Status = "scheduled" || g.Status = "in_progress") games hypeScores hypeCredits
             ]
         ]
 

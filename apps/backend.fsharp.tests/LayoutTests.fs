@@ -24,7 +24,7 @@ let ``page links the layered stylesheets in cascade order`` () =
         |> Seq.toList
 
     Assert.Equal<string list>(
-        [ for name in [ "global"; "components"; "games"; "world-cup"; "motorsport" ] -> $"/css/{name}.css?v=2026-11-07-plain-css" ],
+        [ for name in [ "global"; "components"; "games"; "world-cup"; "motorsport" ] -> $"/css/{name}.css?v=2026-11-07-start-hype" ],
         sheets)
 
 [<Fact>]

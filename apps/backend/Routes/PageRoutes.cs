@@ -1,3 +1,4 @@
+using backend.Data;
 using backend.GraphQL.Types;
 using backend.Models;
 using backend.Scoring;
@@ -5,6 +6,7 @@ using backend.Services;
 using backend.Services.Highlights;
 using Backend.Rendering;
 using Falco.Markup;
+using Microsoft.FSharp.Collections;
 using Microsoft.FSharp.Core;
 
 namespace backend.Routes;
@@ -59,20 +61,25 @@ public static class PageRoutes
             if (resolution.Game is null) { games.RemoveAt(index--); continue; }
             game = games[index] = resolution.Game;
             scores[game.Id] = resolution.Total;
-            if (!resolution.Total.HasValue) continue;
-            var components = resolution.Components;
-            var teams = new List<string>();
-            if (components.AwayQualificationEvidenceKind == ProQualificationEvidenceKind.MoneyPuckModel)
-                teams.Add(game.AwayTeamAbbreviation);
-            if (components.HomeQualificationEvidenceKind == ProQualificationEvidenceKind.MoneyPuckModel)
-                teams.Add(game.HomeTeamAbbreviation);
-            if (teams.Count > 0 || components.QualitySource == NhlPowerRankingsGuruService.Source)
-                credits[game.Id] = new DerivedHypeCredit(teams.ToFSharpList(), components.QualitySource);
+            if (resolution.Total.HasValue && StartHypes.Credit(game, resolution.Components) is { } credit)
+                credits[game.Id] = credit;
         }
         return (scores, credits);
     }
 
-    private static async Task<IResult> HandleHomePage(GameDataService svc, HypeScoreService hypeSvc, IProHypeLifecycle lifecycle, CancellationToken ct)
+    private static async Task AddStartHypeAsync(List<Game> games, ExcitementDbContext db,
+        Dictionary<string, double?> scores, Dictionary<string, DerivedHypeCredit> credits, CancellationToken ct)
+    {
+        var started = await StartHypes.LoadAsync(db, games.Where(g => g.Status == "in_progress").Select(g => g.Id), ct);
+        foreach (var (id, hype) in started)
+        {
+            scores[id] = hype.Total;
+            if (hype.QualitySource is not null)
+                credits[id] = new DerivedHypeCredit(ListModule.OfSeq(hype.MoneyPuckTeams), hype.QualitySource);
+        }
+    }
+
+    private static async Task<IResult> HandleHomePage(GameDataService svc, HypeScoreService hypeSvc, IProHypeLifecycle lifecycle, ExcitementDbContext db, CancellationToken ct)
     {
         var todaysGames = await svc.GetTodaysGamesAsync(ct);
         var liveGames = await svc.GetLiveGamesAsync(ct);
@@ -95,6 +102,7 @@ public static class PageRoutes
             : new Dictionary<string, double?>();
 
         var (hypeScores, hypeCredits) = await GetGameHypeAsync(allGames, hypeSvc, lifecycle, ct);
+        await AddStartHypeAsync(allGames, db, hypeScores, hypeCredits, ct);
 
         var teamRanks = await GetGameTeamRanksAsync(allGames, svc, ct);
 

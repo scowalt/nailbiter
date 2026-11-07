@@ -2,6 +2,7 @@ using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
 using backend.Data;
 using backend.Models;
+using backend.Services;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -184,6 +185,30 @@ public sealed class GroupedHomePageTests : IAsyncLifetime
         Assert.Equal("Live", page.QuerySelector("#status-live")!.TextContent);
         Assert.Equal("Final", page.QuerySelector("#status-final")!.TextContent);
         Assert.Contains("Q3 5:30", page.QuerySelector("#clock-live")!.TextContent);
+    }
+
+    [Fact]
+    public async Task Live_games_keep_the_hype_captured_before_kickoff_and_lead_with_the_most_hyped()
+    {
+        await StoreCollege("seventy", 20, "cfp", 0, 0, .8125);
+        await StoreCollege("forty", 18, "bowl", 12000, 12000, .875);
+        await Store(Game("unrated", 17, "in_progress"));
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+            await StartHypes.CaptureCollegeAsync(db, scope.ServiceProvider.GetRequiredService<HypeScoreService>(), clock.Now.UtcDateTime, default);
+            foreach (var game in await db.Games.Where(g => g.Sport == "cfb").ToListAsync())
+                game.Status = "in_progress";
+            await db.SaveChangesAsync();
+            await StartHypes.CaptureCollegeAsync(db, scope.ServiceProvider.GetRequiredService<HypeScoreService>(), clock.Now.UtcDateTime, default);
+        }
+
+        using var page = await Page();
+        Assert.Equal(["Live now"], Headings(page));
+        Assert.Equal(["seventy", "forty", "unrated"], Cards(Section(page, "Live now")));
+        Assert.Equal("Hype70", page.QuerySelector("#hype-seventy")!.TextContent.Replace(" ", ""));
+        Assert.Equal("Hype40", page.QuerySelector("#hype-forty")!.TextContent.Replace(" ", ""));
+        Assert.Null(page.QuerySelector("#hype-unrated"));
     }
 
     [Fact]
