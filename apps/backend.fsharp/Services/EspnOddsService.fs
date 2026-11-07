@@ -124,9 +124,21 @@ type EspnOddsService
             | Some d -> url <- url + $"?dates={d}"
             | None -> ()
 
+            let readScoreboard () =
+                task {
+                    let! body = httpClient.GetStringAsync(url, ct)
+                    return struct (body, JsonDocument.Parse(body))
+                }
+
             try
-                let! response = httpClient.GetStringAsync(url, ct)
-                use document = JsonDocument.Parse(response)
+                let! struct (response, parsed) =
+                    task {
+                        try return! readScoreboard ()
+                        with :? JsonException as ex ->
+                            logger.LogWarning(ex, "Refetching malformed ESPN scoreboard for {Sport} on {Date}", sport, (defaultArg date "today"))
+                            return! readScoreboard ()
+                    }
+                use document = parsed
                 let scoreboard =
                     try JsonSerializer.Deserialize<EspnScoreboardResponse>(response)
                     with :? JsonException when supportsSeries ->
