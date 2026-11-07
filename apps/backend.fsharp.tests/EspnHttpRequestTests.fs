@@ -40,6 +40,22 @@ type private CapturingHandler(statusCode: HttpStatusCode, json: string) =
         response.Content <- new StringContent(json, Encoding.UTF8, "application/json")
         Task.FromResult(response)
 
+type private SequenceHandler(bodies: string list) =
+    inherit HttpMessageHandler()
+
+    let mutable remaining = bodies
+    let mutable requests = 0
+
+    member _.Requests = requests
+
+    override _.SendAsync(_request: HttpRequestMessage, _ct: CancellationToken) =
+        requests <- requests + 1
+        let body = List.head remaining
+        if not (List.isEmpty (List.tail remaining)) then remaining <- List.tail remaining
+        let response = new HttpResponseMessage(HttpStatusCode.OK)
+        response.Content <- new StringContent(body, Encoding.UTF8, "application/json")
+        Task.FromResult(response)
+
 type private RecordingLogger<'T>() =
     let levels = ResizeArray<LogLevel>()
 
@@ -246,6 +262,52 @@ let ``non-ESPN clients retain their existing origin and headers`` () =
         for request in handler.Requests do
             Assert.Equal("api.elections.kalshi.com", request.Uri.Host)
             Assert.Equal("application/json", request.Accept)
+    }
+
+let private scoreboardWith (bodies: string list) =
+    let handler = new SequenceHandler(bodies)
+    let logger = RecordingLogger<EspnOddsService>()
+
+    let service =
+        EspnOddsService(
+            new HttpClient(handler),
+            logger,
+            Unchecked.defaultof<IServiceProvider>,
+            Unchecked.defaultof<IGameUpdateService>,
+            Unchecked.defaultof<KalshiOddsService>
+        )
+
+    task {
+        let! result = service.FetchScoreboardAsync("nba", date = "20260823")
+        return result, handler.Requests, logger.Levels
+    }
+
+[<Theory>]
+[<InlineData("")>]
+[<InlineData("<html><body>Service Unavailable</body></html>")>]
+[<InlineData("{\"leagues\":[],\"events\":[{\"id\":\"9")>]
+let ``one malformed ESPN scoreboard body is refetched without an error log`` (body: string) =
+    task {
+        let! result, requests, levels = scoreboardWith [ body; "{\"leagues\":[],\"events\":[]}" ]
+
+        Assert.NotNull(box result)
+        Assert.Empty(result.Events)
+        Assert.Equal(2, requests)
+        Assert.DoesNotContain(LogLevel.Error, levels)
+        Assert.Contains(LogLevel.Warning, levels)
+    }
+
+[<Theory>]
+[<InlineData("")>]
+[<InlineData("<html><body>Service Unavailable</body></html>")>]
+[<InlineData("{\"leagues\":[],\"events\":[{\"id\":\"9")>]
+let ``repeated malformed ESPN scoreboard bodies are fetched twice and remain error logged`` (body: string) =
+    task {
+        let! result, requests, levels = scoreboardWith [ body ]
+
+        Assert.Null(box result)
+        Assert.Equal(2, requests)
+        Assert.Contains(LogLevel.Error, levels)
     }
 
 [<Fact>]
