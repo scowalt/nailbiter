@@ -66,6 +66,7 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
         var evaluatedAt = clock.GetUtcNow().UtcDateTime;
         await using var db = new ExcitementDbContext(databaseOptions);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlRawAsync("LOCK TABLE games, team_ratings, pregame_odds IN ACCESS SHARE MODE", ct);
         var revision = await db.ProHypeRevisions.FromSqlRaw("SELECT * FROM pro_hype_revision WHERE id = 1 FOR UPDATE").AsNoTracking().SingleAsync(ct);
         var now = clock.GetUtcNow().UtcDateTime;
         var game = await db.Games.AsNoTracking().SingleOrDefaultAsync(g => g.Id == gameId, ct);

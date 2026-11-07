@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Time.Testing;
+using Npgsql;
 using Testcontainers.PostgreSql;
 using Xunit;
 
@@ -24,6 +25,7 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
     private readonly Clock clock = new();
     private readonly NoNetwork network = new();
     private readonly TransactionGate gate = new();
+    private readonly FenceGate fence = new();
     private WebApplicationFactory<Program>? app;
     private DbContextOptions<ExcitementDbContext> options = null!;
 
@@ -86,6 +88,20 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
         }
     }
 
+    private sealed class FenceGate : DbCommandInterceptor
+    {
+        private readonly AsyncTestGate gate = new();
+        public TaskCompletionSource Entered => gate.Entered;
+        public void Arm() => gate.Arm();
+        public void Release() => gate.Release();
+        public override async ValueTask<InterceptionResult> DataReaderClosingAsync(DbCommand command,
+            DataReaderClosingEventData eventData, InterceptionResult result)
+        {
+            if (command.CommandText.Contains("pro_hype_revision", StringComparison.Ordinal)) await gate.EnterAsync(default);
+            return result;
+        }
+    }
+
     public async Task InitializeAsync()
     {
         await database.StartAsync();
@@ -137,7 +153,7 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
             {
                 services.RemoveAll<IDbContextOptionsConfiguration<ExcitementDbContext>>();
                 services.RemoveAll<DbContextOptions<ExcitementDbContext>>();
-                services.AddDbContext<ExcitementDbContext>(o => o.UseNpgsql(database.GetConnectionString()).AddInterceptors(gate));
+                services.AddDbContext<ExcitementDbContext>(o => o.UseNpgsql(database.GetConnectionString()).AddInterceptors(gate, fence));
                 services.RemoveAll<TimeProvider>();
                 services.AddSingleton<TimeProvider>(clock);
                 services.AddSingleton<IHttpMessageHandlerBuilderFilter>(network);
@@ -380,6 +396,56 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
         Assert.Equal(100, retained.Components.ClosenessScore);
         Assert.Equal(ProHypeTests.Now, retained.EvaluatedAt);
         Assert.Equal(0, network.Requests);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Capture_and_a_migration_replay_that_alters_then_writes_games_both_commit(bool migrationFirst)
+    {
+        var game = await Seed();
+        Start(captureEnabled: false);
+        var replay = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", "022_WorldCupOvertime.sql"));
+        var write = replay.IndexOf("UPDATE games", StringComparison.Ordinal);
+        await using var migration = new NpgsqlConnection(database.GetConnectionString());
+        await migration.OpenAsync();
+        Task capture;
+        Task migrate;
+        if (migrationFirst)
+        {
+            gate.Arm();
+            capture = Capture();
+            await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await new NpgsqlCommand(replay[..write], migration).ExecuteNonQueryAsync();
+            gate.Release();
+            await BlockedOnLock();
+            migrate = new NpgsqlCommand(replay[write..], migration).ExecuteNonQueryAsync();
+        }
+        else
+        {
+            fence.Arm();
+            capture = Capture();
+            await fence.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            migrate = new NpgsqlCommand(replay, migration).ExecuteNonQueryAsync();
+            await BlockedOnLock();
+            fence.Release();
+        }
+        await Task.WhenAll(capture, migrate).WaitAsync(TimeSpan.FromSeconds(30));
+        await using var db = new ExcitementDbContext(options);
+        Assert.NotNull((await db.ProHypeSnapshots.SingleAsync(s => s.GameId == game.Id)).SnapshotJson);
+    }
+
+    private async Task BlockedOnLock()
+    {
+        await using var observer = new NpgsqlConnection(database.GetConnectionString());
+        await observer.OpenAsync();
+        await using var waiting = new NpgsqlCommand("SELECT EXISTS (SELECT 1 FROM pg_locks WHERE NOT granted)", observer);
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (!(bool)(await waiting.ExecuteScalarAsync())!)
+        {
+            Assert.True(DateTime.UtcNow < deadline, "no session blocked on a lock");
+            await Task.Delay(10);
+        }
     }
 
     private async Task RefreshInputs(string id, DateTime observedAt, string[]? completed = null) => await Change(async db =>
