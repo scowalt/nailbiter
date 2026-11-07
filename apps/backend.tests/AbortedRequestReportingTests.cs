@@ -1,10 +1,13 @@
 using System.Collections.Concurrent;
+using System.Data.Common;
 using backend.Data;
 using backend.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -39,9 +42,24 @@ public sealed class AbortedRequestReportingTests
         await oddsLock.WaitForBlockedQueryAsync();
         abort.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
+        var status = await app.RequestCompleted(path);
+
+        Assert.Equal(StatusCodes.Status499ClientClosedRequest, status);
+        Assert.DoesNotContain(app.Events, e => e.Path == path && e.IsQueryCancellation);
+    }
+
+    [Fact]
+    public async Task Cancellation_while_the_client_is_connected_is_still_reported_as_an_unhandled_error()
+    {
+        const string path = "/api/games/" + GameId + "/odds";
+        await using var app = await ReportingApp.StartAsync(connectionOptions: "", new CancelOddsQueries());
+
+        await Record.ExceptionAsync(() => app.Client.GetAsync(path));
         await app.RequestCompleted(path);
 
-        Assert.DoesNotContain(app.Events, e => e.Path == path && e.IsQueryCancellation);
+        var reported = Assert.Single(app.Events, e => e.Path == path && e.IsQueryCancellation);
+        Assert.False(reported.Handled);
+        Assert.IsType<OperationCanceledException>(reported.Exception);
     }
 
     [Fact]
@@ -77,9 +95,9 @@ public sealed class AbortedRequestReportingTests
         private readonly AppFactory entry = new();
         private readonly WebApplicationFactory<Program> app;
         private readonly SentryRecorder recorder = new();
-        private readonly ConcurrentDictionary<string, TaskCompletionSource> completed = new();
+        private readonly ConcurrentDictionary<string, TaskCompletionSource<int>> completed = new();
 
-        private ReportingApp(PostgreSqlContainer database, string connectionString)
+        private ReportingApp(PostgreSqlContainer database, string connectionString, IInterceptor[] interceptors)
         {
             this.database = database;
             app = entry.WithWebHostBuilder(builder =>
@@ -89,7 +107,7 @@ public sealed class AbortedRequestReportingTests
                 {
                     services.RemoveAll<IDbContextOptionsConfiguration<ExcitementDbContext>>();
                     services.RemoveAll<DbContextOptions<ExcitementDbContext>>();
-                    services.AddDbContext<ExcitementDbContext>(options => options.UseNpgsql(connectionString));
+                    services.AddDbContext<ExcitementDbContext>(options => options.UseNpgsql(connectionString).AddInterceptors(interceptors));
                     services.PostConfigure<SentryAspNetCoreOptions>(options =>
                     {
                         options.Dsn = "https://public@sentry.invalid/1";
@@ -105,11 +123,11 @@ public sealed class AbortedRequestReportingTests
         public HttpClient Client { get; }
         public IEnumerable<ReportedEvent> Events => recorder.Events;
 
-        public static async Task<ReportingApp> StartAsync(string connectionOptions)
+        public static async Task<ReportingApp> StartAsync(string connectionOptions, params IInterceptor[] interceptors)
         {
             var database = IsolatedPostgreSql.CreateContainer();
             await database.StartAsync();
-            var started = new ReportingApp(database, database.GetConnectionString() + connectionOptions);
+            var started = new ReportingApp(database, database.GetConnectionString() + connectionOptions, interceptors);
             using var scope = started.app.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
             await db.Database.EnsureCreatedAsync();
@@ -133,7 +151,7 @@ public sealed class AbortedRequestReportingTests
             return new OddsLock(database.GetConnectionString(), connection, transaction);
         }
 
-        public Task RequestCompleted(string path) =>
+        public Task<int> RequestCompleted(string path) =>
             completed.GetOrAdd(path, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).Task.WaitAsync(TimeSpan.FromSeconds(30));
 
         public async ValueTask DisposeAsync()
@@ -166,7 +184,17 @@ public sealed class AbortedRequestReportingTests
         }
     }
 
-    private sealed class CompletionSignalOutsideSentry(ConcurrentDictionary<string, TaskCompletionSource> completed) : IStartupFilter
+    private sealed class CancelOddsQueries : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default) =>
+            command.CommandText.Contains("odds_snapshots")
+                ? throw new OperationCanceledException("Synthetic server-side cancellation")
+                : base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+    }
+
+    private sealed class CompletionSignalOutsideSentry(ConcurrentDictionary<string, TaskCompletionSource<int>> completed) : IStartupFilter
     {
         public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
         {
@@ -175,7 +203,7 @@ public sealed class AbortedRequestReportingTests
                 try { await inner(context); }
                 finally
                 {
-                    completed.GetOrAdd(context.Request.Path, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult();
+                    completed.GetOrAdd(context.Request.Path, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult(context.Response.StatusCode);
                 }
             });
             next(app);
