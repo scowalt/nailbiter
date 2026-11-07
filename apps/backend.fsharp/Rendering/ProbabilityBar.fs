@@ -11,7 +11,7 @@ module ProbabilityBar =
 
     let divider probability =
         Elem.div [
-            cls "probability-divider absolute top-0 h-full"
+            cls "probability-divider"
             Attr.style $"left: {percent probability}; width: 2px; transform: translateX(-50%%); background: #fafafa; box-shadow: 0 0 0 1px #18181b"
         ] []
 
@@ -22,17 +22,17 @@ module ProbabilityBar =
         let awayLabel = label awayAbbr awayProbability
         Elem.div [ Attr.create "role" "group"; Attr.create "aria-label" "Win probability" ] [
             if not compact then
-                Elem.div [ cls "text-sm text-text-secondary text-center mb-1" ] [ Text.raw "Win Probability" ]
-            Elem.div [ cls (if compact then "flex justify-between gap-2 text-xs font-medium tabular-nums text-text-secondary mb-1" else "flex justify-between gap-2 text-sm font-medium tabular-nums text-text-secondary mb-1") ] [
+                Elem.div [ cls "probability-title" ] [ Text.raw "Win Probability" ]
+            Elem.div [ cls (if compact then "probability-labels is-compact" else "probability-labels") ] [
                 Elem.span [] [ Text.enc awayLabel ]
-                Elem.span [ cls "text-right" ] [ Text.enc homeLabel ]
+                Elem.span [ cls "probability-home-label" ] [ Text.enc homeLabel ]
             ]
             Elem.div [
-                cls (if compact then "probability-track relative h-1.5 rounded-full overflow-hidden flex" else "probability-track relative h-3 rounded-full overflow-hidden flex")
+                cls (if compact then "probability-track is-compact" else "probability-track")
                 Attr.create "aria-hidden" "true"
             ] [
-                Elem.div [ cls "probability-away h-full flex-shrink-0"; Attr.style $"width: {percent awayProbability}; background: {colors.Away}" ] []
-                Elem.div [ cls "probability-home h-full flex-shrink-0"; Attr.style $"width: {percent homeProbability}; background: {colors.Home}" ] []
+                Elem.div [ cls "probability-away"; Attr.style $"width: {percent awayProbability}; background: {colors.Away}" ] []
+                Elem.div [ cls "probability-home"; Attr.style $"width: {percent homeProbability}; background: {colors.Home}" ] []
                 if awayProbability > 0.0 && homeProbability > 0.0 then divider awayProbability
             ]
         ]

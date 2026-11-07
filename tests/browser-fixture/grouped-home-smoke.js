@@ -90,7 +90,7 @@ try {
   const failedSnapshot = await page.request.get(fixture.manifest.privateUrl, { headers: { "X-Nailbiter-Live-Snapshot": "1" } });
   assert.equal(failedSnapshot.status(), 503);
   await fixture.control("hype group-low-zero 70");
-  await page.waitForFunction(() => !document.querySelector("#live-reconnect-warning")?.classList.contains("hidden"));
+  await page.waitForFunction(() => document.querySelector("#live-reconnect-warning")?.hidden === false);
   assert.deepEqual(await page.locator("#main-content a[href^='/game/']").evaluateAll((links) => links.map((link) => link.getAttribute("href"))), beforeFailure);
   assert.equal(await page.locator("#excitement-group-low-zero").innerText(), beforeScore);
   assert.ok((await fixture.control("inspect")).rejectedSnapshots > 0);
@@ -120,7 +120,7 @@ try {
   await assert.rejects(fixture.control("unknown"), /ArgumentException/);
   assert.equal((await page.request.get(`${fixture.manifest.privateUrl}/health`)).status(), 200);
   console.log("PASS: invalid input fails closed, real excitement evidence renders, invalid controls leave server healthy");
-  await page.waitForFunction(() => document.querySelector("#live-reconnect-warning")?.classList.contains("hidden"), null, { timeout: 5_000 })
+  await page.waitForFunction(() => document.querySelector("#live-reconnect-warning")?.hidden === true, null, { timeout: 5_000 })
     .catch(() => assert.fail("Successful recovered snapshot must clear the production reconnect warning"));
   console.log("PASS: successful live snapshot clears the reconnect warning");
 } finally {

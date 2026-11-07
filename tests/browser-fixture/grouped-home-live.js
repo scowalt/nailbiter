@@ -166,7 +166,7 @@ try {
     assert.equal(await page.locator(`#${side}-score-group-best-nba`).count(), 1, "nullable stored scores retain stable per-game scalar targets");
   }
   await fixture.control("fail-refresh");
-  await page.waitForFunction(() => !document.querySelector("#live-reconnect-warning").classList.contains("hidden"));
+  await page.waitForFunction(() => !document.querySelector("#live-reconnect-warning").hidden);
   await page.waitForFunction(() => window.activeFetches.size === 1);
   await page.evaluate(() => {
     const guards = ["group-best-nba", "group-null-nhl", "group-best-70"].map((id) => ({
@@ -219,11 +219,11 @@ try {
   await fixture.control("recover");
   await snapshots(1);
   console.log("PASS: actual Datastar fragment application preserves scheduled hype/scores/context; live score changes prove transport and single-subscription lifecycle");
-  await page.waitForFunction(() => document.querySelector("#live-reconnect-warning").classList.contains("hidden"));
+  await page.waitForFunction(() => document.querySelector("#live-reconnect-warning").hidden);
   const retained = await readSchedule();
   const teamContext = await page.locator("#scores-group-null-nhl").innerText();
   await fixture.control("fail-refresh");
-  await page.waitForFunction(() => !document.querySelector("#live-reconnect-warning").classList.contains("hidden"));
+  await page.waitForFunction(() => !document.querySelector("#live-reconnect-warning").hidden);
   const rejectedBefore = (await fixture.control("inspect")).rejectedSnapshots;
   await fixture.control("remove group-good-40");
   await fixture.control("hype group-good-6999 70");
@@ -240,7 +240,7 @@ try {
   expected.splice(2, 1);
   expected[2].ids = ["group-null-nhl", "group-null-early", "group-low-3999", "group-low-zero", "group-null-tie-a", "group-null-late"];
   await expectSchedule();
-  await page.waitForFunction(() => document.querySelector("#live-reconnect-warning").classList.contains("hidden"));
+  await page.waitForFunction(() => document.querySelector("#live-reconnect-warning").hidden);
   assert.equal(await page.locator("#scores-group-null-nhl").innerText(), teamContext);
   assert.match(await page.locator("#qualification-credit-group-null-nhl").innerText(), /NSH playoff probability:/);
   assert.doesNotMatch(await page.locator("#qualification-credit-group-null-nhl").innerText(), /OTT/);

@@ -6,7 +6,7 @@ This is the canonical public repository for development, issues/PRs, CI and prod
 
 ## Components
 
-- `apps/backend`: .NET 10 host, server-rendered HTML, SSE and static assets.
+- `apps/backend`: .NET 10 host, server-rendered HTML, SSE and static assets, including the plain layered CSS described in [Styling](docs/styling.md).
 - `apps/backend.fsharp`: service and rendering logic; `apps/backend.shared`: shared models/policies.
 - `apps/web-components`: independently built browser components, including Chart.js.
 - `apps/www`: independently built Astro marketing site, deployed to Cloudflare Workers.

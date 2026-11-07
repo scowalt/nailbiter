@@ -83,7 +83,7 @@ for file in candidate.glob('apps/*/obj/project.assets.json'):
 (output / 'dependency-inventory.json').write_text(json.dumps({'scope': 'Installed candidate npm and restored NuGet packages; declaration/notice evidence, not legal clearance. Python, containers and CDN distribution need separate review.', 'packages': sorted(records, key=lambda r: (r['ecosystem'], r['name'], r['version']))}, indent=2) + '\n')
 assets = candidate / 'apps/backend/obj/project.assets.json'
 application_packages = {identity.lower() for identity, item in json.loads(assets.read_text()).get('libraries', {}).items() if item.get('type') == 'package'} if assets.exists() else set()
-for app, names in [('backend', {'chart.js', '@kurkle/color', 'tailwindcss'}), ('www', {'astro'})]:
+for app, names in [('backend', {'chart.js', '@kurkle/color'}), ('www', {'astro'})]:
     chunks = ['Nailbiter third-party software notices. Original project license and artwork exclusions are documented in LICENSE-SCOPE.txt. These are upstream declarations, not a relicensing grant by Nailbiter.\n']
     for record in records:
         include = record['ecosystem'] == 'npm' and record['name'] in names

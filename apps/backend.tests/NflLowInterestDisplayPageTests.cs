@@ -82,7 +82,7 @@ public sealed partial class NflPlayoffPageTests
             using var document = await new HtmlParser().ParseDocumentAsync(html);
             var region = page == "detail" ? document.QuerySelector("#detail-comparison")! : document.QuerySelector("a[href='/game/nfl-current']")!;
             Assert.Equal(2, region.QuerySelectorAll("[aria-description='Low-interest display convention, not an exact probability.']").Length);
-            if (page == "league") Assert.Contains("flex-col", region.FirstElementChild!.ClassList);
+            if (page == "league") Assert.Contains("league-game-body-stacked", region.FirstElementChild!.ClassList);
             Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(region.TextContent, "<1%").Count);
             Assert.DoesNotContain("0–2%", region.TextContent);
             Assert.DoesNotContain("Missed playoffs", region.TextContent);

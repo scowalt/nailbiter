@@ -12,8 +12,20 @@ let private pageContexts = None :: (Enum.GetValues<Sport>() |> Array.map Some |>
 let ``page uses one release version for local scripts`` () =
     let html = Layout.renderPage "Nailbiter" "Live games" None []
 
-    Assert.Contains("/js/nailbiter-components.js?v=2026-10-07-highlights-consent", html)
-    Assert.Contains("/js/live-sync.js?v=2026-10-07-highlights-consent", html)
+    Assert.Contains("/js/nailbiter-components.js?v=2026-11-07-plain-css", html)
+    Assert.Contains("/js/live-sync.js?v=2026-11-07-plain-css", html)
+
+[<Fact>]
+let ``page links the layered stylesheets in cascade order`` () =
+    let html = Layout.renderPage "Nailbiter" "Live games" None []
+    let sheets =
+        Regex.Matches(html, "<link rel=\"stylesheet\" href=\"([^\"]+)\"")
+        |> Seq.map (fun m -> m.Groups[1].Value)
+        |> Seq.toList
+
+    Assert.Equal<string list>(
+        [ for name in [ "global"; "components"; "games"; "world-cup"; "motorsport" ] -> $"/css/{name}.css?v=2026-11-07-plain-css" ],
+        sheets)
 
 [<Fact>]
 let ``every page declares the same browser and home screen icons`` () =

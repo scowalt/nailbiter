@@ -141,7 +141,7 @@ let ``college football clocks appear only while live in initial pages and SSE`` 
         let clock = doc.QuerySelector(selector)
         Assert.NotNull(clock)
         Assert.Equal(showClock, clock.TextContent.Contains("Q4 0:00"))
-        if not showClock then Assert.Null(clock.QuerySelector(".text-status-live"))
+        if not showClock then Assert.Null(clock.QuerySelector(".live-clock, .detail-clock-text, .detail-clock-cfb"))
 
 let private update (g: Game) =
     GameUpdate(GameId = g.Id, Sport = SportExtensions.FromDbValue(g.Sport).Value,
@@ -194,7 +194,7 @@ let ``cards detail history pregame and SSE agree on matchup colors`` sport home 
         let group = track.ParentElement
         Assert.Contains($"{away} 47%%", group.TextContent)
         Assert.Contains($"{home} 53%%", group.TextContent)
-        Assert.Contains("text-text-secondary", group.QuerySelector(".tabular-nums").ClassName)
+        Assert.NotNull(group.QuerySelector(".probability-labels"))
         Assert.Empty(group.QuerySelectorAll("span[style]"))
 
     Assert.Equal(homePage.QuerySelector($"#probbar-{g.Id}").InnerHtml, cardPatch.QuerySelector($"#probbar-{g.Id}").InnerHtml)
@@ -218,7 +218,7 @@ let ``divider overlays exact split without reserving space or inventing a losing
     let divider = doc.QuerySelector(".probability-divider")
     Assert.Equal(hasDivider, not (isNull divider))
     if hasDivider then
-        Assert.Contains("absolute", divider.ClassName)
+        Assert.Equal("probability-divider", divider.ClassName)
         Assert.Contains($"left: {awayWidth};", divider.GetAttribute("style"))
         Assert.Contains("translateX(-50%)", divider.GetAttribute("style"))
 

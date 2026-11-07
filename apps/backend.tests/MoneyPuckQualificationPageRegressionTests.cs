@@ -77,7 +77,7 @@ public sealed class MoneyPuckQualificationPageRegressionTests(ITestOutputHelper 
             var region = detail ? doc.Body! : comparison.ParentElement!;
             var score = detail ? doc.QuerySelector("#detail-hype")! : comparison.QuerySelector($"#excitement-{game.Id}")!;
             Assert.Equal(!complete, score.TextContent.Contains("Hype unavailable", StringComparison.Ordinal));
-            if (complete) Assert.Equal("66", detail ? score.QuerySelector(".text-3xl")!.TextContent : score.TextContent.Replace(" ", "").Replace("Hype", ""));
+            if (complete) Assert.Equal("66", detail ? score.QuerySelector(".hype-score")!.TextContent : score.TextContent.Replace(" ", "").Replace("Hype", ""));
             var credits = region.QuerySelectorAll("a[href='https://moneypuck.com/predictions.htm']");
             Assert.Equal(selected, credits.Length > 0);
             foreach (var link in credits)

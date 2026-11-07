@@ -145,9 +145,9 @@ let ``getExcitementLevel - 60 and above is High`` () =
 
 [<Fact>]
 let ``excitementLevelClass returns correct CSS classes`` () =
-    Assert.Equal("text-excitement-high", FormatHelpers.excitementLevelClass FormatHelpers.High)
-    Assert.Equal("text-excitement-medium", FormatHelpers.excitementLevelClass FormatHelpers.Medium)
-    Assert.Equal("text-excitement-low", FormatHelpers.excitementLevelClass FormatHelpers.Low)
+    Assert.Equal("excitement-high", FormatHelpers.excitementLevelClass FormatHelpers.High)
+    Assert.Equal("excitement-medium", FormatHelpers.excitementLevelClass FormatHelpers.Medium)
+    Assert.Equal("excitement-low", FormatHelpers.excitementLevelClass FormatHelpers.Low)
 
 [<Fact>]
 let ``formatHype - null returns dash`` () =
@@ -211,10 +211,10 @@ let ``getStatusLabel - all statuses`` () =
 
 [<Fact>]
 let ``getStatusClass - all statuses`` () =
-    Assert.Equal("bg-status-live/20 text-status-live animate-live-pulse", FormatHelpers.getStatusClass GameStatus.IN_PROGRESS)
-    Assert.Equal("bg-status-scheduled/20 text-status-scheduled", FormatHelpers.getStatusClass GameStatus.SCHEDULED)
-    Assert.Equal("bg-status-final/20 text-status-final", FormatHelpers.getStatusClass GameStatus.FINAL)
-    Assert.Equal("bg-status-final/20 text-status-final", FormatHelpers.getStatusClass GameStatus.CANCELED)
+    Assert.Equal("status-live animate-live-pulse", FormatHelpers.getStatusClass GameStatus.IN_PROGRESS)
+    Assert.Equal("status-scheduled", FormatHelpers.getStatusClass GameStatus.SCHEDULED)
+    Assert.Equal("status-final", FormatHelpers.getStatusClass GameStatus.FINAL)
+    Assert.Equal("status-final", FormatHelpers.getStatusClass GameStatus.CANCELED)
 
 [<Fact>]
 let ``formatMoneyline - positive odds get plus prefix`` () =
@@ -283,9 +283,9 @@ let ``formatLapTimeFixed - pads seconds under 10`` () =
 
 [<Fact>]
 let ``hypeLevelClass returns correct CSS classes`` () =
-    Assert.Equal("text-hype-high", FormatHelpers.hypeLevelClass FormatHelpers.HypeHigh)
-    Assert.Equal("text-hype-medium", FormatHelpers.hypeLevelClass FormatHelpers.HypeMedium)
-    Assert.Equal("text-hype-low", FormatHelpers.hypeLevelClass FormatHelpers.HypeLow)
+    Assert.Equal("hype-high", FormatHelpers.hypeLevelClass FormatHelpers.HypeHigh)
+    Assert.Equal("hype-medium", FormatHelpers.hypeLevelClass FormatHelpers.HypeMedium)
+    Assert.Equal("hype-low", FormatHelpers.hypeLevelClass FormatHelpers.HypeLow)
 
 [<Fact>]
 let ``formatScheduledTime formats correctly`` () =
