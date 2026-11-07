@@ -67,9 +67,10 @@ public sealed class HighlightsLifecycleService(ExcitementDbContext db, TimeProvi
             return new(selected.Selected + catchup, revalidated, expired, "Processed");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-        catch (Exception)
+        catch (Exception ex)
         {
-            logger.LogWarning("Highlights lifecycle skipped: {Reason}", "OperationFailure");
+            if (DatabaseFailure.Is(ex)) logger.LogError(ex, "Highlights lifecycle skipped: {Reason}", "OperationFailure");
+            else logger.LogWarning("Highlights lifecycle skipped: {Reason}", "OperationFailure");
             return new(0, 0, expired, "OperationFailure");
         }
         finally

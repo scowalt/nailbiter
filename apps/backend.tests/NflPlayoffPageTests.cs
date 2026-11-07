@@ -383,7 +383,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
         ("Vancouver Canucks", "VAN", 46), ("Vegas Golden Knights", "VGK", 20), ("Washington Capitals", "WSH", 42), ("Winnipeg Jets", "WPG", 34)
     ];
 
-    private static string PlayoffStatusFixture(string url, DateTime publishedAt, bool invalidBos,
+    internal static string PlayoffStatusFixture(string url, DateTime publishedAt, bool invalidBos,
         string? publishedAtLiteral = null, string? metaName = "nailbiter-approved-source-published-at",
         Func<string, string, string, string>? cellOverride = null, string? omitTeamAbbr = null,
         bool omitFromStandingsOnly = false, bool truncateStandings = false,

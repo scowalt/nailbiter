@@ -8,7 +8,7 @@ This feature remains disabled by default. These changes do not authorize product
 
 `HighlightsBackgroundService` calls the operation on startup and then every minute using the injected `TimeProvider`. It owns its scope and cancellation. PostgreSQL session advisory locking permits only one worker operation across hosts; overlapping operations return `Busy`, not queued provider work. The lock is released on cancellation/disconnection. No ingestion worker or rendering request awaits this worker. The persisted-only detail boundary hides an optional highlights-storage failure rather than failing the scoreboard page, while still honoring request cancellation.
 
-The hosted service remains registered while discovery is disabled: local metadata deletion still runs, without any upstream request. Optional failures are contained and reported without exceptions, URLs, credentials, provider payloads, or game titles in worker logs. Operational reasons and changed counts are logged; repeated unchanged idle/disabled reasons are not flooded.
+The hosted service remains registered while discovery is disabled: local metadata deletion still runs, without any upstream request. Optional failures are contained. A database failure is logged at Error with the database exception. Other optional failures are reported without exceptions, URLs, credentials, provider payloads, or game titles in worker logs. Operational reasons and changed counts are logged; repeated unchanged idle/disabled reasons are not flooded.
 
 ## Configuration
 

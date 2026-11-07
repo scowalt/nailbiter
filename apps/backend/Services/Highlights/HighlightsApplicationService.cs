@@ -22,9 +22,10 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
     {
         try { return await ComposeDetailAsync(gameId, cancellationToken); }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-        catch (Exception)
+        catch (Exception ex)
         {
-            logger.LogWarning("Highlights detail skipped: {Reason}", "OptionalStorageFailure");
+            if (DatabaseFailure.Is(ex)) logger.LogError(ex, "Highlights detail skipped: {Reason}", "OptionalStorageFailure");
+            else logger.LogWarning("Highlights detail skipped: {Reason}", "OptionalStorageFailure");
             return new(HighlightsDetailStatus.Hidden);
         }
     }
