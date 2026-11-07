@@ -18,6 +18,7 @@ public sealed class HighlightsApplicationTests : IAsyncLifetime
     private readonly PostgreSqlContainer database = IsolatedPostgreSql.CreateContainer();
     private readonly AppFactory entry = new();
     private readonly Clock clock = new();
+    private readonly GameUpdateGate gameUpdates = new();
     private WebApplicationFactory<Program> host = null!;
     private JsonObject summary = JsonNode.Parse("""
         {"header":{"id":"fixture-game","season":{"year":2026},"competitions":[{
@@ -58,7 +59,7 @@ public sealed class HighlightsApplicationTests : IAsyncLifetime
     {
         services.RemoveAll<IDbContextOptionsConfiguration<ExcitementDbContext>>();
         services.RemoveAll<DbContextOptions<ExcitementDbContext>>();
-        services.AddDbContext<ExcitementDbContext>(options => options.UseNpgsql(database.GetConnectionString()));
+        services.AddDbContext<ExcitementDbContext>(options => options.UseNpgsql(database.GetConnectionString()).AddInterceptors(gameUpdates));
         services.RemoveAll<TimeProvider>();
         services.AddSingleton<TimeProvider>(clock);
         services.Configure<YouTubeHighlightsOptions>(o => { o.Enabled = enabled; o.ApiKey = "sentinel-not-live"; configure?.Invoke(o); });
@@ -669,6 +670,29 @@ public sealed class HighlightsApplicationTests : IAsyncLifetime
         var rejected = await Use(s => s.OperateAsync(new(HighlightsOperatorAction.Attach, "second-game", "manualVideo", true)));
         Assert.False(rejected.Applied); Assert.Equal("VideoAlreadySelected", rejected.Reason);
         Assert.Equal("manualVideo", (await Use(s => s.GetDetailAsync("fixture-game"))).VideoId);
+    }
+
+    [Fact]
+    public async Task Identity_recording_and_a_concurrent_pro_evidence_write_to_the_same_game_both_commit()
+    {
+        using (var scope = host.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database.ExecuteSqlRawAsync(
+                await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", "035_ProHypeLifecycle.sql")));
+        gameUpdates.Arm();
+        var processing = Use(s => s.ProcessCandidatesAsync(["fixture-game"], []));
+        await gameUpdates.Entered.Task.WaitAsync(TimeSpan.FromSeconds(20));
+
+        await using var refresh = new ExcitementDbContext(new DbContextOptionsBuilder<ExcitementDbContext>().UseNpgsql(database.GetConnectionString()).Options);
+        var stored = await refresh.Games.SingleAsync(g => g.Id == "fixture-game");
+        stored.ProEvidenceJson = "{}";
+        var writing = refresh.SaveChangesAsync();
+        await GameUpdateGate.WaitForLockWaitAsync(database.GetConnectionString());
+        gameUpdates.Release();
+
+        await Task.WhenAll(processing, writing);
+        var saved = (await Use(s => s.InspectAsync("fixture-game")))!.Game;
+        Assert.Equal(849819, saved.MlbGamePk);
+        Assert.Equal("{}", saved.ProEvidenceJson);
     }
 
     public async Task DisposeAsync()
