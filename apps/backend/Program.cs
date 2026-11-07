@@ -293,6 +293,19 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next(context);
+    }
+    catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+    {
+        if (!context.Response.HasStarted)
+            context.Response.StatusCode = StatusCodes.Status499ClientClosedRequest;
+    }
+});
+
 app.UseCors();
 app.UseStaticFiles();
 app.UseHttpsRedirection();
