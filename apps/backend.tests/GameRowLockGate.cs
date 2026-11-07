@@ -4,24 +4,18 @@ using Npgsql;
 
 namespace backend.tests;
 
-internal sealed class GameUpdateGate : DbCommandInterceptor
+internal sealed class GameRowLockGate : DbCommandInterceptor
 {
     private readonly AsyncTestGate gate = new();
     public TaskCompletionSource Entered => gate.Entered;
     public void Arm() => gate.Arm();
     public void Release() => gate.Release();
 
-    public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
-        CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken ct = default)
+    public override async ValueTask<InterceptionResult> DataReaderClosingAsync(DbCommand command,
+        DataReaderClosingEventData eventData, InterceptionResult result)
     {
-        if (command.CommandText.Contains("UPDATE games")) await gate.EnterAsync(ct);
-        return result;
-    }
-
-    public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command,
-        CommandEventData eventData, InterceptionResult<int> result, CancellationToken ct = default)
-    {
-        if (command.CommandText.Contains("UPDATE games")) await gate.EnterAsync(ct);
+        if (command.CommandText.Contains("FROM games WHERE id", StringComparison.Ordinal)
+            && command.CommandText.Contains("FOR UPDATE", StringComparison.Ordinal)) await gate.EnterAsync(default);
         return result;
     }
 
