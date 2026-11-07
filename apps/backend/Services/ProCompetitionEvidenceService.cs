@@ -590,12 +590,12 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
                         if (forecasts.TryGetValue(game.Id, out var forecast) && forecast is not null) evidence.NflPlayoffLeverage = forecast;
                 }
                 foreach (var (game, evidence) in contexts) game.ProEvidenceJson = JsonSerializer.Serialize(evidence);
-                await db.SaveChangesAsync(ct);
             }
             catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or TaskCanceledException && !ct.IsCancellationRequested)
             {
                 logger.LogWarning(ex, "Pro context request failed for {Sport}/{Season}; previous timestamps preserved", group.Key.Sport, group.Key.Season);
             }
+            await db.SaveChangesAsync(ct);
         }
     }
 }
