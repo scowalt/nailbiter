@@ -5,6 +5,7 @@ open System.Threading
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
+open backend.Data
 open backend.Services.Kalshi
 
 type KalshiPlayoffRefreshBackgroundService
@@ -23,7 +24,7 @@ type KalshiPlayoffRefreshBackgroundService
                     ()
                 with
                 | :? OperationCanceledException when ct.IsCancellationRequested -> ()
-                | ex -> logger.LogWarning(ex, "Kalshi playoff refresh failed")
+                | ex -> logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Kalshi playoff refresh failed")
                 let! tick = timer.WaitForNextTickAsync(ct)
                 running <- tick
         with

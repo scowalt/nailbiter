@@ -95,7 +95,7 @@ type MoneyPuckService(httpClient: HttpClient, logger: ILogger<MoneyPuckService>,
                     rankings <- collected
                 with
                 | :? OperationCanceledException when ct.IsCancellationRequested -> cancelled <- true
-                | ex -> logger.LogWarning(ex, "MoneyPuck daily collection stopped; uncommitted input observations retained")
+                | ex -> logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "MoneyPuck daily collection stopped; uncommitted input observations retained")
                 do! gate.CompleteAsync()
                 if cancelled then return raise (OperationCanceledException(ct))
                 else return { Rankings = rankings; Qualification = forecasts; NextAttemptAt = gate.NextAttempt }
