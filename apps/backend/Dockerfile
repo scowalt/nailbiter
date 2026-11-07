@@ -13,7 +13,7 @@ RUN dotnet publish backend/backend.csproj -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION}
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends --only-upgrade openssl libssl3t64 \
+    && apt-get install -y --no-install-recommends --only-upgrade openssl libssl3t64 apt libapt-pkg6.0t64 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app/publish .
