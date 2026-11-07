@@ -481,10 +481,11 @@ type F1DataService
                     year
                 )
 
+                let cutoff = DateTime.UtcNow.AddDays(-1.0)
+
                 let! upcomingRace =
                     db.F1Races
-                        .Where(fun r ->
-                            r.Year = year && r.ScheduledStart >= DateTime.UtcNow.AddDays(-1.0))
+                        .Where(fun r -> r.Year = year && r.ScheduledStart >= cutoff)
                         .OrderBy(fun r -> r.ScheduledStart)
                         .FirstOrDefaultAsync(ct)
 

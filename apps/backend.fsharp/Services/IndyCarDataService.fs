@@ -282,10 +282,11 @@ type IndyCarDataService
                     year
                 )
 
+                let cutoff = DateTime.UtcNow.AddDays(-1.0)
+
                 let! upcomingRace =
                     db.IndyCarRaces
-                        .Where(fun r ->
-                            r.Year = year && r.ScheduledStart >= DateTime.UtcNow.AddDays(-1.0))
+                        .Where(fun r -> r.Year = year && r.ScheduledStart >= cutoff)
                         .OrderBy(fun r -> r.ScheduledStart)
                         .FirstOrDefaultAsync(ct)
 
