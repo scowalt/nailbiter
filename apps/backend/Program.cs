@@ -38,6 +38,9 @@ builder.WebHost.UseSentry(o =>
             eventId?.ToString() == "ResilienceEvent")
             return null;  
 
+        if (sentryEvent.Logger == DbLoggerCategory.Database.Command.Name)
+            return null;
+
         return sentryEvent;
     });
 });
