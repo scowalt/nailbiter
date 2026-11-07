@@ -11,6 +11,7 @@ public class ExcitementDbContext : DbContext
     public DbSet<ProHypeSnapshot> ProHypeSnapshots => Set<ProHypeSnapshot>();
     public DbSet<ProHypeEvidenceChange> ProHypeEvidenceChanges => Set<ProHypeEvidenceChange>();
     public DbSet<ProHypeRevision> ProHypeRevisions => Set<ProHypeRevision>();
+    public DbSet<StartHype> StartHypes => Set<StartHype>();
     public DbSet<GameHighlights> GameHighlights => Set<GameHighlights>();
     public DbSet<HighlightsOperationState> HighlightsOperations => Set<HighlightsOperationState>();
     public DbSet<CollegeTeam> CollegeTeams => Set<CollegeTeam>();
@@ -50,6 +51,17 @@ public class ExcitementDbContext : DbContext
             entity.Property(e => e.SnapshotJson).HasColumnName("snapshot_json");
             entity.Property(e => e.RevokedEvidenceJson).HasColumnName("revoked_evidence_json");
             entity.HasOne<Game>().WithOne().HasForeignKey<ProHypeSnapshot>(e => e.GameId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StartHype>(entity =>
+        {
+            entity.ToTable("start_hype");
+            entity.HasKey(e => e.GameId);
+            entity.Property(e => e.GameId).HasColumnName("game_id");
+            entity.Property(e => e.Total).HasColumnName("total");
+            entity.Property(e => e.QualitySource).HasColumnName("quality_source");
+            entity.Property(e => e.MoneyPuckTeams).HasColumnName("moneypuck_teams");
+            entity.HasOne<Game>().WithOne().HasForeignKey<StartHype>(e => e.GameId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<ProHypeRevision>(entity =>

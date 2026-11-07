@@ -123,6 +123,8 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
                 phase == 2 ? RegularSeasonFormulaVersion : 0);
             if (!WasRevoked(candidate, game, revoked) && (saved is null || Signature(candidate) != Signature(saved))) saved = candidate;
         }
+        if (Upcoming(game, now) && !state.ConfirmedStarted)
+            await StartHypes.RecordAsync(db, game, saved?.Total, saved?.Components, ct);
         state.LastEvaluationTicks = Math.Max(state.LastEvaluationTicks, evaluatedAt.Ticks);
         state.EvidenceRevision = revision.Revision;
         state.SnapshotJson = saved is null ? null : JsonSerializer.Serialize(saved);

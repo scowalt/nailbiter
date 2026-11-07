@@ -12,6 +12,10 @@ For NFL/NBA/NHL/MLB, `IProHypeLifecycle` separates strict current calculation fr
 
 Home, league and detail consumers resolve the same whole result and authoritative game identity. Current ordinary odds and team information remain independent. Required derived-score credit follows the evidence that actually produced the saved estimate, not a newer selected source. No stale badge, timestamp, hidden diagnostic payload or new public endpoint is introduced. See the [canonical specification](https://github.com/scowalt/nailbiter/issues/17) and [offline verification](testing/pro-hype-continuity.md).
 
+## Start hype on live games
+
+Each pregame resolution of an upcoming, unstarted game also writes its displayed total and derived-score credit to `start_hype`, or deletes the row when hype is unavailable. College football games starting within a day are written by the same 30-second background loop. The cutoff that ends pregame also ends these writes, so the row holds the score shown at the start. The home page shows it beside excitement on live cards and orders **Live now** by the mean of start hype and excitement, using whichever is available and placing games with neither last in start order. League and detail pages do not show it. `039_StartHype.sql` adds the table.
+
 ## Durable lifecycle
 
 The proposed additive `035_ProHypeLifecycle.sql` installs snapshots and evidence-writer journal/fence triggers after the existing series migration 034. It does not populate scores, rewrite input rows or backfill history. Isolated fixtures replay both migrations; `EnsureCreated` alone does not install the journal. Production application remains separately gated.

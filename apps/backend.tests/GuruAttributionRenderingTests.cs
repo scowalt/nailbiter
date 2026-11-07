@@ -72,7 +72,6 @@ public sealed class GuruAttributionRenderingTests
     [InlineData("league", "missing-score")]
     [InlineData("home", "nonfinite-score")]
     [InlineData("league", "nonfinite-score")]
-    [InlineData("home", "live")]
     [InlineData("league", "live")]
     [InlineData("home", "historical")]
     [InlineData("league", "historical")]

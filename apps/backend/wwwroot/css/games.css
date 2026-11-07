@@ -525,6 +525,13 @@
     text-align: right;
   }
 
+  .observed-scores {
+    display: flex;
+    flex-shrink: 0;
+    align-items: flex-end;
+    gap: 1.25rem;
+  }
+
   .page-title {
     margin-bottom: 1.5rem;
     font-size: var(--text-2xl);

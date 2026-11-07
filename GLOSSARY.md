@@ -168,6 +168,9 @@ A game-so-far rating of competitive drama, reflecting both meaningful probabilit
 **Last-known-good hype score**:
 The most recent complete, valid hype estimate and its original Stakes, Quality, and Closeness breakdown that still applies to the same upcoming game. Elapsed input freshness or a collection gap does not make that estimate inapplicable.
 
+**Start hype**:
+The hype score a game displayed when its pregame ended, kept unchanged while the game is live. It is not recalculated from evidence that arrives after the start.
+
 **Unavailable hype score**:
 The absence of both a complete current hype estimate and an applicable last-known-good estimate. Unavailable is distinct from a legitimate zero, and individual metrics may still be available.
 

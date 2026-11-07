@@ -318,6 +318,34 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
         finally { gate.Release(); }
     }
 
+    [Theory]
+    [InlineData("nfl")]
+    [InlineData("nhl")]
+    public async Task The_last_pregame_score_stays_on_the_live_home_card_after_the_cutoff_clears_pregame_hype(string sport)
+    {
+        var game = await Seed(sport, start: ProHypeTests.Now.AddHours(1));
+        Start(captureEnabled: false);
+        await Capture();
+        var pregame = (await Resolve(game.Id)).Total;
+        Assert.NotNull(pregame);
+        clock.Advance(TimeSpan.FromHours(2));
+        Assert.Null((await Resolve(game.Id)).Total);
+        await Change(async db =>
+        {
+            var live = await db.Games.SingleAsync(g => g.Id == game.Id);
+            live.Status = "in_progress";
+            live.ActualStart = ProHypeTests.Now.AddHours(1);
+        });
+        await Capture();
+        Assert.Null((await Resolve(game.Id)).Total);
+
+        var html = await app!.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") }).GetStringAsync("/");
+        using var page = new AngleSharp.Html.Parser.HtmlParser().ParseDocument(html);
+        Assert.NotNull(page.QuerySelector($"#home-section-live a[href='/game/{game.Id}']"));
+        Assert.Equal($"Hype{Math.Round(pregame.Value)}", page.QuerySelector($"#hype-{game.Id}")!.TextContent.Replace(" ", ""));
+        Assert.Equal(0, network.Requests);
+    }
+
     [Fact]
     public async Task An_incomplete_first_background_cycle_preserves_independent_metrics_but_never_saves_a_total()
     {
