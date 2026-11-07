@@ -1,11 +1,13 @@
 using System.Net;
 using System.Text.Json;
 using System.Xml;
+using backend.Data;
 using Microsoft.Extensions.Options;
 
 namespace backend.Services.Highlights;
 
-public sealed class YouTubeHighlightsClient(IHttpClientFactory clients, IOptions<YouTubeHighlightsOptions> options, TimeProvider clock)
+public sealed class YouTubeHighlightsClient(IHttpClientFactory clients, IOptions<YouTubeHighlightsOptions> options, TimeProvider clock,
+    ILogger<YouTubeHighlightsClient> logger)
 {
     public const string ApprovedChannelId = "UCoLrcjPV5PbUrUyXq5mjc_A";
     public const string HttpClientName = "YouTubeHighlights";
@@ -135,7 +137,10 @@ public sealed class YouTubeHighlightsClient(IHttpClientFactory clients, IOptions
             catch (Exception failure) when (failure is HttpRequestException or IOException or OperationCanceledException)
             { return Failed(YouTubeOutcome.TemporaryFailure, session.Units); }
             catch (Exception failure) when (failure is JsonException or InvalidOperationException or FormatException or ArgumentException or XmlException or OverflowException)
-            { return Failed(YouTubeOutcome.InvalidResponse, session.Units); }
+            {
+                if (DatabaseFailure.Is(failure)) logger.LogError(failure, "YouTube request authorization failed");
+                return Failed(YouTubeOutcome.InvalidResponse, session.Units);
+            }
         }
         finally { operationGate.Release(); }
     }
