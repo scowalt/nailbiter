@@ -19,6 +19,7 @@ using Backend.Rendering;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using Polly.Telemetry;
 using StarFederation.Datastar.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -44,6 +45,11 @@ builder.WebHost.UseSentry(o =>
         return sentryEvent;
     });
 });
+
+builder.Services.Configure<TelemetryOptions>(options => options.SeverityProvider = args =>
+    args.Event is { EventName: "ExecutionAttempt", Severity: ResilienceEventSeverity.Error }
+        ? ResilienceEventSeverity.Warning
+        : args.Event.Severity);
 
 builder.Services.AddOpenApi();
 
