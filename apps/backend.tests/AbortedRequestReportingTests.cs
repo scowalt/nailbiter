@@ -1,10 +1,13 @@
 using System.Collections.Concurrent;
+using System.Data.Common;
 using backend.Data;
 using backend.Models;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -39,8 +42,9 @@ public sealed class AbortedRequestReportingTests
         await oddsLock.WaitForBlockedQueryAsync();
         abort.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
-        await app.RequestCompleted(path);
+        var status = await app.RequestCompleted(path);
 
+        Assert.Equal(StatusCodes.Status499ClientClosedRequest, status);
         Assert.DoesNotContain(app.Events, e => e.Path == path && e.IsQueryCancellation);
     }
 
@@ -60,6 +64,22 @@ public sealed class AbortedRequestReportingTests
         Assert.Equal(PostgresErrorCodes.QueryCanceled, timeout.SqlState);
     }
 
+    [Fact]
+    public async Task Cancellation_thrown_while_the_client_is_connected_is_still_reported_as_an_unhandled_error()
+    {
+        const string path = "/api/games/" + GameId + "/odds";
+        await using var app = await ReportingApp.StartAsync(connectionOptions: "");
+        app.CancelOddsQueries();
+
+        await Record.ExceptionAsync(() => app.Client.GetAsync(path));
+        var status = await app.RequestCompleted(path);
+
+        var reported = Assert.Single(app.Events, e => e.Path == path && e.IsQueryCancellation);
+        Assert.False(reported.Handled);
+        Assert.IsAssignableFrom<OperationCanceledException>(reported.Exception);
+        Assert.NotEqual(StatusCodes.Status499ClientClosedRequest, status);
+    }
+
     private sealed record ReportedEvent(string? Path, Exception? Exception, bool Handled)
     {
         public bool IsQueryCancellation => Chain().Any(e =>
@@ -77,7 +97,8 @@ public sealed class AbortedRequestReportingTests
         private readonly AppFactory entry = new();
         private readonly WebApplicationFactory<Program> app;
         private readonly SentryRecorder recorder = new();
-        private readonly ConcurrentDictionary<string, TaskCompletionSource> completed = new();
+        private readonly ConcurrentDictionary<string, TaskCompletionSource<int>> completed = new();
+        private readonly OddsQueryCanceller canceller = new();
 
         private ReportingApp(PostgreSqlContainer database, string connectionString)
         {
@@ -89,7 +110,7 @@ public sealed class AbortedRequestReportingTests
                 {
                     services.RemoveAll<IDbContextOptionsConfiguration<ExcitementDbContext>>();
                     services.RemoveAll<DbContextOptions<ExcitementDbContext>>();
-                    services.AddDbContext<ExcitementDbContext>(options => options.UseNpgsql(connectionString));
+                    services.AddDbContext<ExcitementDbContext>(options => options.UseNpgsql(connectionString).AddInterceptors(canceller));
                     services.PostConfigure<SentryAspNetCoreOptions>(options =>
                     {
                         options.Dsn = "https://public@sentry.invalid/1";
@@ -133,7 +154,9 @@ public sealed class AbortedRequestReportingTests
             return new OddsLock(database.GetConnectionString(), connection, transaction);
         }
 
-        public Task RequestCompleted(string path) =>
+        public void CancelOddsQueries() => canceller.Armed = true;
+
+        public Task<int> RequestCompleted(string path) =>
             completed.GetOrAdd(path, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).Task.WaitAsync(TimeSpan.FromSeconds(30));
 
         public async ValueTask DisposeAsync()
@@ -166,16 +189,34 @@ public sealed class AbortedRequestReportingTests
         }
     }
 
-    private sealed class CompletionSignalOutsideSentry(ConcurrentDictionary<string, TaskCompletionSource> completed) : IStartupFilter
+    private sealed class OddsQueryCanceller : DbCommandInterceptor
+    {
+        public volatile bool Armed;
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken)
+        {
+            if (Armed && command.CommandText.Contains("odds_snapshots"))
+                throw new OperationCanceledException("Cancelled by the server while the client was connected");
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
+
+    private sealed class CompletionSignalOutsideSentry(ConcurrentDictionary<string, TaskCompletionSource<int>> completed) : IStartupFilter
     {
         public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
         {
             app.Use(async (context, inner) =>
             {
-                try { await inner(context); }
+                var status = StatusCodes.Status500InternalServerError;
+                try
+                {
+                    await inner(context);
+                    status = context.Response.StatusCode;
+                }
                 finally
                 {
-                    completed.GetOrAdd(context.Request.Path, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult();
+                    completed.GetOrAdd(context.Request.Path, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult(status);
                 }
             });
             next(app);
