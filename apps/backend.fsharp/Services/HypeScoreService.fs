@@ -30,7 +30,7 @@ type HypeScoreService
         d.["nfl"] <- struct (0.45, 0.35, 0.20)    
         d.["nba"] <- struct (0.30, 0.40, 0.30)    
         d.["mlb"] <- struct (0.35, 0.30, 0.35)    
-        d.["nhl"] <- struct (0.35, 0.35, 0.30)    
+        d.["nhl"] <- struct (0.425, 0.425, 0.15)
         d
 
     static let eloMin = 1300.0

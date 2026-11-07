@@ -209,7 +209,7 @@ public static class ProHypePolicy
         if (!stakes.HasValue || !quality.HasValue || !closeness.HasValue) return null;
         var (s, q, c) = sport switch
         {
-            "nhl" => (.35, .35, .30),
+            "nhl" => (.425, .425, .15),
             "nba" => (.30, .40, .30),
             "nfl" => (.45, .35, .20),
             "mlb" => (.35, .30, .35),
