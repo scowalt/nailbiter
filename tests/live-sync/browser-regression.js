@@ -13,7 +13,7 @@ const points = (value) =>
     { label: "now", homeWinProbability: value },
   ]);
 const shell = (content, terminal = false) =>
-  `<!doctype html><html><head><title>fixture</title><style>nb-win-probability-chart{display:block;height:256px}.hidden{display:none}</style></head><body><div id="live-reconnect-warning" class="hidden"></div><main id="main-content"><section data-live-terminal="${terminal}">${content}</section></main></body></html>`;
+  `<!doctype html><html><head><title>fixture</title><style>nb-win-probability-chart{display:block;height:256px}</style></head><body><div id="live-reconnect-warning" hidden></div><main id="main-content"><section data-live-terminal="${terminal}">${content}</section></main></body></html>`;
 const gamePoints = (value, outcomes = 2) =>
   JSON.parse(points(value)).map((point) => ({
     ...point,
@@ -341,7 +341,7 @@ try {
   assert.equal(
     await transition.page
       .locator("#live-reconnect-warning")
-      .evaluate((el) => el.classList.contains("hidden")),
+      .evaluate((el) => el.hidden),
     true,
   );
   assert.equal(

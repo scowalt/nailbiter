@@ -16,11 +16,11 @@ module PlayoffBracketRenderer =
         let logoUrl = if sport.HasValue then Logos.getTeamLogoUrl sport.Value team else None
         let teamColor = if sport.HasValue then TeamColors.getTeamColorOrDefault sport.Value team "#6b7280" else "#6b7280"
         let rowClass =
-            if isWinner then "flex items-center gap-1.5 py-1 px-1.5 rounded font-semibold"
-            elif isEliminated then "flex items-center gap-1.5 py-1 px-1.5 rounded opacity-40"
-            else "flex items-center gap-1.5 py-1 px-1.5 rounded"
+            if isWinner then "bracket-team is-winner"
+            elif isEliminated then "bracket-team is-eliminated"
+            else "bracket-team"
         Elem.div [ cls rowClass ] [
-            Elem.span [ cls "text-xs text-text-muted w-4 flex-shrink-0 tabular-nums" ] [
+            Elem.span [ cls "bracket-seed" ] [
                 Text.raw (if seed > 0 then $"{seed}" else "")
             ]
             match logoUrl with
@@ -28,18 +28,18 @@ module PlayoffBracketRenderer =
                 Elem.img [
                     Attr.src url
                     Attr.alt team
-                    cls "w-5 h-5 flex-shrink-0"
+                    cls "bracket-logo"
                     Attr.create "loading" "lazy"
                 ]
             | None ->
-                Elem.div [ cls "w-5 h-5 flex-shrink-0 rounded-full bg-bg-card-hover" ] []
+                Elem.div [ cls "bracket-logo-placeholder" ] []
             Elem.span [
-                cls "text-xs font-medium truncate flex-1"
+                cls "bracket-team-name"
                 Attr.style $"color: {teamColor}"
             ] [
                 Text.enc team
             ]
-            Elem.span [ cls "text-sm font-semibold ml-auto tabular-nums text-text-primary flex-shrink-0" ] [
+            Elem.span [ cls "bracket-wins" ] [
                 Text.raw $"{wins}"
             ]
         ]
@@ -50,30 +50,30 @@ module PlayoffBracketRenderer =
         let higherEliminated = series.Completed && not higherIsWinner
         let lowerEliminated = series.Completed && not lowerIsWinner
 
-        Elem.div [ cls "bg-bg-card border border-border rounded-lg p-1.5 mb-2 min-w-[130px]" ] [
+        Elem.div [ cls "bracket-series" ] [
             teamRow sport series.HigherSeedTeam series.HigherSeedNumber series.HigherSeedWins higherIsWinner higherEliminated
-            Elem.div [ cls "border-t border-border/50 mx-1" ] []
+            Elem.div [ cls "bracket-divider" ] []
             teamRow sport series.LowerSeedTeam series.LowerSeedNumber series.LowerSeedWins lowerIsWinner lowerEliminated
         ]
 
     let private tbdSeriesBox () =
-        Elem.div [ cls "bg-bg-card border border-border border-dashed rounded-lg p-1.5 mb-2 min-w-[130px]" ] [
-            Elem.div [ cls "flex items-center gap-1.5 py-1 px-1.5" ] [
-                Elem.div [ cls "w-5 h-5 flex-shrink-0 rounded-full bg-bg-card-hover" ] []
-                Elem.span [ cls "text-xs text-text-muted/50" ] [ Text.raw "TBD" ]
+        Elem.div [ cls "bracket-series-tbd" ] [
+            Elem.div [ cls "bracket-tbd-row" ] [
+                Elem.div [ cls "bracket-logo-placeholder" ] []
+                Elem.span [ cls "bracket-tbd" ] [ Text.raw "TBD" ]
             ]
-            Elem.div [ cls "border-t border-border/50 mx-1" ] []
-            Elem.div [ cls "flex items-center gap-1.5 py-1 px-1.5" ] [
-                Elem.div [ cls "w-5 h-5 flex-shrink-0 rounded-full bg-bg-card-hover" ] []
-                Elem.span [ cls "text-xs text-text-muted/50" ] [ Text.raw "TBD" ]
+            Elem.div [ cls "bracket-divider" ] []
+            Elem.div [ cls "bracket-tbd-row" ] [
+                Elem.div [ cls "bracket-logo-placeholder" ] []
+                Elem.span [ cls "bracket-tbd" ] [ Text.raw "TBD" ]
             ]
         ]
 
     let private roundColumn (label: string) (sport: Nullable<Sport>) (series: PlayoffSeriesData list) (expectedCount: int) =
         let seriesCount = series.Length
         let placeholderCount = max 0 (expectedCount - seriesCount)
-        Elem.div [ cls "flex flex-col justify-around flex-1 min-w-[140px]" ] [
-            Elem.p [ cls "text-xs text-text-muted text-center mb-2 font-medium whitespace-nowrap" ] [
+        Elem.div [ cls "bracket-round" ] [
+            Elem.p [ cls "bracket-round-label" ] [
                 Text.raw label
             ]
             Elem.div [] [
@@ -85,8 +85,8 @@ module PlayoffBracketRenderer =
         ]
 
     let private finalsColumn (sport: Nullable<Sport>) (finalSeries: PlayoffSeriesData list) =
-        Elem.div [ cls "flex flex-col justify-center flex-1 min-w-[140px]" ] [
-            Elem.p [ cls "text-xs text-text-muted text-center mb-2 font-medium" ] [
+        Elem.div [ cls "bracket-finals" ] [
+            Elem.p [ cls "bracket-finals-label" ] [
                 Text.raw "Finals"
             ]
             Elem.div [] [
@@ -129,12 +129,12 @@ module PlayoffBracketRenderer =
         let r3Label = r3 |> Option.map (fun r -> r.Label) |> Option.defaultValue "Conference Finals"
 
         [
-            Elem.div [ cls "bg-bg-card border border-border rounded-xl p-6 mb-6" ] [
-                Elem.h2 [ cls "text-lg font-semibold mb-4 text-text-primary" ] [
+            Elem.div [ cls "panel" ] [
+                Elem.h2 [ cls "bracket-title" ] [
                     Text.raw $"{bracket.SeasonYear} Playoff Bracket"
                 ]
-                Elem.div [ cls "overflow-x-auto" ] [
-                    Elem.div [ cls "flex gap-2 min-w-[700px]" ] [
+                Elem.div [ cls "bracket-scroll" ] [
+                    Elem.div [ cls "bracket-rounds" ] [
                         roundColumn r1Label sport westR1 4
                         roundColumn r2Label sport westR2 2
                         roundColumn r3Label sport westR3 1
@@ -146,9 +146,9 @@ module PlayoffBracketRenderer =
                         roundColumn r1Label sport eastR1 4
                     ]
                 ]
-                Elem.div [ cls "flex justify-between mt-3 px-1" ] [
-                    Elem.span [ cls "text-xs text-text-muted/60 font-medium" ] [ Text.raw "Western Conference →" ]
-                    Elem.span [ cls "text-xs text-text-muted/60 font-medium" ] [ Text.raw "← Eastern Conference" ]
+                Elem.div [ cls "bracket-legend" ] [
+                    Elem.span [ cls "bracket-legend-label" ] [ Text.raw "Western Conference →" ]
+                    Elem.span [ cls "bracket-legend-label" ] [ Text.raw "← Eastern Conference" ]
                 ]
             ]
         ]

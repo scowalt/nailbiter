@@ -281,7 +281,7 @@ public sealed class ExcitementLiveWiringTests : IAsyncLifetime
     {
         var region = page.QuerySelector("#" + id);
         Assert.NotNull(region);
-        Assert.Null(region.QuerySelector("[class*=text-excitement-]"));
+        Assert.Null(region.QuerySelector(".excitement-high, .excitement-medium, .excitement-low"));
         Assert.Equal(college ? "Excitement unavailable" : "", region.TextContent.Trim());
     }
 

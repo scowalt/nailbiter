@@ -18,7 +18,7 @@ internal static class ExcitementWiringSupport
     {
         var region = page.QuerySelector("#" + id);
         Assert.NotNull(region);
-        var number = region.QuerySelector(".text-excitement-" + band);
+        var number = region.QuerySelector(".excitement-" + band);
         Assert.True(number is not null, $"Expected {value}/{band} in {id}, got {region.OuterHtml}");
         Assert.Equal(value, number.TextContent);
         return region;

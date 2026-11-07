@@ -94,7 +94,7 @@ function stop() {
   stopped = true;
   pending = false;
   events?.close();
-  warning?.classList.add("hidden");
+  if (warning) warning.hidden = true;
 }
 
 async function synchronize() {
@@ -147,7 +147,7 @@ async function synchronize() {
     }
 
     current.replaceChildren(...next.childNodes);
-    warning?.classList.add("hidden");
+    if (warning) warning.hidden = true;
     document.title = nextDocument.title;
     if (focusedSelector) {
       current.querySelector(focusedSelector)?.focus({ preventScroll: true });
@@ -159,7 +159,7 @@ async function synchronize() {
     await refreshComponents(current, finalTransitions, embeddedComponents);
     if (isTerminal(current)) stop();
   } catch {
-    if (!stopped) warning?.classList.remove("hidden");
+    if (!stopped && warning) warning.hidden = false;
   } finally {
     syncing = false;
     if (pending && !stopped) {
@@ -176,12 +176,12 @@ if (isTerminal()) {
 } else {
   events = new EventSource("/sse/page-sync");
   events.addEventListener("open", () => {
-    if (!stopped) warning?.classList.add("hidden");
+    if (!stopped && warning) warning.hidden = true;
   });
   events.addEventListener("sync", () => {
     if (!stopped) void synchronize();
   });
   events.addEventListener("error", () => {
-    if (!stopped) warning?.classList.remove("hidden");
+    if (!stopped && warning) warning.hidden = false;
   });
 }

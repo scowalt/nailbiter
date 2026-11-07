@@ -16,29 +16,29 @@ module SseFragmentRenderer =
         (homeScore: int option)
         (awayLogoUrlStr: string)   
         (homeLogoUrlStr: string) =
-        Elem.div [ cls "space-y-2"; Attr.id $"scores-{gameId}" ] [
-            Elem.div [ cls "flex items-center justify-between" ] [
-                Elem.div [ cls "flex items-center gap-2" ] [
+        Elem.div [ cls "team-scores"; Attr.id $"scores-{gameId}" ] [
+            Elem.div [ cls "team-row" ] [
+                Elem.div [ cls "team-identity" ] [
                     if not (String.IsNullOrEmpty awayLogoUrlStr) then
-                        Elem.img [ Attr.src awayLogoUrlStr; Attr.alt awayAbbr; cls "w-6 h-6 rounded-full ring-1 ring-white/20" ]
-                    Elem.span [ cls "font-medium text-text-primary" ] [ Text.enc awayAbbr ]
+                        Elem.img [ Attr.src awayLogoUrlStr; Attr.alt awayAbbr; cls "team-logo" ]
+                    Elem.span [ cls "team-name" ] [ Text.enc awayAbbr ]
                 ]
                 match awayScore with
                 | Some s ->
-                    Elem.span [ cls "text-lg font-semibold tabular-nums text-text-primary" ] [
+                    Elem.span [ cls "team-score" ] [
                         Text.raw $"{s}"
                     ]
                 | None -> ()
             ]
-            Elem.div [ cls "flex items-center justify-between" ] [
-                Elem.div [ cls "flex items-center gap-2" ] [
+            Elem.div [ cls "team-row" ] [
+                Elem.div [ cls "team-identity" ] [
                     if not (String.IsNullOrEmpty homeLogoUrlStr) then
-                        Elem.img [ Attr.src homeLogoUrlStr; Attr.alt homeAbbr; cls "w-6 h-6 rounded-full ring-1 ring-white/20" ]
-                    Elem.span [ cls "font-medium text-text-primary" ] [ Text.enc homeAbbr ]
+                        Elem.img [ Attr.src homeLogoUrlStr; Attr.alt homeAbbr; cls "team-logo" ]
+                    Elem.span [ cls "team-name" ] [ Text.enc homeAbbr ]
                 ]
                 match homeScore with
                 | Some s ->
-                    Elem.span [ cls "text-lg font-semibold tabular-nums text-text-primary" ] [
+                    Elem.span [ cls "team-score" ] [
                         Text.raw $"{s}"
                     ]
                 | None -> ()
@@ -50,9 +50,9 @@ module SseFragmentRenderer =
             if excitementScore.HasValue && (isLive || isFinal) then
                 let level = FormatHelpers.getExcitementLevel excitementScore
                 let levelClass = FormatHelpers.excitementLevelClass level
-                Elem.div [ cls "text-right" ] [
-                    Elem.span [ cls "block text-xs text-text-muted mb-0.5" ] [ Text.raw "Excitement" ]
-                    Elem.span [ cls $"text-xl font-semibold tabular-nums {levelClass}" ] [
+                Elem.div [ cls "metric-block" ] [
+                    Elem.span [ cls "metric-label" ] [ Text.raw "Excitement" ]
+                    Elem.span [ cls $"metric-value {levelClass}" ] [
                         Text.raw $"{Math.Round(excitementScore.Value)}"
                     ]
                 ]
@@ -67,7 +67,7 @@ module SseFragmentRenderer =
         (isFinal: bool) =
         Elem.div [ Attr.id $"probbar-{gameId}" ] [
             if not isFinal then
-                Elem.div [ cls "mt-3" ] [
+                Elem.div [ cls "card-probability" ] [
                     ProbabilityBar.render true homeAbbr awayAbbr homeWinProb (1.0 - homeWinProb) colors
                 ]
         ]
@@ -78,20 +78,20 @@ module SseFragmentRenderer =
                 let periodNullable = match period with Some p -> Nullable p | None -> Nullable()
                 let clockText = FormatHelpers.formatGameClock periodNullable gameClock sport
                 if clockText <> "" then
-                    Elem.div [ cls "mt-2 text-sm text-status-live font-medium text-center" ] [
+                    Elem.div [ cls "live-clock" ] [
                         Text.raw clockText
                     ]
         ]
 
     let renderGameCardStatus (gameId: string) (status: GameStatus) (statusLabel: string) (statusClass: string) =
-        Elem.span [ cls $"text-xs font-medium px-1.5 py-0.5 rounded {statusClass}"; Attr.id $"status-{gameId}" ] [
+        Elem.span [ cls $"status-badge {statusClass}"; Attr.id $"status-{gameId}" ] [
             Text.raw statusLabel
         ]
 
     let renderDetailProbBar homeWinProb homeAbbr awayAbbr colors isFinal =
         Elem.div [ Attr.id "detail-probbar" ] [
             if not isFinal then
-                Elem.div [ cls "mt-6" ] [
+                Elem.div [ cls "detail-probability" ] [
                     ProbabilityBar.render false homeAbbr awayAbbr homeWinProb (1.0 - homeWinProb) colors
                 ]
         ]
@@ -101,9 +101,9 @@ module SseFragmentRenderer =
             if excitementScore.HasValue && (isLive || isFinal) then
                 let level = FormatHelpers.getExcitementLevel excitementScore
                 let levelClass = FormatHelpers.excitementLevelClass level
-                Elem.div [ cls "flex items-center gap-2" ] [
-                    Elem.span [ cls "text-text-muted text-sm" ] [ Text.raw "Excitement" ]
-                    Elem.span [ cls $"text-xl font-bold tabular-nums {levelClass}" ] [
+                Elem.div [ cls "excitement-inline" ] [
+                    Elem.span [ cls "meta-text" ] [ Text.raw "Excitement" ]
+                    Elem.span [ cls $"detail-excitement-value {levelClass}" ] [
                         Text.raw $"{Math.Round(excitementScore.Value)}"
                     ]
                 ]
@@ -136,7 +136,7 @@ module SseFragmentRenderer =
         let fragments = [
             if preserveTeamContext || sport = Sport.CFB then
                 for side, score in [ "away", awayScore; "home", homeScore ] do
-                    Elem.span [ Attr.id $"{side}-score-{update.GameId}"; cls "text-lg font-semibold tabular-nums text-text-primary" ] [
+                    Elem.span [ Attr.id $"{side}-score-{update.GameId}"; cls "team-score" ] [
                         match score with
                         | Some value when not suppressScheduledScores || update.Status <> GameStatus.SCHEDULED -> Text.raw $"{value}"
                         | _ -> ()
@@ -145,11 +145,11 @@ module SseFragmentRenderer =
             if ((not preserveTeamContext && sport <> Sport.CFB) || isLive || isFinal)
                && not (update.Status = GameStatus.SCHEDULED && backend.Scoring.ProHypePolicy.Supports(sport.ToDbValue())) then
                 if sport = Sport.CFB && not excitementScore.HasValue then
-                    Elem.div [ Attr.id $"excitement-{update.GameId}"; cls "text-xs text-text-muted" ] [ Text.raw "Excitement unavailable" ]
+                    Elem.div [ Attr.id $"excitement-{update.GameId}"; cls "unavailable-note" ] [ Text.raw "Excitement unavailable" ]
                 else renderGameCardExcitement update.GameId excitementScore isLive isFinal
             if not preserveTeamContext || update.Status <> GameStatus.SCHEDULED then
                 if sport = Sport.CFB && not update.HomeWinProbability.HasValue then
-                    Elem.div [ Attr.id $"probbar-{update.GameId}"; cls "text-xs text-text-muted" ] [
+                    Elem.div [ Attr.id $"probbar-{update.GameId}"; cls "unavailable-note" ] [
                         if isLive then Text.raw "Live probability unavailable"
                     ]
                 else renderGameCardProbBar update.GameId homeWinProb homeAbbr awayAbbr colors isFinal
@@ -168,14 +168,14 @@ module SseFragmentRenderer =
     let renderLeagueGameCardFragments (update: GameUpdate) = renderCardFragments true false update
 
     let renderDetailAwayScore (awayScore: int option) =
-        Elem.span [ cls "text-3xl font-bold tabular-nums text-text-primary"; Attr.id "detail-away-score" ] [
+        Elem.span [ cls "detail-score"; Attr.id "detail-away-score" ] [
             match awayScore with
             | Some s -> Text.raw $"{s}"
             | None -> ()
         ]
 
     let renderDetailHomeScore (homeScore: int option) =
-        Elem.span [ cls "text-3xl font-bold tabular-nums text-text-primary"; Attr.id "detail-home-score" ] [
+        Elem.span [ cls "detail-score"; Attr.id "detail-home-score" ] [
             match homeScore with
             | Some s -> Text.raw $"{s}"
             | None -> ()
@@ -187,19 +187,19 @@ module SseFragmentRenderer =
                 let periodNullable = match period with Some p -> Nullable p | None -> Nullable()
                 let clockText = FormatHelpers.formatGameClock periodNullable gameClock sport
                 if clockText <> "" then
-                    Elem.div [ cls "text-sm text-status-live font-medium" ] [
+                    Elem.div [ cls "detail-clock-text" ] [
                         Text.raw clockText
                     ]
                 else
-                    Elem.span [ cls "text-text-muted text-sm" ] [ Text.raw "@" ]
+                    Elem.span [ cls "meta-text" ] [ Text.raw "@" ]
             else
-                Elem.span [ cls "text-text-muted text-sm" ] [ Text.raw "@" ]
+                Elem.span [ cls "meta-text" ] [ Text.raw "@" ]
         ]
 
     let renderDetailStatus (status: GameStatus) =
         let statusLabel = FormatHelpers.getStatusLabel status
         let statusClass = FormatHelpers.getStatusClass status
-        Elem.span [ cls $"text-sm font-medium px-2 py-1 rounded {statusClass}"; Attr.id "detail-status" ] [
+        Elem.span [ cls $"detail-status-badge {statusClass}"; Attr.id "detail-status" ] [
             Text.raw statusLabel
         ]
 
@@ -222,10 +222,10 @@ module SseFragmentRenderer =
         let awayAbbr = if String.IsNullOrEmpty update.AwayTeamAbbreviation then update.AwayTeam else update.AwayTeamAbbreviation
         let fragments = [
             if update.Sport = Sport.CFB && not excitementScore.HasValue && (isLive || isFinal) then
-                Elem.div [ Attr.id "detail-excitement"; cls "text-sm text-text-muted" ] [ Text.raw "Excitement unavailable" ]
+                Elem.div [ Attr.id "detail-excitement"; cls "detail-unavailable-note" ] [ Text.raw "Excitement unavailable" ]
             else renderDetailExcitement excitementScore isLive isFinal
             if update.Sport = Sport.CFB && not update.HomeWinProbability.HasValue then
-                Elem.div [ Attr.id "detail-probbar"; cls "text-sm text-text-muted" ] [
+                Elem.div [ Attr.id "detail-probbar"; cls "detail-unavailable-note" ] [
                     if isLive then Text.raw "Live probability unavailable"
                 ]
             else renderDetailProbBar homeWinProb homeAbbr awayAbbr colors isFinal

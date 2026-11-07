@@ -190,7 +190,7 @@ module WorldCupRenderer =
         let flagTitle = if String.IsNullOrWhiteSpace name then abbr else name
         if String.IsNullOrEmpty flag then []
         else
-            [ Elem.span [ cls "w-5 text-base leading-none text-center flex-shrink-0"; Attr.create "aria-hidden" "true"; Attr.create "title" flagTitle ] [
+            [ Elem.span [ cls "wc-flag"; Attr.create "aria-hidden" "true"; Attr.create "title" flagTitle ] [
                   Text.raw flag
               ] ]
 
@@ -211,14 +211,14 @@ module WorldCupRenderer =
         else $"{flag} {safeAbbr} {safePercentage}"
 
     let private teamLine (abbr: string) (name: string) (score: Nullable<int>) (color: string) =
-        Elem.div [ cls "flex items-center justify-between gap-3" ] [
-            Elem.div [ cls "flex items-center gap-2 min-w-0" ] [
-                Elem.span [ cls "inline-block w-2 h-2 rounded-full flex-shrink-0"; Attr.style $"background: {color}" ] []
+        Elem.div [ cls "wc-team-line" ] [
+            Elem.div [ cls "wc-team" ] [
+                Elem.span [ cls "team-dot"; Attr.style $"background: {color}" ] []
                 yield! flagNode abbr name
-                Elem.span [ cls "font-medium text-text-primary truncate" ] [ Text.enc abbr ]
+                Elem.span [ cls "wc-team-abbr" ] [ Text.enc abbr ]
             ]
             if score.HasValue then
-                Elem.span [ cls "text-lg font-semibold tabular-nums text-text-primary" ] [ Text.raw $"{score.Value}" ]
+                Elem.span [ cls "team-score" ] [ Text.raw $"{score.Value}" ]
         ]
 
     let private probabilityBarContent (view: WorldCupCardView) =
@@ -234,20 +234,20 @@ module WorldCupRenderer =
                         let homeName = if String.IsNullOrEmpty view.HomeTeam then view.HomeTeamAbbreviation else view.HomeTeam
                         let awayName = if String.IsNullOrEmpty view.AwayTeam then view.AwayTeamAbbreviation else view.AwayTeam
                         let aria = $"{homeName} to advance {accessibleProbability homePct}, {awayName} to advance {accessibleProbability awayPct}"
-                        Elem.div [ cls "mt-3" ] [
-                            Elem.div [ cls "text-xs text-text-muted mb-1" ] [ Text.raw "To advance" ]
-                            Elem.div [ cls "relative h-2 rounded-full overflow-hidden flex"; Attr.create "role" "img"; Attr.create "aria-label" aria ] [
-                                Elem.div [ cls "h-full"; Attr.style $"width: {h * 100.0:F1}%%; background: {homeColor}" ] []
-                                Elem.div [ cls "h-full"; Attr.style $"width: {a * 100.0:F1}%%; background: {awayColor}" ] []
+                        Elem.div [ cls "card-probability" ] [
+                            Elem.div [ cls "wc-advance-label" ] [ Text.raw "To advance" ]
+                            Elem.div [ cls "wc-advance-track"; Attr.create "role" "img"; Attr.create "aria-label" aria ] [
+                                Elem.div [ cls "wc-segment"; Attr.style $"width: {h * 100.0:F1}%%; background: {homeColor}" ] []
+                                Elem.div [ cls "wc-segment"; Attr.style $"width: {a * 100.0:F1}%%; background: {awayColor}" ] []
                                 if h > 0.0 && a > 0.0 then ProbabilityBar.divider h
                             ]
-                            Elem.div [ cls "grid grid-cols-2 gap-2 text-xs font-medium tabular-nums text-text-secondary mt-1" ] [
-                                Elem.span [ cls "truncate" ] [ Text.raw (probabilityLabel view.HomeTeamAbbreviation view.HomeTeam homePct) ]
-                                Elem.span [ cls "text-right truncate" ] [ Text.raw (probabilityLabel view.AwayTeamAbbreviation view.AwayTeam awayPct) ]
+                            Elem.div [ cls "wc-advance-labels" ] [
+                                Elem.span [ cls "wc-prob-home" ] [ Text.raw (probabilityLabel view.HomeTeamAbbreviation view.HomeTeam homePct) ]
+                                Elem.span [ cls "wc-prob-away" ] [ Text.raw (probabilityLabel view.AwayTeamAbbreviation view.AwayTeam awayPct) ]
                             ]
                         ]
                     else
-                        Elem.div [ cls "mt-3 rounded-md border border-border bg-bg-card-hover/40 px-3 py-2 text-xs text-text-muted text-center" ] [
+                        Elem.div [ cls "wc-market-note" ] [
                             Text.raw "Advance odds unavailable"
                         ]
                 elif hasThreeWayOdds view then
@@ -261,20 +261,20 @@ module WorldCupRenderer =
                     let homeName = if String.IsNullOrEmpty view.HomeTeam then view.HomeTeamAbbreviation else view.HomeTeam
                     let awayName = if String.IsNullOrEmpty view.AwayTeam then view.AwayTeamAbbreviation else view.AwayTeam
                     let aria = $"{homeName} {accessibleProbability homePct}, Draw {accessibleProbability drawPct}, {awayName} {accessibleProbability awayPct}"
-                    Elem.div [ cls "mt-3" ] [
-                        Elem.div [ cls "h-2 rounded-full overflow-hidden flex"; Attr.create "role" "img"; Attr.create "aria-label" aria ] [
-                            Elem.div [ cls "h-full transition-all duration-300"; Attr.style $"width: {h * 100.0:F1}%%; background: {homeColor}" ] []
-                            Elem.div [ cls "h-full transition-all duration-300"; Attr.style $"width: {d * 100.0:F1}%%; background: {drawColor}" ] []
-                            Elem.div [ cls "h-full transition-all duration-300"; Attr.style $"width: {a * 100.0:F1}%%; background: {awayColor}" ] []
+                    Elem.div [ cls "card-probability" ] [
+                        Elem.div [ cls "wc-track"; Attr.create "role" "img"; Attr.create "aria-label" aria ] [
+                            Elem.div [ cls "wc-track-segment"; Attr.style $"width: {h * 100.0:F1}%%; background: {homeColor}" ] []
+                            Elem.div [ cls "wc-track-segment"; Attr.style $"width: {d * 100.0:F1}%%; background: {drawColor}" ] []
+                            Elem.div [ cls "wc-track-segment"; Attr.style $"width: {a * 100.0:F1}%%; background: {awayColor}" ] []
                         ]
-                        Elem.div [ cls "grid grid-cols-3 gap-2 text-xs font-medium tabular-nums mt-1" ] [
-                            Elem.span [ cls "truncate"; Attr.style $"color: {homeColor}" ] [ Text.raw (probabilityLabel view.HomeTeamAbbreviation view.HomeTeam homePct) ]
-                            Elem.span [ cls "text-center truncate"; Attr.style $"color: {drawColor}" ] [ Text.enc $"Draw {drawPct}" ]
-                            Elem.span [ cls "text-right truncate"; Attr.style $"color: {awayColor}" ] [ Text.raw (probabilityLabel view.AwayTeamAbbreviation view.AwayTeam awayPct) ]
+                        Elem.div [ cls "wc-prob-labels" ] [
+                            Elem.span [ cls "wc-prob-home"; Attr.style $"color: {homeColor}" ] [ Text.raw (probabilityLabel view.HomeTeamAbbreviation view.HomeTeam homePct) ]
+                            Elem.span [ cls "wc-prob-draw"; Attr.style $"color: {drawColor}" ] [ Text.enc $"Draw {drawPct}" ]
+                            Elem.span [ cls "wc-prob-away"; Attr.style $"color: {awayColor}" ] [ Text.raw (probabilityLabel view.AwayTeamAbbreviation view.AwayTeam awayPct) ]
                         ]
                     ]
                 else
-                    Elem.div [ cls "mt-3 rounded-md border border-border bg-bg-card-hover/40 px-3 py-2 text-xs text-text-muted text-center" ] [
+                    Elem.div [ cls "wc-market-note" ] [
                         Text.raw "3-way odds unavailable"
                     ]
         ]
@@ -288,7 +288,7 @@ module WorldCupRenderer =
     let private matchProbabilityBarContent (view: WorldCupCardView) =
         [
             if view.Status = "final" then
-                Elem.p [ cls "text-sm text-text-muted" ] [ Text.raw "Final matches no longer show live probability." ]
+                Elem.p [ cls "meta-text" ] [ Text.raw "Final matches no longer show live probability." ]
             else
                 yield! probabilityBarContent view
         ]
@@ -300,7 +300,7 @@ module WorldCupRenderer =
         [
             if view.Status = "in_progress" then
                 let clockText = FormatHelpers.formatGameClock view.Period view.GameClock view.Sport
-                Elem.div [ cls "mt-2 text-sm text-status-live font-medium text-center" ] [
+                Elem.div [ cls "live-clock" ] [
                     Text.raw (if String.IsNullOrEmpty clockText then "Live" else clockText)
                 ]
         ]
@@ -316,9 +316,9 @@ module WorldCupRenderer =
             if view.Status <> "final" && view.NailbiterScore.HasValue && hasThreeWayOdds view then
                 let level = FormatHelpers.getHypeLevel view.NailbiterScore
                 let levelClass = FormatHelpers.hypeLevelClass level
-                Elem.div [ cls "text-right" ] [
-                    Elem.span [ cls "block text-xs text-text-muted mb-0.5" ] [ Text.raw "Nailbiter" ]
-                    Elem.span [ cls $"text-xl font-semibold tabular-nums {levelClass}" ] [
+                Elem.div [ cls "metric-block" ] [
+                    Elem.span [ cls "metric-label" ] [ Text.raw "Nailbiter" ]
+                    Elem.span [ cls $"metric-value {levelClass}" ] [
                         Text.raw $"{Math.Round(view.NailbiterScore.Value)}"
                     ]
                 ]
@@ -334,59 +334,59 @@ module WorldCupRenderer =
         let status = GameStatusExtensions.FromDbValue(view.Status)
         let statusLabel = if status.HasValue then FormatHelpers.getStatusLabel status.Value else view.Status
         let statusClass = if status.HasValue then FormatHelpers.getStatusClass status.Value else ""
-        Elem.span [ cls $"text-xs font-medium px-1.5 py-0.5 rounded {statusClass}"; Attr.id $"{idPrefix}{view.Id}" ] [ Text.raw statusLabel ]
+        Elem.span [ cls $"status-badge {statusClass}"; Attr.id $"{idPrefix}{view.Id}" ] [ Text.raw statusLabel ]
 
     let private marketLabel (view: WorldCupCardView) =
         if view.IsOvertime then "To advance" else "Home / Draw / Away"
 
     let private cardChildren (view: WorldCupCardView) =
         [
-            Elem.div [ cls "flex items-center justify-between mb-3" ] [
-                Elem.div [ cls "flex items-center gap-2" ] [
-                    Elem.img [ Attr.src (Logos.getLeagueLogoUrl Sport.WORLD_CUP); Attr.alt "World Cup"; cls "w-4 h-4" ]
+            Elem.div [ cls "wc-card-header" ] [
+                Elem.div [ cls "wc-card-league" ] [
+                    Elem.img [ Attr.src (Logos.getLeagueLogoUrl Sport.WORLD_CUP); Attr.alt "World Cup"; cls "league-icon" ]
                     statusBadge "status-" view
                 ]
                 if view.Status = "scheduled" || view.Status = "final" then
-                    Elem.span [ cls "text-sm text-text-muted" ] [ FormatHelpers.scheduledTimeNode view.ScheduledStart ]
+                    Elem.span [ cls "meta-text" ] [ FormatHelpers.scheduledTimeNode view.ScheduledStart ]
             ]
-            Elem.div [ cls "space-y-2"; Attr.id $"scores-{view.Id}" ] [
+            Elem.div [ cls "team-scores"; Attr.id $"scores-{view.Id}" ] [
                 teamLine view.AwayTeamAbbreviation view.AwayTeam view.AwayScore awayColor
                 teamLine view.HomeTeamAbbreviation view.HomeTeam view.HomeScore homeColor
             ]
             probabilityBar view
             clock view
-            Elem.div [ cls "flex justify-between items-end pt-2 mt-2 border-t border-border" ] [
-                Elem.span [ cls "text-xs text-text-muted"; Attr.id $"market-label-{view.Id}" ] [ Text.raw (marketLabel view) ]
+            Elem.div [ cls "wc-card-footer" ] [
+                Elem.span [ cls "wc-market-label"; Attr.id $"market-label-{view.Id}" ] [ Text.raw (marketLabel view) ]
                 scoreBlock view
             ]
         ]
 
     let RenderCardLink (card: WorldCupCardData) =
         let view = viewFromCard card
-        let liveClass = if view.Status = "in_progress" then " border-status-live/30" else ""
-        Elem.a [ Attr.href (matchUrl view); cls $"block bg-bg-card border border-border rounded-lg p-4 hover:border-border-hover transition-colors group{liveClass}" ] (cardChildren view)
+        let liveClass = if view.Status = "in_progress" then " is-live" else ""
+        Elem.a [ Attr.href (matchUrl view); cls $"wc-card{liveClass}" ] (cardChildren view)
 
     let RenderCardStatic (card: WorldCupCardData) =
         let view = viewFromCard card
-        let liveClass = if view.Status = "in_progress" then " border-status-live/30 bg-status-live/5" else ""
-        Elem.div [ cls $"block bg-bg-card border border-border rounded-lg p-4{liveClass}" ] (cardChildren view)
+        let liveClass = if view.Status = "in_progress" then " is-live" else ""
+        Elem.div [ cls $"wc-card-static{liveClass}" ] (cardChildren view)
 
     let RenderPage (cards: Collections.Generic.List<WorldCupCardData>) =
         [
-            Elem.div [ cls "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" ] [
-                Elem.div [ cls "mb-8" ] [
-                    Elem.h1 [ cls "text-2xl font-semibold mb-1 flex items-center gap-2" ] [
+            Elem.div [ cls "page" ] [
+                Elem.div [ cls "page-header" ] [
+                    Elem.h1 [ cls "league-title" ] [
                         Elem.span [] [ Text.raw "⚽" ]
                         Elem.span [] [ Text.raw "FIFA World Cup" ]
                     ]
-                    Elem.p [ cls "text-text-muted text-sm" ] [ Text.raw "Live-first match cards with home, draw, and away probabilities" ]
+                    Elem.p [ cls "meta-text" ] [ Text.raw "Live-first match cards with home, draw, and away probabilities" ]
                 ]
                 if cards.Count = 0 then
-                    Elem.div [ cls "bg-bg-card border border-border rounded-lg p-12 text-center" ] [
-                        Elem.p [ cls "text-text-muted" ] [ Text.raw "No active World Cup matches are available right now." ]
+                    Elem.div [ cls "empty-state" ] [
+                        Elem.p [ cls "empty-state-text" ] [ Text.raw "No active World Cup matches are available right now." ]
                     ]
                 else
-                    Elem.div [ cls "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"; Attr.create "data-init" "@get('/sse/live/world_cup', {requestCancellation: 'cleanup'})" ] [
+                    Elem.div [ cls "wc-grid"; Attr.create "data-init" "@get('/sse/live/world_cup', {requestCancellation: 'cleanup'})" ] [
                         for card in cards do
                             RenderCardLink card
                     ]
@@ -395,28 +395,28 @@ module WorldCupRenderer =
 
     let private matchTeamColumn (abbr: string) (name: string) (score: Nullable<int>) (color: string) =
         let flag = countryFlag abbr name
-        Elem.div [ cls "flex flex-col items-center gap-2 min-w-0" ] [
+        Elem.div [ cls "wc-match-team" ] [
             if not (String.IsNullOrEmpty flag) then
-                Elem.span [ cls "text-3xl leading-none"; Attr.create "aria-hidden" "true" ] [ Text.raw flag ]
-            Elem.div [ cls "flex items-center gap-2" ] [
-                Elem.span [ cls "inline-block w-2 h-2 rounded-full flex-shrink-0"; Attr.style $"background: {color}" ] []
-                Elem.span [ cls "text-xl font-semibold text-text-primary truncate" ] [ Text.enc abbr ]
+                Elem.span [ cls "wc-match-flag"; Attr.create "aria-hidden" "true" ] [ Text.raw flag ]
+            Elem.div [ cls "wc-match-team-name" ] [
+                Elem.span [ cls "team-dot"; Attr.style $"background: {color}" ] []
+                Elem.span [ cls "wc-match-abbr" ] [ Text.enc abbr ]
             ]
             if not (String.IsNullOrEmpty name) then
-                Elem.span [ cls "text-sm text-text-muted text-center truncate" ] [ Text.enc name ]
+                Elem.span [ cls "wc-match-name" ] [ Text.enc name ]
             if score.HasValue then
-                Elem.span [ cls "text-3xl font-bold tabular-nums text-text-primary" ] [ Text.raw $"{score.Value}" ]
+                Elem.span [ cls "detail-score" ] [ Text.raw $"{score.Value}" ]
         ]
 
     let private matchScores (view: WorldCupCardView) =
-        Elem.div [ Attr.id $"match-scores-{view.Id}"; cls "grid grid-cols-3 gap-4 items-center text-center" ] [
+        Elem.div [ Attr.id $"match-scores-{view.Id}"; cls "wc-match-scores" ] [
             matchTeamColumn view.AwayTeamAbbreviation view.AwayTeam view.AwayScore awayColor
-            Elem.div [ cls "flex flex-col items-center gap-1" ] [
+            Elem.div [ cls "wc-match-center" ] [
                 if view.Status = "scheduled" then
-                    Elem.span [ cls "text-text-muted text-lg" ] [ Text.raw "VS" ]
-                    Elem.span [ cls "text-text-muted text-sm" ] [ FormatHelpers.scheduledTimeNode view.ScheduledStart ]
+                    Elem.span [ cls "scoreboard-vs" ] [ Text.raw "VS" ]
+                    Elem.span [ cls "meta-text" ] [ FormatHelpers.scheduledTimeNode view.ScheduledStart ]
                 else
-                    Elem.span [ cls "text-text-muted text-lg" ] [ Text.raw "@" ]
+                    Elem.span [ cls "scoreboard-vs" ] [ Text.raw "@" ]
             ]
             matchTeamColumn view.HomeTeamAbbreviation view.HomeTeam view.HomeScore homeColor
         ]
@@ -425,14 +425,14 @@ module WorldCupRenderer =
         if moneyline.HasValue then FormatHelpers.formatMoneyline moneyline.Value else "—"
 
     let private oddsRow (label: string) (abbr: string) (name: string) (moneyline: Nullable<int>) (color: string) =
-        Elem.div [ cls "flex items-center justify-between gap-3 py-2 border-b border-border" ] [
-            Elem.div [ cls "flex items-center gap-2 min-w-0" ] [
-                Elem.span [ cls "inline-block w-2 h-2 rounded-full flex-shrink-0"; Attr.style $"background: {color}" ] []
+        Elem.div [ cls "wc-odds-row" ] [
+            Elem.div [ cls "wc-team" ] [
+                Elem.span [ cls "team-dot"; Attr.style $"background: {color}" ] []
                 yield! flagNode abbr name
-                Elem.span [ cls "text-sm text-text-muted" ] [ Text.raw label ]
-                Elem.span [ cls "font-medium text-text-primary truncate" ] [ Text.enc abbr ]
+                Elem.span [ cls "meta-text" ] [ Text.raw label ]
+                Elem.span [ cls "wc-team-abbr" ] [ Text.enc abbr ]
             ]
-            Elem.span [ cls "font-semibold tabular-nums text-text-primary" ] [ Text.raw (moneylineText moneyline) ]
+            Elem.span [ cls "wc-odds-value" ] [ Text.raw (moneylineText moneyline) ]
         ]
 
     let private probabilityChart (view: WorldCupCardView) (snapshots: Collections.Generic.List<OddsSnapshot>) =
@@ -448,9 +448,9 @@ module WorldCupRenderer =
             if view.IsOvertime then "Probability of each team advancing over time"
             else "Home, draw, and away movement over time"
 
-        Elem.div [ cls "bg-bg-card border border-border rounded-xl p-6 mb-6" ] [
-            Elem.h2 [ cls "text-lg font-semibold mb-1" ] [ Text.raw chartTitle ]
-            Elem.p [ cls "text-xs text-text-muted mb-4" ] [ Text.raw chartDescription ]
+        Elem.div [ cls "panel" ] [
+            Elem.h2 [ cls "panel-title-tight" ] [ Text.raw chartTitle ]
+            Elem.p [ cls "panel-subtitle" ] [ Text.raw chartDescription ]
             if chartSnapshots.Length >= 2 then
                 let chartData =
                     chartSnapshots
@@ -477,10 +477,10 @@ module WorldCupRenderer =
                     Attr.create "home-abbr" (if view.IsOvertime then $"{view.HomeTeamAbbreviation} advances" else view.HomeTeamAbbreviation)
                     Attr.create "draw-abbr" "Draw"
                     Attr.create "away-abbr" (if view.IsOvertime then $"{view.AwayTeamAbbreviation} advances" else view.AwayTeamAbbreviation)
-                    cls "block h-64"
+                    cls "odds-chart"
                 ] []
             else
-                Elem.div [ cls "rounded-md border border-border bg-bg-card-hover/40 px-3 py-4 text-sm text-text-muted text-center" ] [
+                Elem.div [ cls "wc-chart-empty" ] [
                     Text.raw "Graph appears once live odds history has at least two updates."
                 ]
         ]
@@ -488,60 +488,60 @@ module WorldCupRenderer =
     let RenderMatchPage (card: WorldCupCardData) (snapshots: Collections.Generic.List<OddsSnapshot>) =
         let view = viewFromCard card
         [
-            Elem.div [ cls "max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8"; Attr.create "data-live-terminal" (if view.Status = "final" then "true" else "false") ] [
-                Elem.a [ Attr.href "/world-cup"; cls "text-sm text-text-muted hover:text-text-primary" ] [ Text.raw "← All World Cup matches" ]
-                Elem.div [ cls "mt-6 mb-6" ] [
-                    Elem.div [ cls "flex items-center gap-2 mb-1" ] [
-                        Elem.img [ Attr.src (Logos.getLeagueLogoUrl Sport.WORLD_CUP); Attr.alt "World Cup"; cls "w-5 h-5" ]
-                        Elem.span [ cls "text-sm text-text-muted" ] [ Text.raw "FIFA World Cup" ]
+            Elem.div [ cls "page-narrow"; Attr.create "data-live-terminal" (if view.Status = "final" then "true" else "false") ] [
+                Elem.a [ Attr.href "/world-cup"; cls "back-link" ] [ Text.raw "← All World Cup matches" ]
+                Elem.div [ cls "wc-match-header" ] [
+                    Elem.div [ cls "wc-match-eyebrow" ] [
+                        Elem.img [ Attr.src (Logos.getLeagueLogoUrl Sport.WORLD_CUP); Attr.alt "World Cup"; cls "detail-league-logo" ]
+                        Elem.span [ cls "meta-text" ] [ Text.raw "FIFA World Cup" ]
                     ]
-                    Elem.h1 [ cls "text-2xl font-semibold text-text-primary" ] [
+                    Elem.h1 [ cls "wc-match-title" ] [
                         Text.enc $"{view.AwayTeamAbbreviation} at {view.HomeTeamAbbreviation}"
                     ]
-                    Elem.p [ cls "text-text-muted text-sm mt-1" ] [
+                    Elem.p [ cls "wc-match-subtitle" ] [
                         Text.enc $"{view.AwayTeam} at {view.HomeTeam}"
                     ]
                 ]
-                Elem.div [ cls "grid grid-cols-1 md:grid-cols-3 gap-4" ] [
-                    Elem.div [ cls "md:col-span-2" ] [
-                        Elem.div [ cls "bg-bg-card border border-border rounded-xl p-6 mb-6" ] [
-                            Elem.div [ cls "flex items-center justify-between mb-6" ] [
+                Elem.div [ cls "wc-match-layout" ] [
+                    Elem.div [ cls "wc-match-main" ] [
+                        Elem.div [ cls "panel" ] [
+                            Elem.div [ cls "detail-topbar" ] [
                                 statusBadge "match-status-" view
                                 if view.Status = "scheduled" || view.Status = "final" then
-                                    Elem.span [ cls "text-sm text-text-muted" ] [ FormatHelpers.scheduledTimeNode view.ScheduledStart ]
+                                    Elem.span [ cls "meta-text" ] [ FormatHelpers.scheduledTimeNode view.ScheduledStart ]
                             ]
                             matchScores view
                             matchClock view
                         ]
-                        Elem.div [ cls "bg-bg-card border border-border rounded-xl p-6 mb-6" ] [
-                            Elem.h2 [ cls "text-lg font-semibold mb-4"; Attr.id $"match-market-label-{view.Id}" ] [ Text.raw (marketLabel view) ]
+                        Elem.div [ cls "panel" ] [
+                            Elem.h2 [ cls "panel-title"; Attr.id $"match-market-label-{view.Id}" ] [ Text.raw (marketLabel view) ]
                             matchProbabilityBar view
                         ]
                         probabilityChart view snapshots
                     ]
-                    Elem.div [ cls "space-y-4" ] [
-                        Elem.div [ cls "bg-bg-card border border-border rounded-xl p-6" ] [
-                            Elem.div [ cls "flex items-end justify-between gap-4" ] [
+                    Elem.div [ cls "wc-match-aside" ] [
+                        Elem.div [ cls "wc-side-panel" ] [
+                            Elem.div [ cls "wc-score-header" ] [
                                 Elem.div [] [
-                                    Elem.h2 [ cls "text-lg font-semibold" ] [ Text.raw "Nailbiter" ]
-                                    Elem.p [ cls "text-xs text-text-muted mt-1" ] [ Text.raw (if view.IsOvertime then "Unavailable for advance odds" else "3-way closeness score") ]
+                                    Elem.h2 [ cls "wc-score-title" ] [ Text.raw "Nailbiter" ]
+                                    Elem.p [ cls "wc-score-subtitle" ] [ Text.raw (if view.IsOvertime then "Unavailable for advance odds" else "3-way closeness score") ]
                                 ]
                                 matchScoreBlock view
                             ]
                             if not (view.NailbiterScore.HasValue && hasThreeWayOdds view && view.Status <> "final") then
-                                Elem.p [ cls "text-sm text-text-muted mt-3" ] [
+                                Elem.p [ cls "wc-score-note" ] [
                                     Text.raw (if view.IsOvertime then "Score is unavailable for two-way advance odds." else "Score unavailable until complete 3-way odds are available.")
                                 ]
                         ]
-                        Elem.div [ cls "bg-bg-card border border-border rounded-xl p-6" ] [
-                            Elem.h2 [ cls "text-lg font-semibold mb-1" ] [ Text.raw (if view.IsOvertime then "To advance" else "Moneyline") ]
-                            Elem.p [ cls "text-xs text-text-muted mb-4" ] [ Text.raw (if view.IsOvertime then "Latest live advance odds" else "Latest complete 3-way odds at page load") ]
+                        Elem.div [ cls "wc-side-panel" ] [
+                            Elem.h2 [ cls "panel-title-tight" ] [ Text.raw (if view.IsOvertime then "To advance" else "Moneyline") ]
+                            Elem.p [ cls "panel-subtitle" ] [ Text.raw (if view.IsOvertime then "Latest live advance odds" else "Latest complete 3-way odds at page load") ]
                             oddsRow "Away" view.AwayTeamAbbreviation view.AwayTeam card.AwayMoneyline awayColor
                             if not view.IsOvertime then
                                 oddsRow "Draw" "DRAW" "Draw" card.DrawMoneyline drawColor
                             oddsRow "Home" view.HomeTeamAbbreviation view.HomeTeam card.HomeMoneyline homeColor
                             if not (String.IsNullOrEmpty card.Source) || card.OddsTimestamp.HasValue then
-                                Elem.div [ cls "text-xs text-text-muted mt-3" ] [
+                                Elem.div [ cls "wc-odds-note" ] [
                                     if not (String.IsNullOrEmpty card.Source) then
                                         Text.enc card.Source
                                     if not (String.IsNullOrEmpty card.Source) && card.OddsTimestamp.HasValue then
@@ -558,14 +558,14 @@ module WorldCupRenderer =
     let RenderFragments (update: GameUpdate) =
         let view = viewFromUpdate update
         [
-            Elem.div [ Attr.id $"scores-{update.GameId}"; cls "space-y-2" ] [
+            Elem.div [ Attr.id $"scores-{update.GameId}"; cls "team-scores" ] [
                 teamLine view.AwayTeamAbbreviation view.AwayTeam update.AwayScore awayColor
                 teamLine view.HomeTeamAbbreviation view.HomeTeam update.HomeScore homeColor
             ]
             probabilityBar view
             clock view
             scoreBlock view
-            Elem.span [ cls "text-xs text-text-muted"; Attr.id $"market-label-{view.Id}" ] [ Text.raw (marketLabel view) ]
+            Elem.span [ cls "wc-market-label"; Attr.id $"market-label-{view.Id}" ] [ Text.raw (marketLabel view) ]
             statusBadge "status-" view
         ]
         |> List.map XmlNodeRenderer.renderNode
@@ -575,7 +575,7 @@ module WorldCupRenderer =
         let view = viewFromUpdate update
         [
             matchScores view
-            Elem.h2 [ cls "text-lg font-semibold mb-4"; Attr.id $"match-market-label-{view.Id}" ] [ Text.raw (marketLabel view) ]
+            Elem.h2 [ cls "panel-title"; Attr.id $"match-market-label-{view.Id}" ] [ Text.raw (marketLabel view) ]
             matchProbabilityBar view
             matchClock view
             matchScoreBlock view

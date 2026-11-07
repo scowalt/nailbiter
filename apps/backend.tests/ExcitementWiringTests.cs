@@ -65,7 +65,7 @@ public sealed class ExcitementWiringTests : IAsyncLifetime
                 {
                     var region = page.QuerySelector("#" + regionId);
                     Assert.NotNull(region);
-                    Assert.Null(region.QuerySelector("[class*=text-excitement-]"));
+                    Assert.Null(region.QuerySelector(".excitement-high, .excitement-medium, .excitement-low"));
                     Assert.Equal(sport == "cfb" ? "Excitement unavailable" : "", region.TextContent.Trim());
                 }
             }

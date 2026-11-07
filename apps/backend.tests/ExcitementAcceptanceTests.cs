@@ -187,7 +187,7 @@ public sealed class ExcitementAcceptanceTests(ITestOutputHelper output) : IAsync
                 var rating = document.QuerySelector($"#excitement-{id}");
                 Assert.NotNull(rating);
                 Assert.Equal("Excitement unavailable", rating.TextContent.Trim());
-                Assert.Empty(rating.QuerySelectorAll(".tabular-nums"));
+                Assert.Empty(rating.QuerySelectorAll(".metric-value, .home-metric-value"));
             }
         }
     }
@@ -245,7 +245,7 @@ public sealed class ExcitementAcceptanceTests(ITestOutputHelper output) : IAsync
         var rating = document.QuerySelector($"#excitement-{id}");
         Assert.NotNull(rating);
         Assert.Contains("Excitement", rating.TextContent);
-        var value = Assert.Single(rating.QuerySelectorAll($".text-excitement-{band}"));
+        var value = Assert.Single(rating.QuerySelectorAll($".excitement-{band}"));
         Assert.Equal(displayed, value.TextContent.Trim());
     }
 

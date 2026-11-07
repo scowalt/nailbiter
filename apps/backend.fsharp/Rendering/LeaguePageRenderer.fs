@@ -36,96 +36,96 @@ module LeaguePageRenderer =
         let awayLogoUrl = if game.Sport = "cfb" then CollegeFootballPolicy.Logo(game.AwayTeamId) |> Option.ofObj else Logos.getTeamLogoUrl sport game.AwayTeamAbbreviation
 
         let homeWinProb = latestOdds |> Option.map (fun o -> o.HomeWinProbability) |> Option.defaultValue 0.5
-        let liveClass = if isLive then " border-status-live/30 bg-status-live/5" else ""
+        let liveClass = if isLive then " is-live" else ""
         let displayOverride team =
             match teamRanks.TryGetValue($"{game.Sport}:{PlayoffRatingPolicy.gameSeason game}:{game.SeasonType.GetValueOrDefault()}:{team}") with
             | true, rank -> rank.PlayoffDisplayOverride.IsSome
             | _ -> false
         let responsiveRows = game.Sport = "cfb" || (game.Sport = "nfl" && (displayOverride game.HomeTeamAbbreviation || displayOverride game.AwayTeamAbbreviation))
 
-        let card = Elem.a [ Attr.href $"/game/{game.Id}"; cls $"block bg-bg-card border border-border rounded-lg p-4 hover:border-border-hover transition-colors group{liveClass}" ] [
-            Elem.div [ cls (if responsiveRows then "flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" else "flex items-center justify-between") ] [
-                Elem.div [ cls "flex items-center gap-3 min-w-0 flex-1"; Attr.id $"scores-{game.Id}" ] [
-                    Elem.div [ cls "flex items-center gap-2 min-w-0" ] [
+        let card = Elem.a [ Attr.href $"/game/{game.Id}"; cls $"league-game{liveClass}" ] [
+            Elem.div [ cls (if responsiveRows then "league-game-body-stacked" else "league-game-body") ] [
+                Elem.div [ cls "league-matchup"; Attr.id $"scores-{game.Id}" ] [
+                    Elem.div [ cls "league-team" ] [
                         match awayLogoUrl with
-                        | Some url -> Elem.img [ Attr.src url; Attr.alt game.AwayTeamAbbreviation; cls "w-6 h-6 flex-shrink-0 rounded-full ring-1 ring-white/20" ]
+                        | Some url -> Elem.img [ Attr.src url; Attr.alt game.AwayTeamAbbreviation; cls "league-team-logo" ]
                         | None -> ()
-                        Elem.div [ cls "flex flex-col min-w-0" ] [
-                            Elem.span [ cls "font-medium text-text-primary truncate group-hover:text-accent transition-colors" ] [
+                        Elem.div [ cls "league-team-label" ] [
+                            Elem.span [ cls "league-team-name" ] [
                                 Text.enc game.AwayTeamAbbreviation
                                 if game.Sport = "cfb" then yield! FormatHelpers.apRank game.AwayApRank
                             ]
                             match teamRanks.TryGetValue($"{game.Sport}:{PlayoffRatingPolicy.gameSeason game}:{game.SeasonType.GetValueOrDefault()}:{game.AwayTeamAbbreviation}") with
                             | true, rank ->
                                 match rank.DisplayRank with
-                                | Some text -> Elem.span [ cls (if rank.PlayoffDisplayOverride.IsSome then "text-xs text-text-secondary/70" else "text-xs text-text-muted/70"); yield! FormatHelpers.playoffDisplayConventionAttributes rank.PlayoffDisplayOverride.IsSome ] [ Text.enc text ]
+                                | Some text -> Elem.span [ cls (if rank.PlayoffDisplayOverride.IsSome then "team-rank-override" else "team-rank"); yield! FormatHelpers.playoffDisplayConventionAttributes rank.PlayoffDisplayOverride.IsSome ] [ Text.enc text ]
                                 | None -> ()
                             | _ -> ()
                         ]
-                        Elem.span [ cls "text-lg font-semibold tabular-nums text-text-primary"; Attr.id $"away-score-{game.Id}" ] [
+                        Elem.span [ cls "team-score"; Attr.id $"away-score-{game.Id}" ] [
                             if game.AwayScore.HasValue then Text.raw $"{game.AwayScore.Value}"
                         ]
                     ]
-                    Elem.span [ cls "text-text-muted text-xs mx-2" ] [ Text.raw "@" ]
-                    Elem.div [ cls "flex items-center gap-2 min-w-0" ] [
+                    Elem.span [ cls "league-at" ] [ Text.raw "@" ]
+                    Elem.div [ cls "league-team" ] [
                         match homeLogoUrl with
-                        | Some url -> Elem.img [ Attr.src url; Attr.alt game.HomeTeamAbbreviation; cls "w-6 h-6 flex-shrink-0 rounded-full ring-1 ring-white/20" ]
+                        | Some url -> Elem.img [ Attr.src url; Attr.alt game.HomeTeamAbbreviation; cls "league-team-logo" ]
                         | None -> ()
-                        Elem.div [ cls "flex flex-col min-w-0" ] [
-                            Elem.span [ cls "font-medium text-text-primary truncate group-hover:text-accent transition-colors" ] [
+                        Elem.div [ cls "league-team-label" ] [
+                            Elem.span [ cls "league-team-name" ] [
                                 Text.enc game.HomeTeamAbbreviation
                                 if game.Sport = "cfb" then yield! FormatHelpers.apRank game.HomeApRank
                             ]
                             match teamRanks.TryGetValue($"{game.Sport}:{PlayoffRatingPolicy.gameSeason game}:{game.SeasonType.GetValueOrDefault()}:{game.HomeTeamAbbreviation}") with
                             | true, rank ->
                                 match rank.DisplayRank with
-                                | Some text -> Elem.span [ cls (if rank.PlayoffDisplayOverride.IsSome then "text-xs text-text-secondary/70" else "text-xs text-text-muted/70"); yield! FormatHelpers.playoffDisplayConventionAttributes rank.PlayoffDisplayOverride.IsSome ] [ Text.enc text ]
+                                | Some text -> Elem.span [ cls (if rank.PlayoffDisplayOverride.IsSome then "team-rank-override" else "team-rank"); yield! FormatHelpers.playoffDisplayConventionAttributes rank.PlayoffDisplayOverride.IsSome ] [ Text.enc text ]
                                 | None -> ()
                             | _ -> ()
                         ]
-                        Elem.span [ cls "text-lg font-semibold tabular-nums text-text-primary"; Attr.id $"home-score-{game.Id}" ] [
+                        Elem.span [ cls "team-score"; Attr.id $"home-score-{game.Id}" ] [
                             if game.HomeScore.HasValue then Text.raw $"{game.HomeScore.Value}"
                         ]
                     ]
                 ]
-                Elem.div [ cls (if responsiveRows then "flex items-center justify-between gap-3 sm:flex-shrink-0 sm:ml-4" else "flex items-center gap-3 flex-shrink-0 ml-4") ] [
-                    Elem.span [ cls $"text-xs font-medium px-1.5 py-0.5 rounded {statusClass}"; Attr.id $"status-{game.Id}" ] [
+                Elem.div [ cls (if responsiveRows then "league-game-aside-stacked" else "league-game-aside") ] [
+                    Elem.span [ cls $"status-badge {statusClass}"; Attr.id $"status-{game.Id}" ] [
                         Text.raw statusLabel
                     ]
                     Elem.div [ Attr.id $"excitement-{game.Id}" ] [
                         if (game.Sport = "cfb" || backend.Scoring.ProHypePolicy.Supports(game.Sport)) && game.Status = "scheduled" && not hypeScore.HasValue then
-                            Elem.span [ cls "text-xs text-text-muted" ] [ Text.raw "Hype unavailable" ]
+                            Elem.span [ cls "unavailable-note" ] [ Text.raw "Hype unavailable" ]
                         elif game.Sport = "cfb" && (isLive || game.Status = "final") && not excitementScore.HasValue then
-                            Elem.span [ cls "text-xs text-text-muted" ] [ Text.raw "Excitement unavailable" ]
+                            Elem.span [ cls "unavailable-note" ] [ Text.raw "Excitement unavailable" ]
                         if excitementScore.HasValue && (isLive || game.Status = "final") then
                             let level = FormatHelpers.getExcitementLevel excitementScore
                             let levelClass = FormatHelpers.excitementLevelClass level
-                            Elem.div [ cls "text-right" ] [
-                                Elem.span [ cls "block text-xs text-text-muted mb-0.5" ] [ Text.raw "Excitement" ]
-                                Elem.span [ cls $"text-xl font-semibold tabular-nums {levelClass}" ] [
+                            Elem.div [ cls "metric-block" ] [
+                                Elem.span [ cls "metric-label" ] [ Text.raw "Excitement" ]
+                                Elem.span [ cls $"metric-value {levelClass}" ] [
                                     Text.raw $"{Math.Round(excitementScore.Value)}"
                                 ]
                             ]
                         if hypeScore.HasValue && game.Status = "scheduled" then
                             let level = FormatHelpers.getHypeLevel hypeScore
                             let levelClass = FormatHelpers.hypeLevelClass level
-                            Elem.div [ cls "text-right" ] [
-                                Elem.span [ cls "block text-xs text-text-muted mb-0.5" ] [ Text.raw "Hype" ]
-                                Elem.span [ cls $"text-xl font-semibold tabular-nums {levelClass}" ] [
+                            Elem.div [ cls "metric-block" ] [
+                                Elem.span [ cls "metric-label" ] [ Text.raw "Hype" ]
+                                Elem.span [ cls $"metric-value {levelClass}" ] [
                                     Text.raw $"{Math.Round(hypeScore.Value)}"
                                 ]
                             ]
                     ]
                     if game.Status = "scheduled" || game.Status = "final" then
-                        Elem.span [ cls "text-text-muted text-sm" ] [
+                        Elem.span [ cls "meta-text" ] [
                             FormatHelpers.scheduledTimeNode game.ScheduledStart
                             yield! FormatHelpers.broadcastNodes game
                         ]
                     elif isLive then
                         match FormatHelpers.broadcastNodes game with
                         | [] -> ()
-                        | nodes -> Elem.span [ cls "text-text-muted text-sm" ] (List.tail nodes)
-                    Elem.span [ cls "text-text-muted group-hover:text-text-primary transition-colors" ] [
+                        | nodes -> Elem.span [ cls "meta-text" ] (List.tail nodes)
+                    Elem.span [ cls "league-game-arrow" ] [
                         Text.raw "→"
                     ]
                 ]
@@ -133,32 +133,32 @@ module LeaguePageRenderer =
             yield! FormatHelpers.collegeContext game
             Elem.div [ Attr.id $"probbar-{game.Id}" ] [
                 if game.Sport = "cfb" && latestOdds.IsNone && isLive then
-                    Elem.span [ cls "text-xs text-text-muted" ] [ Text.raw "Live probability unavailable" ]
+                    Elem.span [ cls "unavailable-note" ] [ Text.raw "Live probability unavailable" ]
                 if latestOdds.IsSome && game.Status <> "final" then
-                    Elem.div [ cls "mt-3" ] [
+                    Elem.div [ cls "card-probability" ] [
                         ProbabilityBar.render true game.HomeTeamAbbreviation game.AwayTeamAbbreviation homeWinProb (1.0 - homeWinProb) colors
                     ]
             ]
             Elem.div [ Attr.id $"clock-{game.Id}" ] [
                 if game.Sport = "cfb" && isLive then
-                    Elem.div [ cls "mt-2 text-sm text-status-live font-medium text-center" ] [
+                    Elem.div [ cls "live-clock" ] [
                         Text.enc (FormatHelpers.formatGameClock game.Period game.GameClock game.Sport)
                     ]
                 elif isLive && latestOdds.IsSome then
                     let odds = latestOdds.Value
                     let clockText = FormatHelpers.formatGameClock odds.Period odds.GameClock game.Sport
                     if clockText <> "" then
-                        Elem.div [ cls "mt-2 text-sm text-status-live font-medium text-center" ] [
+                        Elem.div [ cls "live-clock" ] [
                             Text.raw clockText
                         ]
             ]
             if isLive || game.Status = "final" then
-                Elem.div [ cls "mt-2" ] [
+                Elem.div [ cls "metric-trend" ] [
                     Elem.create "nb-sparkline" [
                         Attr.create "game-id" game.Id
                         Attr.create "data-live-final" (if game.Status = "final" then "true" else "false")
                         Attr.create "color" colors.Home
-                        cls "block h-8"
+                        cls "card-sparkline"
                     ] []
                 ]
         ]
@@ -171,32 +171,32 @@ module LeaguePageRenderer =
         let navPrevLabel = if usesWeeks then "← Previous Week" else "← Previous Day"
         let navNextLabel = if usesWeeks then "Next Week →" else "Next Day →"
         [
-            Elem.div [ cls "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" ] [
-                Elem.div [ cls "mb-8" ] [
-                    Elem.h1 [ cls "text-2xl font-semibold mb-1 flex items-center gap-2" ] [
+            Elem.div [ cls "page" ] [
+                Elem.div [ cls "page-header" ] [
+                    Elem.h1 [ cls "league-title" ] [
                         Elem.span [] [ Text.raw config.Meta.Emoji ]
                         Elem.span [] [ Text.raw config.Name ]
                     ]
                     match weekInfo with
                     | Some wi ->
-                        Elem.p [ cls "text-text-muted text-sm" ] [
+                        Elem.p [ cls "meta-text" ] [
                             Text.raw (if String.IsNullOrEmpty wi.WeekLabel then $"{wi.SeasonYear} Season" else $"{wi.SeasonYear} {wi.WeekLabel}")
                         ]
                     | None ->
-                        Elem.p [ cls "text-text-muted text-sm" ] [ Text.raw "No current season data" ]
+                        Elem.p [ cls "meta-text" ] [ Text.raw "No current season data" ]
                     match prevWeekUrl, nextWeekUrl with
                     | None, None -> ()
                     | _ ->
-                        Elem.div [ cls "flex items-center gap-4 mt-2" ] [
+                        Elem.div [ cls "week-nav" ] [
                             match prevWeekUrl with
                             | Some url ->
-                                Elem.a [ Attr.href url; cls "text-sm text-text-muted hover:text-text-primary transition-colors" ] [
+                                Elem.a [ Attr.href url; cls "week-nav-link" ] [
                                     Text.raw navPrevLabel
                                 ]
                             | None -> ()
                             match nextWeekUrl with
                             | Some url ->
-                                Elem.a [ Attr.href url; cls "text-sm text-text-muted hover:text-text-primary transition-colors ml-auto" ] [
+                                Elem.a [ Attr.href url; cls "week-nav-link is-next" ] [
                                     Text.raw navNextLabel
                                 ]
                             | None -> ()
@@ -204,17 +204,17 @@ module LeaguePageRenderer =
                 ]
                 match bracket with
                 | Some bracketData ->
-                    Elem.div [ cls "overflow-x-auto" ] [
+                    Elem.div [ cls "bracket-scroll" ] [
                         yield! PlayoffBracketRenderer.render bracketData
                     ]
                 | None -> ()
                 if games.Count = 0 then
-                    Elem.div [ cls "bg-bg-card border border-border rounded-lg p-12 text-center" ] [
-                        Elem.p [ cls "text-text-muted" ] [ Text.raw $"No {config.ShortName} games found." ]
+                    Elem.div [ cls "empty-state" ] [
+                        Elem.p [ cls "empty-state-text" ] [ Text.raw $"No {config.ShortName} games found." ]
                     ]
                 else
                     let sportStr = sport.ToString().ToLowerInvariant()
-                    Elem.div [ cls "space-y-2"; Attr.create "data-init" $"@get('/sse/live/{sportStr}', {{requestCancellation: 'cleanup'}})" ] [
+                    Elem.div [ cls "league-games"; Attr.create "data-init" $"@get('/sse/live/{sportStr}', {{requestCancellation: 'cleanup'}})" ] [
                         for game in games do
                             gameRow game sport odds scores hypeScores teamRanks hypeCredits
                     ]

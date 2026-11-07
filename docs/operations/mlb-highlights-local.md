@@ -183,7 +183,6 @@ export DOTNET_ROOT=/home/scowalt/.local/share/mise/installs/dotnet-legacy/10.0.4
 unset TESTCONTAINERS_RYUK_DISABLED
 bun install --frozen-lockfile
 (cd apps/web-components && bun install --frozen-lockfile && bun run build)
-(cd apps/backend && bun install --frozen-lockfile && bun run css:build)
 dotnet test apps/backend.tests
 dotnet test apps/backend.fsharp.tests
 dotnet build apps/backend -c Release

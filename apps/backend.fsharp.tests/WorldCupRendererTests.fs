@@ -282,9 +282,9 @@ let ``RenderMatchFragments renders two-way advance probabilities without a draw`
     Assert.Contains("ENG 92%", html)
     Assert.DoesNotContain("Draw", html)
     for fragment in [html; cardHtml] do
-        Assert.Contains("probability-divider absolute", fragment)
+        Assert.Contains("class=\"probability-divider\"", fragment)
         Assert.Contains("left: 7.5%;", fragment)
-        Assert.Contains("tabular-nums text-text-secondary", fragment)
+        Assert.Contains("wc-advance-labels", fragment)
 
 [<Fact>]
 let ``RenderMatchFragments hides stale regulation probabilities during overtime`` () =

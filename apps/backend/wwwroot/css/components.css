@@ -1,0 +1,752 @@
+@layer components {
+  .panel {
+    margin-bottom: 1.5rem;
+    border-radius: var(--radius-xl);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-border);
+    background-color: var(--color-bg-card);
+    padding: 1.5rem;
+  }
+
+  .panel-title {
+    margin-bottom: 1rem;
+    font-size: var(--text-lg);
+    line-height: var(--text-lg-line-height);
+    font-weight: 600;
+  }
+
+  .page-narrow {
+    margin-inline: auto;
+    max-width: 56rem;
+    padding-inline: 1rem;
+    padding-block: 2rem;
+  }
+
+  @media (min-width: 40rem) {
+    .page-narrow {
+      padding-inline: 1.5rem;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .page-narrow {
+      padding-inline: 2rem;
+    }
+  }
+
+  .detail-topbar {
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .detail-league-logo {
+    height: 1.25rem;
+    width: 1.25rem;
+  }
+
+  .scoreboard-vs {
+    font-size: var(--text-lg);
+    line-height: var(--text-lg-line-height);
+    color: var(--color-text-muted);
+  }
+
+  .odds-chart {
+    display: block;
+    height: 16rem;
+  }
+
+  .home-game-card {
+    display: block;
+    border-radius: var(--radius-lg);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-border);
+    background-color: var(--color-bg-card);
+  }
+
+  @media (hover: hover) {
+    .home-game-card:hover {
+      border-color: var(--color-border-hover);
+    }
+  }
+
+  .league-icon {
+    height: 1rem;
+    width: 1rem;
+  }
+
+  .status-badge {
+    border-radius: 0.25rem;
+    padding-inline: 0.375rem;
+    padding-block: 0.125rem;
+    font-size: var(--text-xs);
+    line-height: var(--text-xs-line-height);
+    font-weight: 500;
+  }
+
+  :where(.team-scores > :not(:last-child)) {
+    margin-block-end: 0.5rem;
+  }
+
+  .team-score {
+    font-size: var(--text-lg);
+    line-height: var(--text-lg-line-height);
+    font-weight: 600;
+    color: var(--color-text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .card-probability {
+    margin-top: 0.75rem;
+  }
+
+  .live-clock {
+    margin-top: 0.5rem;
+    text-align: center;
+    font-size: var(--text-sm);
+    line-height: var(--text-sm-line-height);
+    font-weight: 500;
+    color: var(--color-status-live);
+  }
+
+  .home-card-series {
+    border-top-style: solid;
+    border-top-width: 1px;
+    border-color: var(--color-border);
+    padding-top: 0.5rem;
+  }
+
+  .home-card-observed-metric {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    border-top-style: solid;
+    border-top-width: 1px;
+    border-color: var(--color-border);
+    padding-top: 0.5rem;
+  }
+
+  .metric-block {
+    text-align: right;
+  }
+
+  .metric-label {
+    margin-bottom: 0.125rem;
+    display: block;
+    font-size: var(--text-xs);
+    line-height: var(--text-xs-line-height);
+    color: var(--color-text-muted);
+  }
+
+  .metric-value {
+    font-size: var(--text-xl);
+    line-height: var(--text-xl-line-height);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .page {
+    margin-inline: auto;
+    max-width: 80rem;
+    padding-inline: 1rem;
+    padding-block: 2rem;
+  }
+
+  @media (min-width: 40rem) {
+    .page {
+      padding-inline: 1.5rem;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .page {
+      padding-inline: 2rem;
+    }
+  }
+
+  .empty-state {
+    border-radius: var(--radius-lg);
+    border-style: solid;
+    border-width: 1px;
+    border-color: var(--color-border);
+    background-color: var(--color-bg-card);
+    padding: 3rem;
+    text-align: center;
+  }
+
+  .empty-state-text {
+    color: var(--color-text-muted);
+  }
+
+  .home-section-title {
+    margin-bottom: 0.75rem;
+    font-size: var(--text-base);
+    line-height: var(--text-base-line-height);
+    font-weight: 600;
+  }
+
+  .detail-excitement-value {
+    font-size: var(--text-xl);
+    line-height: var(--text-xl-line-height);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .detail-score {
+    font-size: var(--text-3xl);
+    line-height: var(--text-3xl-line-height);
+    font-weight: 700;
+    color: var(--color-text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: var(--radius-md);
+    padding-inline: 0.5rem;
+    padding-block: 0.375rem;
+    font-size: var(--text-sm);
+    line-height: var(--text-sm-line-height);
+  }
+
+  .nav-link-logo {
+    height: 1rem;
+    width: 1rem;
+  }
+
+  .site-nav {
+    display: none;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  @media (min-width: 48rem) {
+    .site-nav {
+      display: flex;
+    }
+  }
+
+  .menu-toggle {
+    padding: 0.5rem;
+    color: var(--color-text-muted);
+    transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+
+  @media (hover: hover) {
+    .menu-toggle:hover {
+      color: var(--color-text-primary);
+    }
+  }
+
+  @media (min-width: 48rem) {
+    .menu-toggle {
+      display: none;
+    }
+  }
+
+  .menu-icon,
+  .header-league-logo,
+  .brand-logo {
+    height: 1.5rem;
+    width: 1.5rem;
+  }
+
+  .mobile-nav {
+    border-top-style: solid;
+    border-top-width: 1px;
+    border-color: var(--color-border);
+    background-color: var(--color-bg-primary);
+  }
+
+  @media (min-width: 48rem) {
+    .mobile-nav {
+      display: none;
+    }
+  }
+
+  .mobile-nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding-inline: 1rem;
+    padding-block: 0.75rem;
+  }
+
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    border-bottom-style: solid;
+    border-bottom-width: 1px;
+    border-color: var(--color-border);
+    background-color: color-mix(in oklab, var(--color-bg-primary) 95%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+
+  .site-header-inner {
+    margin-inline: auto;
+    max-width: 80rem;
+    padding-inline: 1rem;
+  }
+
+  @media (min-width: 40rem) {
+    .site-header-inner {
+      padding-inline: 1.5rem;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .site-header-inner {
+      padding-inline: 2rem;
+    }
+  }
+
+  .site-header-bar {
+    display: flex;
+    height: 3.5rem;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .site-identity {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: var(--text-lg);
+    line-height: var(--text-lg-line-height);
+    font-weight: 600;
+  }
+
+  .site-league-name {
+    font-size: var(--text-sm);
+    line-height: var(--text-sm-line-height);
+    color: var(--color-text-muted);
+  }
+
+  .reconnect-warning {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 100;
+    border-radius: var(--radius-md);
+    border-style: solid;
+    border-width: 1px;
+    background-color: var(--color-bg-card);
+    padding-inline: 0.75rem;
+    padding-block: 0.5rem;
+    font-size: var(--text-sm);
+    line-height: var(--text-sm-line-height);
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  }
+
+  .nav-link.nav-link-strong {
+    font-weight: 500;
+  }
+
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .league-title {
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: var(--text-2xl);
+    line-height: var(--text-2xl-line-height);
+    font-weight: 600;
+  }
+
+  .week-nav {
+    margin-top: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .week-nav-link {
+    font-size: var(--text-sm);
+    line-height: var(--text-sm-line-height);
+  }
+
+  .ap-rank {
+    margin-left: 0.125rem;
+    font-size: 0.65em;
+    line-height: 1;
+  }
+
+  .excitement-high {
+    color: var(--color-excitement-high);
+  }
+
+  .excitement-medium {
+    color: var(--color-excitement-medium);
+  }
+
+  .excitement-low {
+    color: var(--color-excitement-low);
+  }
+
+  .hype-high {
+    color: var(--color-hype-high);
+  }
+
+  .hype-medium {
+    color: var(--color-hype-medium);
+  }
+
+  .hype-low {
+    color: var(--color-hype-low);
+  }
+
+  .college-context {
+    margin-top: 0.5rem;
+    font-size: var(--text-xs);
+    line-height: var(--text-xs-line-height);
+    color: var(--color-text-muted);
+  }
+
+  .nb-broadcast {
+    white-space: nowrap;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border-width: 0;
+  }
+
+  .status-live {
+    background-color: color-mix(in oklab, var(--color-status-live) 20%, transparent);
+    color: var(--color-status-live);
+  }
+
+  .status-scheduled {
+    background-color: color-mix(in oklab, var(--color-status-scheduled) 20%, transparent);
+    color: var(--color-status-scheduled);
+  }
+
+  .status-final {
+    background-color: color-mix(in oklab, var(--color-status-final) 20%, transparent);
+    color: var(--color-status-final);
+  }
+
+  .probability-divider {
+    position: absolute;
+    top: 0;
+    height: 100%;
+  }
+
+  .probability-title {
+    margin-bottom: 0.25rem;
+    text-align: center;
+    font-size: var(--text-sm);
+    line-height: var(--text-sm-line-height);
+    color: var(--color-text-secondary);
+  }
+
+  .probability-labels {
+    margin-bottom: 0.25rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: var(--text-sm);
+    line-height: var(--text-sm-line-height);
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .probability-home-label {
+    text-align: right;
+  }
+
+  .probability-track {
+    position: relative;
+    display: flex;
+    height: 0.75rem;
+    overflow: hidden;
+    border-radius: 9999px;
+  }
+
+  .probability-away,
+  .probability-home {
+    height: 100%;
+    flex-shrink: 0;
+  }
+
+  .probability-labels.is-compact {
+    font-size: var(--text-xs);
+    line-height: var(--text-xs-line-height);
+  }
+
+  .probability-track.is-compact {
+    height: 0.375rem;
+  }
+
+  .back-link {
+    font-size: var(--text-sm);
+    line-height: var(--text-sm-line-height);
+  }
+
+  .home-schedule {
+    --home-muted: #a1a1aa;
+  }
+
+  .home-section + .home-section {
+    margin-top: 28px;
+  }
+
+  .home-game-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .home-game-item {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .home-game-card {
+    flex: 1;
+    min-width: 0;
+    padding: 16px;
+    color: var(--color-text-primary);
+    background: #151518;
+    border-color: #303035;
+  }
+
+  .home-game-card:hover {
+    color: var(--color-text-primary);
+    background: #1a1a1e;
+    border-color: #52525b;
+  }
+
+  .home-game-card[data-status="in_progress"] {
+    border-color: var(--color-status-live);
+  }
+
+  .home-schedule a:focus-visible {
+    outline: 2px solid var(--color-accent-hover);
+    outline-offset: 4px;
+  }
+
+  .home-game-item > p a {
+    text-underline-offset: 3px;
+  }
+
+  .home-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .home-card-meta {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .home-card-league {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .home-card-league img {
+    width: 14px;
+    height: 14px;
+  }
+
+  .home-game-card[data-status="scheduled"] [id^="status-"] {
+    display: none;
+  }
+
+  .home-card-time,
+  .home-metric-label {
+    color: var(--home-muted);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .home-card-hype {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .home-metric-value {
+    font-size: 24px;
+    line-height: 1;
+    font-weight: 600;
+  }
+
+  .home-game-card .hype-high {
+    color: #c084fc;
+  }
+
+  .home-game-card .hype-low,
+  .home-game-card .excitement-low {
+    color: var(--color-text-secondary);
+  }
+
+  .home-game-card .status-final {
+    color: var(--home-muted);
+  }
+
+  .home-hype-unavailable {
+    color: var(--home-muted);
+  }
+
+  .home-game-card [id^="scores-"] {
+    display: grid;
+    gap: 12px;
+  }
+
+  .home-game-card [id^="scores-"] > div {
+    margin: 0;
+    min-width: 0;
+  }
+
+  .home-game-card [id^="scores-"] img {
+    width: 28px;
+    height: 28px;
+    flex-shrink: 0;
+  }
+
+  .home-game-card [id^="home-score-"]:empty,
+  .home-game-card [id^="away-score-"]:empty,
+  .home-game-card [id^="probbar-"]:empty,
+  .home-game-card [id^="clock-"]:empty {
+    display: none;
+  }
+
+  @media (min-width: 768px) {
+    .home-game-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .home-game-card {
+      padding: 18px;
+    }
+
+    .home-card-top {
+      margin-bottom: 18px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .home-game-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .home-section[data-single-game="true"] .home-game-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .home-section[data-single-game="true"] .home-game-card {
+      display: grid;
+      grid-template-columns: minmax(140px, max-content) minmax(0, 1fr) auto;
+      column-gap: 32px;
+      align-items: center;
+    }
+
+    .home-section[data-single-game="true"] .home-card-top {
+      display: contents;
+    }
+
+    .home-section[data-single-game="true"] .home-card-meta {
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .home-section[data-single-game="true"] .home-card-hype,
+    .home-section[data-single-game="true"] .home-card-observed-metric {
+      grid-column: 3;
+      grid-row: 1;
+    }
+
+    .home-section[data-single-game="true"] .home-card-observed-metric {
+      border-top: 0;
+      padding-top: 0;
+      gap: 24px;
+    }
+
+    .home-section[data-single-game="true"] [id^="scores-"] {
+      grid-column: 2;
+      grid-row: 1;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 24px;
+    }
+
+    .home-section[data-single-game="true"] .home-card-context,
+    .home-section[data-single-game="true"] [id^="probbar-"],
+    .home-section[data-single-game="true"] [id^="clock-"] {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @keyframes live-pulse {
+    0%, 100% {
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.2);
+    }
+    50% {
+      box-shadow: 0 0 16px rgba(34, 197, 94, 0.4);
+    }
+  }
+
+  .animate-live-pulse {
+    animation: live-pulse 2s ease-in-out infinite;
+  }
+
+  .header-accent {
+    position: relative;
+  }
+
+  .header-accent::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      var(--header-accent, transparent),
+      transparent
+    );
+    opacity: 0.5;
+  }
+}

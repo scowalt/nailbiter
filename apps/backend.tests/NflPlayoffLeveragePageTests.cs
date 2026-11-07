@@ -162,7 +162,7 @@ public sealed partial class NflPlayoffPageTests
                 var outlook = doc.QuerySelector("#detail-comparison")!.Children.Single(row =>
                     row.Children.Length == 3 && row.Children[1].TextContent == "Playoff outlook");
                 Assert.Matches(@"^62\s*%$", outlook.Children[0].TextContent);
-                var rows = forecast.QuerySelectorAll(".grid");
+                var rows = forecast.QuerySelectorAll(".comparison-header, .comparison-row");
                 Assert.Contains("GB", rows[0].Children[0].TextContent);
                 Assert.Contains(smallSwing ? "59%" : "82%", rows[1].Children[0].TextContent);
                 Assert.Contains(game.HomeTeamAbbreviation, rows[0].Children[2].TextContent);

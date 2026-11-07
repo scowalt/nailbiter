@@ -6,6 +6,7 @@ The canonical public development, issue/PR, CI and CD repository is `scowalt/nai
 
 - Make changes through reviewed PRs. Push/create PRs only when the current task authorizes GitHub writes. Preserve required checks and protection; never merge directly to main or bypass failures.
 - Preserve application behavior, data, backups, provider flags and deployment identity unless the task explicitly approves those changes.
+- Backend styles are plain layered CSS with semantic class names and no build step. Follow `docs/styling.md`; do not add utility classes, `!important` or a styling dependency.
 - Keep frontend, marketing and backend independently buildable. Runtime pins are in `.mise.toml` and `apps/backend/global.json`.
 - Preserve upstream license/NOTICE requirements. Original code and new synthetic fixtures are MIT; third-party artwork/provider material are not relicensed. See `THIRD_PARTY.md` before changing bundled material.
 

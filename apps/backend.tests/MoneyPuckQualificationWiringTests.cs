@@ -249,7 +249,7 @@ public sealed partial class NflPlayoffPageTests
                 Assert.NotNull(region.QuerySelector("a[href='https://moneypuck.com/predictions.htm']"));
                 Assert.DoesNotContain("Hype unavailable", region.TextContent);
                 var score = path.StartsWith("/game/") ? doc.QuerySelector("#detail-hype")! : doc.QuerySelector($"#excitement-{game.Id}")!;
-                Assert.Equal("66", score.QuerySelector(path.StartsWith("/game/") ? ".text-3xl" : ".text-xl, .home-metric-value")!.TextContent);
+                Assert.Equal("66", score.QuerySelector(path.StartsWith("/game/") ? ".hype-score" : ".metric-value, .home-metric-value")!.TextContent);
                 if (!eligible)
                 {
                     Assert.DoesNotContain("25%", region.TextContent);
@@ -291,7 +291,7 @@ public sealed partial class NflPlayoffPageTests
             {
                 Assert.NotNull(doc.QuerySelector("#detail-hype a[href='https://moneypuck.com/predictions.htm']"));
                 Assert.Contains("model estimate", doc.QuerySelector("#detail-hype")!.TextContent);
-                Assert.Equal("66", doc.QuerySelector("#detail-hype .text-3xl")!.TextContent);
+                Assert.Equal("66", doc.QuerySelector("#detail-hype .hype-score")!.TextContent);
                 Assert.DoesNotContain("Hype unavailable", doc.Body!.TextContent);
             }
             else

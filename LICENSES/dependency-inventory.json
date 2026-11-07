@@ -346,24 +346,6 @@
     },
     {
       "ecosystem": "npm",
-      "name": "@jridgewell/gen-mapping",
-      "version": "0.3.13",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/@jridgewell__gen-mapping@0.3.13/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@jridgewell/remapping",
-      "version": "2.3.5",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/@jridgewell__remapping@2.3.5/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
       "name": "@jridgewell/resolve-uri",
       "version": "3.1.2",
       "declared_license": "MIT",
@@ -378,15 +360,6 @@
       "declared_license": "MIT",
       "notices": [
         "LICENSES/npm/@jridgewell__sourcemap-codec@1.5.5/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@jridgewell/trace-mapping",
-      "version": "0.3.31",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/@jridgewell__trace-mapping@0.3.31/LICENSE"
       ]
     },
     {
@@ -442,33 +415,6 @@
       "declared_license": "MIT",
       "notices": [
         "LICENSES/npm/@oslojs__encoding@1.1.0/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@parcel/watcher",
-      "version": "2.5.6",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/@parcel__watcher@2.5.6/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@parcel/watcher-linux-x64-glibc",
-      "version": "2.5.6",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/@parcel__watcher-linux-x64-glibc@2.5.6/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@parcel/watcher-linux-x64-musl",
-      "version": "2.5.6",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/@parcel__watcher-linux-x64-musl@2.5.6/LICENSE"
       ]
     },
     {
@@ -639,51 +585,6 @@
       "declared_license": "MIT",
       "notices": [
         "LICENSES/npm/@standard-schema__spec@1.1.0/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@tailwindcss/cli",
-      "version": "4.2.4",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/@tailwindcss__cli@4.2.4/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@tailwindcss/node",
-      "version": "4.2.4",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/@tailwindcss__node@4.2.4/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@tailwindcss/oxide",
-      "version": "4.2.4",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/@tailwindcss__oxide@4.2.4/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@tailwindcss/oxide-linux-x64-gnu",
-      "version": "4.2.4",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/@tailwindcss__oxide-linux-x64-gnu@4.2.4/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@tailwindcss/oxide-linux-x64-musl",
-      "version": "4.2.4",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/@tailwindcss__oxide-linux-x64-musl@4.2.4/LICENSE"
       ]
     },
     {
@@ -1771,15 +1672,6 @@
     },
     {
       "ecosystem": "npm",
-      "name": "enhanced-resolve",
-      "version": "5.21.2",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/enhanced-resolve@5.21.2/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
       "name": "entities",
       "version": "4.5.0",
       "declared_license": "BSD-2-Clause",
@@ -2554,29 +2446,11 @@
     },
     {
       "ecosystem": "npm",
-      "name": "is-extglob",
-      "version": "2.1.1",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/is-extglob@2.1.1/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
       "name": "is-fullwidth-code-point",
       "version": "3.0.0",
       "declared_license": "MIT",
       "notices": [
         "LICENSES/npm/is-fullwidth-code-point@3.0.0/license"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "is-glob",
-      "version": "4.0.3",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/is-glob@4.0.3/LICENSE"
       ]
     },
     {
@@ -2613,15 +2487,6 @@
       "declared_license": "MIT",
       "notices": [
         "LICENSES/npm/is-wsl@3.1.1/license"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "jiti",
-      "version": "2.7.0",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/jiti@2.7.0/LICENSE"
       ]
     },
     {
@@ -2725,33 +2590,6 @@
       "version": "2.0.12",
       "declared_license": "MIT",
       "notices": []
-    },
-    {
-      "ecosystem": "npm",
-      "name": "lightningcss",
-      "version": "1.32.0",
-      "declared_license": "MPL-2.0",
-      "notices": [
-        "LICENSES/npm/lightningcss@1.32.0/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "lightningcss-linux-x64-gnu",
-      "version": "1.32.0",
-      "declared_license": "MPL-2.0",
-      "notices": [
-        "LICENSES/npm/lightningcss-linux-x64-gnu@1.32.0/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "lightningcss-linux-x64-musl",
-      "version": "1.32.0",
-      "declared_license": "MPL-2.0",
-      "notices": [
-        "LICENSES/npm/lightningcss-linux-x64-musl@1.32.0/LICENSE"
-      ]
     },
     {
       "ecosystem": "npm",
@@ -3329,15 +3167,6 @@
     },
     {
       "ecosystem": "npm",
-      "name": "mri",
-      "version": "1.2.0",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/mri@1.2.0/license.md"
-      ]
-    },
-    {
-      "ecosystem": "npm",
       "name": "mrmime",
       "version": "2.0.1",
       "declared_license": "MIT",
@@ -3415,15 +3244,6 @@
       "declared_license": "MIT",
       "notices": [
         "LICENSES/npm/nlcst-to-string@4.0.0/license"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "node-addon-api",
-      "version": "7.1.1",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/node-addon-api@7.1.1/LICENSE.md"
       ]
     },
     {
@@ -4485,24 +4305,6 @@
       "declared_license": "MIT",
       "notices": [
         "LICENSES/npm/svgo@4.0.1/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "tailwindcss",
-      "version": "4.2.4",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/tailwindcss@4.2.4/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "tapable",
-      "version": "2.3.3",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/tapable@2.3.3/LICENSE"
       ]
     },
     {

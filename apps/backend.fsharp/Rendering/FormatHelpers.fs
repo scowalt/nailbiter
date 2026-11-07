@@ -27,7 +27,7 @@ module FormatHelpers =
 
     let apRank (rank: Nullable<int>) =
         [ if rank.HasValue && rank.Value >= 1 && rank.Value <= 25 then
-            Elem.sup [ Attr.class' "ml-0.5 text-[0.65em] leading-none"
+            Elem.sup [ Attr.class' "ap-rank"
                        Attr.title $"AP rank {rank.Value}"
                        Attr.create "aria-label" $"AP rank {rank.Value}" ] [ Text.raw $"{rank.Value}" ] ]
 
@@ -43,9 +43,9 @@ module FormatHelpers =
         else High
 
     let excitementLevelClass = function
-        | High -> "text-excitement-high"
-        | Medium -> "text-excitement-medium"
-        | Low -> "text-excitement-low"
+        | High -> "excitement-high"
+        | Medium -> "excitement-medium"
+        | Low -> "excitement-low"
 
     let formatHype (score: Nullable<float>) =
         if score.HasValue then $"{Math.Round(score.Value)}"
@@ -59,9 +59,9 @@ module FormatHelpers =
         else HypeHigh
 
     let hypeLevelClass = function
-        | HypeHigh -> "text-hype-high"
-        | HypeMedium -> "text-hype-medium"
-        | HypeLow -> "text-hype-low"
+        | HypeHigh -> "hype-high"
+        | HypeMedium -> "hype-medium"
+        | HypeLow -> "hype-low"
 
     let formatGameClock (period: Nullable<int>) (gameClock: string) (sport: string) =
         if not period.HasValue then ""
@@ -107,10 +107,10 @@ module FormatHelpers =
                 | "bowl" -> Some "Non-CFP bowl"
                 | _ -> None
             match label with
-            | Some label -> Elem.div [ Attr.class' "text-xs text-text-muted mt-2" ] [ Text.enc label ]
+            | Some label -> Elem.div [ Attr.class' "college-context" ] [ Text.enc label ]
             | None -> ()
             if game.IsHistoricalImport then
-                Elem.div [ Attr.class' "text-xs text-text-muted mt-2" ] [ Text.raw "Historical import · hype and excitement unavailable" ] ]
+                Elem.div [ Attr.class' "college-context" ] [ Text.raw "Historical import · hype and excitement unavailable" ] ]
 
     let formatScheduledTime (dt: DateTime) =
         dt.ToString("MMM d, h:mm tt", Globalization.CultureInfo.InvariantCulture)
@@ -139,8 +139,8 @@ module FormatHelpers =
             | Some label ->
                 let title = String.Join(", ", game.BroadcastNetworks |> Array.filter (String.IsNullOrWhiteSpace >> not))
                 [ Elem.span [ Attr.class' "nb-broadcast-sep"; Attr.create "aria-hidden" "true" ] [ Text.raw " · " ]
-                  Elem.span [ Attr.class' "nb-broadcast whitespace-nowrap"; Attr.id $"broadcast-{game.Id}"; Attr.title $"TV: {title}" ] [
-                      Elem.span [ Attr.class' "sr-only" ] [ Text.raw "TV: " ]
+                  Elem.span [ Attr.class' "nb-broadcast"; Attr.id $"broadcast-{game.Id}"; Attr.title $"TV: {title}" ] [
+                      Elem.span [ Attr.class' "visually-hidden" ] [ Text.raw "TV: " ]
                       Text.enc label ] ]
             | None -> []
         | _ -> []
@@ -160,10 +160,10 @@ module FormatHelpers =
 
     let getStatusClass (status: GameStatus) =
         match status with
-        | GameStatus.IN_PROGRESS -> "bg-status-live/20 text-status-live animate-live-pulse"
-        | GameStatus.SCHEDULED -> "bg-status-scheduled/20 text-status-scheduled"
-        | GameStatus.FINAL -> "bg-status-final/20 text-status-final"
-        | GameStatus.CANCELED -> "bg-status-final/20 text-status-final"
+        | GameStatus.IN_PROGRESS -> "status-live animate-live-pulse"
+        | GameStatus.SCHEDULED -> "status-scheduled"
+        | GameStatus.FINAL -> "status-final"
+        | GameStatus.CANCELED -> "status-final"
         | _ -> ""
 
     let formatMoneyline (odds: int) =
