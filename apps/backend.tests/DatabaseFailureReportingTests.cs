@@ -4,6 +4,9 @@ using System.Text.Json;
 using backend.Data;
 using backend.Models;
 using backend.Services;
+using backend.Services.Highlights;
+using backend.Services.Kalshi;
+using backend.Services.PlayoffStatus;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -11,6 +14,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Time.Testing;
 using Npgsql;
 using Sentry;
 using Sentry.AspNetCore;
@@ -25,13 +29,15 @@ public sealed class DatabaseFailureReportingTests
 {
     private const string GameId = "database-failure-game";
     private const string EfCommandLogger = "Microsoft.EntityFrameworkCore.Database.Command";
+    private const string LockTimeout = ";Options=-c lock_timeout=500";
+    private static readonly DateTimeOffset Now = new(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
     public async Task Request_query_failure_is_reported_once_with_its_sqlstate()
     {
         await using var database = await SyntheticDatabase.StartAsync();
         await using var oddsLock = await database.HoldLockAsync("LOCK TABLE odds_snapshots IN ACCESS EXCLUSIVE MODE");
-        await using var app = new ReportingApp(database.ConnectionString + ";Options=-c lock_timeout=500", worker: null);
+        await using var app = new ReportingApp(database.ConnectionString + LockTimeout, worker: null);
 
         await Record.ExceptionAsync(() => app.Client.GetAsync($"/api/games/{GameId}/odds"));
 
@@ -43,10 +49,156 @@ public sealed class DatabaseFailureReportingTests
     {
         await using var database = await SyntheticDatabase.StartAsync();
         await using var rowLock = await database.HoldLockAsync($"SELECT 1 FROM games WHERE id = '{GameId}' FOR UPDATE");
-        await using var app = new ReportingApp(database.ConnectionString + ";Options=-c lock_timeout=500",
+        await using var app = new ReportingApp(database.ConnectionString + LockTimeout,
             worker: typeof(ProCompetitionRefreshBackgroundService));
 
         AssertReportedOnce(await app.SentEventsAfterFailureAsync(), PostgresErrorCodes.LockNotAvailable);
+    }
+
+    [Fact]
+    public async Task Highlights_lifecycle_failure_is_reported_once_with_its_sqlstate()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        await using var tableLock = await database.HoldLockAsync("LOCK TABLE highlights_operations IN ACCESS EXCLUSIVE MODE");
+        await using var app = new ReportingApp(database.ConnectionString + LockTimeout, typeof(HighlightsBackgroundService));
+
+        AssertReportedOnce(await app.SentEventsAfterFailureAsync(), PostgresErrorCodes.LockNotAvailable);
+    }
+
+    [Fact]
+    public async Task Highlights_detail_failure_is_reported_once_and_the_page_still_renders()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        await database.AddGameAsync(new Game
+        {
+            Id = "database-failure-final", Sport = "mlb", Status = "final", SeasonYear = 2026, SeasonType = 2,
+            HomeTeam = "Home", AwayTeam = "Away", HomeTeamAbbreviation = "HOM", AwayTeamAbbreviation = "AWY",
+            ScheduledStart = DateTime.UtcNow.AddDays(-1)
+        });
+        await using var tableLock = await database.HoldLockAsync("LOCK TABLE game_highlights IN ACCESS EXCLUSIVE MODE");
+        await using var app = new ReportingApp(database.ConnectionString + LockTimeout, worker: null);
+
+        using var response = await app.Client.GetAsync("/game/database-failure-final");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertReportedOnce(await app.SentEventsAfterFailureAsync(), PostgresErrorCodes.LockNotAvailable);
+    }
+
+    [Fact]
+    public async Task Kalshi_ratings_failure_is_reported_once_with_its_sqlstate()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        await using var tableLock = await database.HoldLockAsync("LOCK TABLE team_ratings IN ACCESS EXCLUSIVE MODE");
+        var nhlEvent = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Fixtures", "NhlSeeding", "qualification.json"));
+        var kalshi = new Provider(uri => uri.AbsolutePath.EndsWith("/events/KXNHLPLAYOFF-27", StringComparison.Ordinal) ? nhlEvent
+            : uri.AbsolutePath.EndsWith("/historical/markets", StringComparison.Ordinal) ? """{"markets":[],"cursor":""}""" : "{}");
+        await using var app = new ReportingApp(database.ConnectionString + LockTimeout, typeof(KalshiPlayoffRefreshBackgroundService), services =>
+        {
+            PinClock(services);
+            services.AddHttpClient<KalshiPlayoffRatingsService>().ConfigurePrimaryHttpMessageHandler(() => kalshi);
+        });
+
+        AssertReportedOnce(await app.SentEventsAfterFailureAsync(), PostgresErrorCodes.LockNotAvailable);
+    }
+
+    [Fact]
+    public async Task Kalshi_college_teams_failure_is_reported_once_with_its_sqlstate()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        await using var tableLock = await database.HoldLockAsync("LOCK TABLE college_teams IN ACCESS EXCLUSIVE MODE");
+        var kalshi = new Provider(_ => "{}");
+        await using var app = new ReportingApp(database.ConnectionString + LockTimeout, typeof(KalshiPlayoffRefreshBackgroundService), services =>
+        {
+            PinClock(services);
+            services.AddHttpClient<KalshiPlayoffRatingsService>().ConfigurePrimaryHttpMessageHandler(() => kalshi);
+        });
+
+        AssertReportedOnce(await app.SentEventsAfterFailureAsync(), PostgresErrorCodes.LockNotAvailable);
+    }
+
+    [Fact]
+    public async Task PlayoffStatus_model_commit_failure_is_reported_once_with_its_sqlstate()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        await using var tableLock = await database.HoldLockAsync("LOCK TABLE team_ratings IN ACCESS EXCLUSIVE MODE");
+        var published = Now.UtcDateTime.AddHours(-24);
+        var playoffStatus = new Provider(uri => NflPlayoffPageTests.PlayoffStatusFixture(uri.AbsoluteUri, published, invalidBos: false));
+        await using var app = new ReportingApp(database.ConnectionString + LockTimeout, typeof(PlayoffStatusNhlRefreshBackgroundService), services =>
+        {
+            PinClock(services);
+            services.AddHttpClient(nameof(PlayoffStatusService)).ConfigurePrimaryHttpMessageHandler(() => playoffStatus);
+            services.PostConfigure<PlayoffRatingsOptions>(options =>
+            {
+                options.NhlModelMode = "fallback";
+                options.NhlModelRefreshEnabled = true;
+                options.ApprovedSeasons = [2027];
+            });
+        });
+
+        AssertReportedOnce(await app.SentEventsAfterFailureAsync(), PostgresErrorCodes.LockNotAvailable);
+    }
+
+    [Fact]
+    public async Task MoneyPuck_collection_failure_is_reported_once_and_the_cycle_is_finalized()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        await using var tableLock = await database.HoldLockAsync("LOCK TABLE team_ratings IN ACCESS EXCLUSIVE MODE");
+        using var moneyPuck = new MoneyPuckQualificationHandler();
+        await using var app = MoneyPuckApp(database, moneyPuck);
+
+        AssertReportedOnce(await app.SentEventsAfterFailureAsync(), PostgresErrorCodes.LockNotAvailable);
+        Assert.Equal(3, moneyPuck.Requests.Count);
+        Assert.False(await database.ScalarAsync<bool>("SELECT active FROM moneypuck_refresh_state WHERE id = 1", until: active => !active));
+    }
+
+    [Fact]
+    public async Task MoneyPuck_claim_failure_is_reported_once_without_provider_requests()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        await using var tableLock = await database.HoldLockAsync("LOCK TABLE moneypuck_refresh_state IN ACCESS EXCLUSIVE MODE");
+        using var moneyPuck = new MoneyPuckQualificationHandler();
+        await using var app = MoneyPuckApp(database, moneyPuck);
+
+        AssertReportedOnce(await app.SentEventsAfterFailureAsync(), PostgresErrorCodes.LockNotAvailable);
+        Assert.Empty(moneyPuck.Requests);
+    }
+
+    [Fact]
+    public async Task MoneyPuck_finalize_failure_is_reported_once_and_the_cycle_stays_blocked()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        using var moneyPuck = new MoneyPuckQualificationHandler();
+        IAsyncDisposable? rowLock = null;
+        moneyPuck.Override = async (_, _) =>
+        {
+            rowLock ??= await database.HoldLockAsync("SELECT 1 FROM moneypuck_refresh_state WHERE id = 1 FOR UPDATE");
+            return null;
+        };
+        try
+        {
+            await using var app = MoneyPuckApp(database, moneyPuck);
+
+            AssertReportedOnce(await app.SentEventsAfterFailureAsync(), PostgresErrorCodes.LockNotAvailable);
+            Assert.True(await database.ScalarAsync<bool>("SELECT active FROM moneypuck_refresh_state WHERE id = 1"));
+        }
+        finally
+        {
+            if (rowLock is not null) await rowLock.DisposeAsync();
+        }
+    }
+
+    private static ReportingApp MoneyPuckApp(SyntheticDatabase database, MoneyPuckQualificationHandler moneyPuck) =>
+        new(database.ConnectionString + LockTimeout, typeof(MoneyPuckRefreshBackgroundService),
+            services =>
+            {
+                PinClock(services);
+                services.AddHttpClient<MoneyPuckService>().ConfigurePrimaryHttpMessageHandler(() => moneyPuck);
+            });
+
+    private static void PinClock(IServiceCollection services)
+    {
+        services.RemoveAll<TimeProvider>();
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
     }
 
     private static void AssertReportedOnce(IReadOnlyCollection<SentEvent> sent, string sqlState)
@@ -82,6 +234,28 @@ public sealed class DatabaseFailureReportingTests
             return database;
         }
 
+        public async Task AddGameAsync(Game game)
+        {
+            var options = new DbContextOptionsBuilder<ExcitementDbContext>().UseNpgsql(ConnectionString).Options;
+            await using var db = new ExcitementDbContext(options);
+            db.Games.Add(game);
+            await db.SaveChangesAsync();
+        }
+
+        public async Task<T> ScalarAsync<T>(string sql, Func<T, bool>? until = null)
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            while (true)
+            {
+                await using var connection = new NpgsqlConnection(ConnectionString);
+                await connection.OpenAsync();
+                await using var command = new NpgsqlCommand(sql, connection);
+                var value = (T)(await command.ExecuteScalarAsync())!;
+                if (until?.Invoke(value) != false || deadline.IsCancellationRequested) return value;
+                await Task.Delay(50, CancellationToken.None);
+            }
+        }
+
         public async Task<IAsyncDisposable> HoldLockAsync(string sql)
         {
             var connection = new NpgsqlConnection(ConnectionString);
@@ -110,7 +284,7 @@ public sealed class DatabaseFailureReportingTests
         private readonly WebApplicationFactory<Program> app;
         private readonly SentTransport transport = new();
 
-        public ReportingApp(string connectionString, Type? worker)
+        public ReportingApp(string connectionString, Type? worker, Action<IServiceCollection>? configure = null)
         {
             app = entry.WithWebHostBuilder(builder =>
             {
@@ -121,15 +295,16 @@ public sealed class DatabaseFailureReportingTests
                     services.RemoveAll<DbContextOptions<ExcitementDbContext>>();
                     services.AddDbContext<ExcitementDbContext>(options => options.UseNpgsql(connectionString));
                     foreach (var other in services.Where(s => s.ServiceType == typeof(IHostedService)
-                        && s.ImplementationType?.Namespace?.StartsWith("backend", StringComparison.Ordinal) == true
-                        && s.ImplementationType != worker).ToArray())
+                        && s.ImplementationType?.Namespace?.StartsWith("backend", StringComparison.Ordinal) == true).ToArray())
                         services.Remove(other);
-                    services.AddHttpClient<ProCompetitionEvidenceService>().ConfigurePrimaryHttpMessageHandler(() => new EmptyEspn());
+                    if (worker is not null) services.AddSingleton(typeof(IHostedService), worker);
+                    services.AddHttpClient<ProCompetitionEvidenceService>().ConfigurePrimaryHttpMessageHandler(() => new Provider(_ => "{}"));
                     services.PostConfigure<SentryAspNetCoreOptions>(options =>
                     {
                         options.Dsn = "https://public@sentry.invalid/1";
                         options.Transport = transport;
                     });
+                    configure?.Invoke(services);
                 });
             });
             Client = app.CreateClient(new() { BaseAddress = new Uri("https://localhost") });
@@ -153,10 +328,10 @@ public sealed class DatabaseFailureReportingTests
         }
     }
 
-    private sealed class EmptyEspn : HttpMessageHandler
+    private sealed class Provider(Func<Uri, string> respond) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") });
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(respond(request.RequestUri!)) });
     }
 
     private sealed record SentEvent(string? Logger, string? Level, (string Type, string Value)[] Exceptions, string?[] BreadcrumbCategories);
