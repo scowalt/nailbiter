@@ -381,6 +381,7 @@ app.MapPost("/api/ratings/refresh", async (
     EspnStandingsService standings,
     PlayoffStatusService playoffStatus,
     KalshiPlayoffRatingsService kalshiPlayoffs,
+    ILogger<Program> logger,
     CancellationToken ct) =>
 {
     var results = new Dictionary<string, object>();
@@ -388,7 +389,12 @@ app.MapPost("/api/ratings/refresh", async (
     async Task Run(string key, Func<Task<int>> action)
     {
         try { results[key] = await action(); }
-        catch (Exception ex) { results[key] = $"error: {ex.Message}"; }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Ratings refresh step {Step} failed", key);
+            results[key] = $"error: {ex.Message}";
+        }
     }
 
     await Run("kalshiPlayoffs", () => kalshiPlayoffs.RefreshCurrentAsync(ct));
