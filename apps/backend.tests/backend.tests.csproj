@@ -20,6 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="../backend/Migrations/022_WorldCupOvertime.sql" Link="Migrations/022_WorldCupOvertime.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../backend/Migrations/030_MlbHighlights.sql" Link="Migrations/030_MlbHighlights.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../backend/Migrations/031_HighlightsLifecycle.sql" Link="Migrations/031_HighlightsLifecycle.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../backend/Migrations/032_CollegePregameProbabilities.sql" Link="Migrations/032_CollegePregameProbabilities.sql" CopyToOutputDirectory="PreserveNewest" />
