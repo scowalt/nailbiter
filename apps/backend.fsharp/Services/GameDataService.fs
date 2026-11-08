@@ -24,10 +24,9 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
     member _.GetTodaysGamesAsync(ct: CancellationToken) = task {
         let eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York")
         let nowEt = TimeZoneInfo.ConvertTimeFromUtc(timeProvider.GetUtcNow().UtcDateTime, eastern)
-        let todayEt = nowEt.Date
-        let etOffset = eastern.GetUtcOffset(DateTime.SpecifyKind(todayEt, DateTimeKind.Unspecified))
-        let todayStart = DateTimeOffset(todayEt, etOffset).UtcDateTime
-        let todayEnd = todayStart.AddDays(1.0)
+        let todayEt = DateTime.SpecifyKind(nowEt.Date, DateTimeKind.Unspecified)
+        let todayStart = TimeZoneInfo.ConvertTimeToUtc(todayEt, eastern)
+        let todayEnd = TimeZoneInfo.ConvertTimeToUtc(todayEt.AddDays(1.0), eastern)
 
         let! games =
             publicGames
@@ -204,7 +203,7 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
         let nowEt = TimeZoneInfo.ConvertTimeFromUtc(now, eastern)
         let todayEt = nowEt.Date
         let todayStart = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(todayEt, DateTimeKind.Unspecified), eastern)
-        let todayEnd = todayStart.AddDays(1.0)
+        let todayEnd = TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(todayEt.AddDays(1.0), DateTimeKind.Unspecified), eastern)
 
         let! games =
             publicGames
