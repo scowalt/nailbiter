@@ -180,7 +180,7 @@ type PlayoffSeriesCollector private () =
                 return rejected
             else
                 use! transaction = db.Database.BeginTransactionAsync(cancellationToken)
-                if db.Database.IsNpgsql() then do! db.LockProHypeFenceAsync(cancellationToken)
+                if db.Database.IsNpgsql() then do! db.LockProHypeFenceAsync(ProHypeFenceAccess.WriteGames, cancellationToken)
                 for observation in batch do
                     let! stored =
                         if db.Database.IsNpgsql() then

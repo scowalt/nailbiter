@@ -339,7 +339,7 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
 
     private async Task<Game?> LockAsync(string id, CancellationToken cancellationToken)
     {
-        await db.LockProHypeFenceAsync(cancellationToken);
+        await db.LockProHypeFenceAsync(ProHypeFenceAccess.WriteGames, cancellationToken);
         return await db.Games.FromSqlInterpolated($"SELECT * FROM games WHERE id = {id} FOR UPDATE").SingleOrDefaultAsync(cancellationToken);
     }
 

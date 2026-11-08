@@ -35,8 +35,13 @@ public class ExcitementDbContext : DbContext
     public DbSet<IndyCarRaceResult> IndyCarRaceResults => Set<IndyCarRaceResult>();
     public DbSet<IndyCarRaceSnapshot> IndyCarRaceSnapshots => Set<IndyCarRaceSnapshot>();
 
-    public async Task LockProHypeFenceAsync(CancellationToken ct) => await Database.ExecuteSqlRawAsync(
-        "LOCK TABLE games IN ROW EXCLUSIVE MODE; SELECT id FROM pro_hype_revision WHERE id = 1 FOR UPDATE", ct);
+    public async Task LockProHypeFenceAsync(ProHypeFenceAccess access, CancellationToken ct) => await Database.ExecuteSqlRawAsync(
+        access switch
+        {
+            ProHypeFenceAccess.ReadEvidence => "LOCK TABLE games, team_ratings, pregame_odds IN ACCESS SHARE MODE",
+            ProHypeFenceAccess.WriteGames => "LOCK TABLE games IN ROW EXCLUSIVE MODE",
+            _ => throw new ArgumentOutOfRangeException(nameof(access)),
+        } + "; SELECT id FROM pro_hype_revision WHERE id = 1 FOR UPDATE", ct);
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -621,3 +626,5 @@ public class ExcitementDbContext : DbContext
         });
     }
 }
+
+public enum ProHypeFenceAccess { ReadEvidence, WriteGames }
