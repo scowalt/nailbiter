@@ -31,6 +31,7 @@
     <Compile Include="LogosTests.fs" />
     <Compile Include="LeagueConfigTests.fs" />
     <Compile Include="WorldCupRendererTests.fs" />
+    <Compile Include="QueryLambdaTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
