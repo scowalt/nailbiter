@@ -15,7 +15,7 @@ namespace backend.tests;
 public sealed partial class NflPlayoffPageTests
 {
     [Fact]
-    public async Task Low_interest_display_reaches_all_public_pages_without_changing_hype_or_qualification()
+    public async Task Empty_bid_bounds_reach_all_public_pages_without_changing_nfl_stakes()
     {
         clock.Now = new DateTimeOffset(ProHypeTests.Now);
         using var scope = app.Services.CreateScope();
@@ -66,11 +66,12 @@ public sealed partial class NflPlayoffPageTests
         });
         using var http = new HttpClient(handler);
         var importer = new KalshiPlayoffRatingsService(http, NullLogger<KalshiPlayoffRatingsService>.Instance, app.Services, clock);
-        Assert.Equal(30, await importer.RefreshAsync("nfl", 2026, default));
+        Assert.Equal(32, await importer.RefreshAsync("nfl", 2026, default));
         Assert.Equal(1, requests);
         db.ChangeTracker.Clear();
-        var after = await scorer.GetHypeComponentsAsync(game, null);
-        Assert.Null(after.HomePlayoffOdds); Assert.Null(after.AwayPlayoffOdds);
+        using var refreshed = app.Services.CreateScope();
+        var after = await refreshed.ServiceProvider.GetRequiredService<HypeScoreService>().GetHypeComponentsAsync(game, null);
+        Assert.Equal(0.01, after.HomePlayoffOdds); Assert.Equal(0.01, after.AwayPlayoffOdds);
         Assert.False(after.HomeQualificationIsFinal); Assert.False(after.AwayQualificationIsFinal);
         Assert.Equal(before.StakesScore, after.StakesScore);
         Assert.Equal(before.QualityScore, after.QualityScore);
@@ -81,22 +82,14 @@ public sealed partial class NflPlayoffPageTests
             var html = await client.GetStringAsync(path);
             using var document = await new HtmlParser().ParseDocumentAsync(html);
             var region = page == "detail" ? document.QuerySelector("#detail-comparison")! : document.QuerySelector("a[href='/game/nfl-current']")!;
-            Assert.Equal(2, region.QuerySelectorAll("[aria-description='Low-interest display convention, not an exact probability.']").Length);
-            if (page == "league") Assert.Contains("league-game-body-stacked", region.FirstElementChild!.ClassList);
-            Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(region.TextContent, "<1%").Count);
-            Assert.DoesNotContain("0–2%", region.TextContent);
+            Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(region.TextContent, "<2%").Count);
             Assert.DoesNotContain("Missed playoffs", region.TextContent);
             Assert.DoesNotContain("Clinched playoffs", region.TextContent);
             Assert.DoesNotContain("Hype unavailable", document.QuerySelector(page == "detail" ? "#detail-hype" : "#excitement-nfl-current")!.TextContent);
-            if (Environment.GetEnvironmentVariable("NFL_LOW_INTEREST_ARTIFACT_DIR") is string directory)
-            {
-                Directory.CreateDirectory(directory);
-                await File.WriteAllTextAsync(Path.Combine(directory, page + ".html"), html);
-            }
         }
         var rows = await db.TeamRatings.AsNoTracking().Where(r => r.Source == "kalshi" && (r.TeamAbbreviation == "KC" || r.TeamAbbreviation == "BUF")).ToListAsync();
-        Assert.All(rows, row => { Assert.Null(row.PlayoffProbability); Assert.False(row.PlayoffProbabilityIsFinal); });
-        Assert.All(rows, row => Assert.Equal("insufficient_depth", PlayoffQuoteEvidence.Parse(row.PlayoffEvidenceJson)!.ReasonCode));
+        Assert.All(rows, row => { Assert.Equal(0.01, row.PlayoffProbability); Assert.False(row.PlayoffProbabilityIsFinal); });
+        Assert.All(rows, row => Assert.Equal(0.02m, PlayoffQuoteEvidence.Parse(row.PlayoffEvidenceJson)!.Ask));
         Assert.Equal(1, requests);
         game = await db.Games.SingleAsync(g => g.Id == "nfl-current");
         evidence.NflPlayoffLeverage = null;
@@ -107,6 +100,6 @@ public sealed partial class NflPlayoffPageTests
         Assert.False(double.IsFinite(scorer.CalculateFinalScore("nfl", missing)));
         using var unavailable = await new HtmlParser().ParseDocumentAsync(await client.GetStringAsync("/game/nfl-current"));
         Assert.Contains("Hype unavailable", unavailable.QuerySelector("#detail-hype")!.TextContent);
-        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(unavailable.QuerySelector("#detail-comparison")!.TextContent, "<1%").Count);
+        Assert.Equal(2, System.Text.RegularExpressions.Regex.Matches(unavailable.QuerySelector("#detail-comparison")!.TextContent, "<2%").Count);
     }
 }

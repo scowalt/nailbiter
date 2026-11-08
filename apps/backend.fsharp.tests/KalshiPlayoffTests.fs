@@ -288,6 +288,7 @@ let ``Synthetic ATL and CIN one-sided quotes render bounds on every playoff surf
 [<InlineData("0.9990", "1.0000", "1.00", "0.00", 0.9995)>]
 [<InlineData("0.0000", "0.0100", "0.00", "0.01", 0.005)>]
 [<InlineData("0.0000", "0.0010", "0.00", "1.00", 0.0005)>]
+[<InlineData("0.0000", "0.0500", "0.00", "3.00", 0.025)>]
 let ``Only populated extreme side is needed for a nonfinal estimate`` bid ask bidSize askSize expected = task {
     use importer = new Importer()
     let root = eventWithQuotes "mlb"
@@ -305,7 +306,7 @@ let ``Only populated extreme side is needed for a nonfinal estimate`` bid ask bi
 
 [<Theory>]
 [<InlineData("ATL", "yes_bid_dollars", "0.9899")>]
-[<InlineData("CIN", "yes_ask_dollars", "0.0101")>]
+[<InlineData("CIN", "yes_ask_dollars", "0.0501")>]
 [<InlineData("ATL", "yes_ask_dollars", "0.9990")>]
 [<InlineData("CIN", "yes_bid_dollars", "0.0010")>]
 [<InlineData("ATL", "yes_bid_size_fp", "0.00")>]

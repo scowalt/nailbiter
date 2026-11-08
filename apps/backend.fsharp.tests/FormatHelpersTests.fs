@@ -43,7 +43,7 @@ let ``formatProbability - 0.0 returns 0%`` () =
 [<InlineData(0.9995, ">99%")>]
 [<InlineData(1.0, ">99%")>]
 let ``Playoff extreme estimates use bounds instead of rounding to certainty`` probability expected =
-    Assert.Equal(expected, FormatHelpers.formatPlayoffOutlook false probability)
+    Assert.Equal(expected, FormatHelpers.formatPlayoffOutlook false None probability)
 
 [<Theory>]
 [<InlineData(0.01)>]
@@ -52,13 +52,23 @@ let ``Playoff extreme estimates use bounds instead of rounding to certainty`` pr
 [<InlineData(0.98)>]
 [<InlineData(0.99)>]
 let ``Ordinary playoff estimates retain percentage formatting`` probability =
-    Assert.Equal($"{probability:P0}", FormatHelpers.formatPlayoffOutlook false probability)
+    Assert.Equal($"{probability:P0}", FormatHelpers.formatPlayoffOutlook false None probability)
 
 [<Theory>]
 [<InlineData(0.0, "Missed playoffs")>]
 [<InlineData(1.0, "Clinched playoffs")>]
 let ``Confirmed outcomes use qualification labels instead of percentages`` probability expected =
-    Assert.Equal(expected, FormatHelpers.formatPlayoffOutlook true probability)
+    Assert.Equal(expected, FormatHelpers.formatPlayoffOutlook true None probability)
+
+[<Theory>]
+[<InlineData(0.001, "<1%")>]
+[<InlineData(0.01, "<1%")>]
+[<InlineData(0.04, "<4%")>]
+[<InlineData(0.045, "<5%")>]
+[<InlineData(0.07, "<7%")>]
+[<InlineData(0.29, "<29%")>]
+let ``Empty-bid estimates show their ask as a whole-percent upper bound`` (ask: float) expected =
+    Assert.Equal(expected, FormatHelpers.formatPlayoffOutlook false (Some ask) (ask / 2.0))
 
 [<Theory>]
 [<InlineData(1)>]

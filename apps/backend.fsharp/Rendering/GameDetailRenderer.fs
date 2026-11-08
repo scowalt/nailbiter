@@ -41,14 +41,12 @@ module GameDetailRenderer =
                 yield "Current game-winner odds are unavailable."
         ]
 
-    let private comparisonRowWithDisplay (label: string) (away: string) (home: string) awayDisplayOnly homeDisplayOnly =
+    let private comparisonRow (label: string) (away: string) (home: string) =
         Elem.div [ cls "comparison-row" ] [
-            Elem.div [ cls "comparison-away"; yield! FormatHelpers.playoffDisplayConventionAttributes awayDisplayOnly ] [ Text.enc away ]
+            Elem.div [ cls "comparison-away" ] [ Text.enc away ]
             Elem.div [ cls "comparison-label" ] [ Text.enc label ]
-            Elem.div [ cls "comparison-home"; yield! FormatHelpers.playoffDisplayConventionAttributes homeDisplayOnly ] [ Text.enc home ]
+            Elem.div [ cls "comparison-home" ] [ Text.enc home ]
         ]
-
-    let private comparisonRow label away home = comparisonRowWithDisplay label away home false false
 
     let private teamHeader (game: Game) =
         Elem.div [ cls "comparison-header" ] [
@@ -410,14 +408,11 @@ module GameDetailRenderer =
                         if showQualification then
                             let outlook (rank: TeamRankInfo option) =
                                 rank |> Option.bind (fun r ->
-                                    let numeric = r.PlayoffOdds |> Option.map (fun p ->
-                                        let text = FormatHelpers.formatPlayoffOutlook r.PlayoffIsFinal p
-                                        if r.PlayoffEvidenceKind = backend.Scoring.ProQualificationEvidenceKind.MoneyPuckModel then $"{text} (model estimate)" else text)
-                                    numeric |> Option.orElse r.PlayoffDisplayOverride)
+                                    r.PlayoffOdds |> Option.map (fun p ->
+                                        let text = FormatHelpers.formatPlayoffOutlook r.PlayoffIsFinal r.PlayoffUpperBound p
+                                        if r.PlayoffEvidenceKind = backend.Scoring.ProQualificationEvidenceKind.MoneyPuckModel then $"{text} (model estimate)" else text))
                                 |> Option.defaultValue "Unavailable"
-                            comparisonRowWithDisplay (if game.Sport = "cfb" then "CFP qualification" else "Playoff outlook") (outlook awayTeamRank) (outlook homeTeamRank)
-                                (awayTeamRank |> Option.exists (fun r -> r.PlayoffDisplayOverride.IsSome))
-                                (homeTeamRank |> Option.exists (fun r -> r.PlayoffDisplayOverride.IsSome))
+                            comparisonRow (if game.Sport = "cfb" then "CFP qualification" else "Playoff outlook") (outlook awayTeamRank) (outlook homeTeamRank)
                         if not (isNull (box hypeComponents)) && (hypeComponents.HomeTeamElo.HasValue || hypeComponents.AwayTeamElo.HasValue) then
                             let rating (value: Nullable<float>) = if value.HasValue then $"{value.Value:F0}" else "—"
                             comparisonRow (if game.Sport = "cfb" then "FPI" else "Elo / Rating") (rating hypeComponents.AwayTeamElo) (rating hypeComponents.HomeTeamElo)

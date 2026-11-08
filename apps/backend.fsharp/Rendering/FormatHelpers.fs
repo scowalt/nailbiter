@@ -12,18 +12,15 @@ module FormatHelpers =
         elif prob.Value > 0.99 && prob.Value < 1.0 then ">99%"
         else $"{Math.Round(prob.Value * 100.0)}%%"
 
-    let formatPlayoffOutlook isFinal (prob: float) =
+    let formatPlayoffOutlook isFinal (upperBound: float option) (prob: float) =
         if isFinal && prob = 1.0 then "Clinched playoffs"
         elif isFinal && prob = 0.0 then "Missed playoffs"
-        elif prob < 0.01 then "<1%"
-        elif prob > 0.99 then ">99%"
-        else $"{prob:P0}"
-
-    let playoffDisplayConventionAttributes displayOnly =
-        [ if displayOnly then
-              let explanation = "Low-interest display convention, not an exact probability."
-              Attr.title explanation
-              Attr.create "aria-description" explanation ]
+        else
+            match upperBound with
+            | Some bound -> $"<{Math.Ceiling(Math.Round(bound * 100.0, 6))}%%"
+            | None when prob < 0.01 -> "<1%"
+            | None when prob > 0.99 -> ">99%"
+            | None -> $"{prob:P0}"
 
     let pollRank (poll: Nullable<backend.Models.CollegePoll>) (rank: Nullable<int>) =
         [ if poll.HasValue && rank.HasValue && rank.Value >= 1 && rank.Value <= 25 then

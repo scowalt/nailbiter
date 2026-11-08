@@ -31,7 +31,7 @@ public sealed class NhlSeedingWitnessPageTests
                 {
                     var rejected = market!["ticker"]!.GetValue<string>().EndsWith("-" + RejectedQualificationTeam, StringComparison.Ordinal);
                     market["yes_bid_dollars"] = rejected ? "0.0000" : "0.8800";
-                    market["yes_ask_dollars"] = rejected ? "0.0500" : "0.9200";
+                    market["yes_ask_dollars"] = rejected ? "0.0600" : "0.9200";
                     market["yes_bid_size_fp"] = rejected ? "0.00" : "10.00";
                 }
                 body = value.ToJsonString();
