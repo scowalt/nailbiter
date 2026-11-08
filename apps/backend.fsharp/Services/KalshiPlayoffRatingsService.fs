@@ -248,7 +248,7 @@ type KalshiPlayoffRatingsService
                             with
                             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
                             | ex ->
-                                logger.LogWarning(ex, "Failed to recover archived {Sport} playoff finals for season {Season}; missing nonfinal probabilities are cleared without advancing their timestamps", sport, season)
+                                logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to recover archived {Sport} playoff finals for season {Season}; missing nonfinal probabilities are cleared without advancing their timestamps", sport, season)
                                 return None
                     }
                     let canAssumeNoMarket =
@@ -357,7 +357,7 @@ type KalshiPlayoffRatingsService
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
-                logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to refresh Kalshi {Sport} playoff probabilities for season {Season}", sport, season)
+                logger.Log((if DatabaseFailure.Is ex || ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to refresh Kalshi {Sport} playoff probabilities for season {Season}", sport, season)
                 return 0
     }
 

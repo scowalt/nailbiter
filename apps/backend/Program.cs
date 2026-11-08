@@ -47,9 +47,7 @@ builder.WebHost.UseSentry(o =>
 });
 
 builder.Services.Configure<TelemetryOptions>(options => options.SeverityProvider = args =>
-    args.Event is { EventName: "ExecutionAttempt", Severity: ResilienceEventSeverity.Error }
-        ? ResilienceEventSeverity.Warning
-        : args.Event.Severity);
+    args.Event.Severity == ResilienceEventSeverity.Error ? ResilienceEventSeverity.Warning : args.Event.Severity);
 
 builder.Services.AddOpenApi();
 

@@ -461,7 +461,7 @@ type PlayoffStatusService
                     with
                     | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
                     | ex ->
-                        logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed NHL PlayoffStatus model refresh for season {Season}", season)
+                        logger.Log((if DatabaseFailure.Is ex || ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed NHL PlayoffStatus model refresh for season {Season}", season)
                         return 0
                 finally
                     gate.Exit()

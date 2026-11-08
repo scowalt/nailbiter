@@ -593,7 +593,7 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
             }
             catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or TaskCanceledException && !ct.IsCancellationRequested)
             {
-                logger.LogWarning(ex, "Pro context request failed for {Sport}/{Season}; previous timestamps preserved", group.Key.Sport, group.Key.Season);
+                logger.Log(ProviderFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "Pro context request failed for {Sport}/{Season}; previous timestamps preserved", group.Key.Sport, group.Key.Season);
             }
             await db.SaveChangesAsync(ct);
         }

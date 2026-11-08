@@ -7,6 +7,7 @@ open System.Text.RegularExpressions
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.Extensions.Logging
+open backend.Services
 
 module private KalshiOddsServiceMappings =
 
@@ -249,7 +250,7 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                 with
                 | :? OperationCanceledException -> return Unchecked.defaultof<KalshiMoneylineOdds>
                 | ex ->
-                    logger.LogWarning(ex, "Could not verify MLB schedule for {EventTicker}", hm.EventTicker)
+                    logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Could not verify MLB schedule for {EventTicker}", hm.EventTicker)
                     return Unchecked.defaultof<KalshiMoneylineOdds>
             | _ -> return Unchecked.defaultof<KalshiMoneylineOdds>
         | _ -> return Unchecked.defaultof<KalshiMoneylineOdds>
@@ -405,7 +406,7 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                 with
                 | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: Kalshi World Cup markets fetch"); return struct (ResizeArray<KalshiMarket>(), false)
                 | ex ->
-                    logger.LogWarning(ex, "Failed to fetch World Cup markets from Kalshi")
+                    logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch World Cup markets from Kalshi")
                     return struct (ResizeArray<KalshiMarket>(), false)
         }
 
@@ -501,7 +502,7 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                     with
                     | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: Kalshi markets fetch for {Sport}", sport); return ResizeArray<KalshiMarket>()
                     | ex ->
-                        logger.LogWarning(ex, "Failed to fetch markets from Kalshi for {Sport}", sport)
+                        logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch markets from Kalshi for {Sport}", sport)
                         return ResizeArray<KalshiMarket>()
         }
 
@@ -524,7 +525,7 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                 return None
             | :? OperationCanceledException -> return None
             | ex ->
-                logger.LogDebug(ex, "Failed to fetch Kalshi market {Ticker}", ticker)
+                logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Debug), ex, "Failed to fetch Kalshi market {Ticker}", ticker)
                 return None
         }
 

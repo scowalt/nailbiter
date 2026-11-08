@@ -127,7 +127,7 @@ public sealed class CollegeKalshiClient(HttpClient http, ILogger<CollegeKalshiCl
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            logger.LogWarning(ex, "College game quotes unavailable for {Ticker}", pair.HomeTicker);
+            logger.Log(ProviderFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "College game quotes unavailable for {Ticker}", pair.HomeTicker);
             return null;
         }
     }
