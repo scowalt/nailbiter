@@ -7,11 +7,22 @@ using Testcontainers.PostgreSql;
 
 namespace backend.tests;
 
-internal static class IsolatedPostgreSql
+public sealed class IsolatedPostgreSql(Func<PostgreSqlBuilder, PostgreSqlBuilder>? configure = null) : IAsyncDisposable
 {
-    public static PostgreSqlContainer CreateContainer() => CreateBuilder().Build();
+    private PostgreSqlContainer? container;
 
-    public static PostgreSqlBuilder CreateBuilder()
+    public async Task StartAsync()
+    {
+        container = (configure ?? (builder => builder))(CreateBuilder()).Build();
+        await container.StartAsync();
+    }
+
+    public string GetConnectionString() =>
+        (container ?? throw new InvalidOperationException("Start the database before reading its connection string.")).GetConnectionString();
+
+    public ValueTask DisposeAsync() => container?.DisposeAsync() ?? ValueTask.CompletedTask;
+
+    private static PostgreSqlBuilder CreateBuilder()
     {
         ConfigureTestcontainers();
         var id = Guid.NewGuid().ToString("N");

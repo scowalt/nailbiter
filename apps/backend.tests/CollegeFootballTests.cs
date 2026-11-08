@@ -15,14 +15,13 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
-using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace backend.tests;
 
 public sealed class CollegeFootballTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer database = IsolatedPostgreSql.CreateContainer();
+    private readonly IsolatedPostgreSql database = new IsolatedPostgreSql();
     private readonly AppFactory entry = new();
     private readonly Clock clock = new();
     private readonly Provider provider = new();

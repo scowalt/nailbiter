@@ -4,14 +4,13 @@ using backend.Models;
 using backend.Services;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace backend.tests;
 
 public sealed class PlayoffSeriesLockOrderTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer database = IsolatedPostgreSql.CreateContainer();
+    private readonly IsolatedPostgreSql database = new IsolatedPostgreSql();
     private readonly GameRowLockGate gameRowLocks = new();
     private readonly Game game = ProHypeTests.Game("mlb");
     private DbContextOptions<ExcitementDbContext> options = null!;

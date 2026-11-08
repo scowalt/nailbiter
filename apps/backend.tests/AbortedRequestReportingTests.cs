@@ -17,7 +17,6 @@ using Sentry;
 using Sentry.AspNetCore;
 using Sentry.Extensibility;
 using Sentry.Protocol.Envelopes;
-using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace backend.tests;
@@ -118,13 +117,13 @@ public sealed class AbortedRequestReportingTests
 
     private sealed class ReportingApp : IAsyncDisposable
     {
-        private readonly PostgreSqlContainer database;
+        private readonly IsolatedPostgreSql database;
         private readonly AppFactory entry = new();
         private readonly WebApplicationFactory<Program> app;
         private readonly SentryRecorder recorder = new();
         private readonly ConcurrentDictionary<string, TaskCompletionSource<int>> completed = new();
 
-        private ReportingApp(PostgreSqlContainer database, string connectionString, IInterceptor[] interceptors)
+        private ReportingApp(IsolatedPostgreSql database, string connectionString, IInterceptor[] interceptors)
         {
             this.database = database;
             app = entry.WithWebHostBuilder(builder =>
@@ -153,7 +152,7 @@ public sealed class AbortedRequestReportingTests
 
         public static async Task<ReportingApp> StartAsync(string connectionOptions, params IInterceptor[] interceptors)
         {
-            var database = IsolatedPostgreSql.CreateContainer();
+            var database = new IsolatedPostgreSql();
             await database.StartAsync();
             var started = new ReportingApp(database, database.GetConnectionString() + connectionOptions, interceptors);
             using var scope = started.app.Services.CreateScope();

@@ -7,14 +7,13 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
-using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace backend.tests;
 
 public sealed class YouTubeHighlightsDatabase : IAsyncLifetime
 {
-    public PostgreSqlContainer Database { get; } = IsolatedPostgreSql.CreateContainer();
+    public IsolatedPostgreSql Database { get; } = new IsolatedPostgreSql();
     public Task InitializeAsync() => Database.StartAsync();
     public Task DisposeAsync() => Database.DisposeAsync().AsTask();
 }

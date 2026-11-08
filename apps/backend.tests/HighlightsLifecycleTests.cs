@@ -12,14 +12,13 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
-using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace backend.tests;
 
 public sealed class HighlightsLifecycleTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer database = IsolatedPostgreSql.CreateContainer();
+    private readonly IsolatedPostgreSql database = new IsolatedPostgreSql();
     private readonly AppFactory entry = new();
     private readonly Clock clock = new();
     private WebApplicationFactory<Program> host = null!;

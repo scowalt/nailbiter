@@ -28,10 +28,8 @@ public sealed class IsolatedPostgreSqlTests
         reservation.Close();
         for (var index = 0; index < 2; index++)
         {
-            await using var container = IsolatedPostgreSql.CreateBuilder()
-                .WithCreateParameterModifier(parameters =>
-                    parameters.HostConfig!.PortBindings["5432/tcp"] = [new PortBinding { HostPort = port }])
-                .Build();
+            await using var container = new IsolatedPostgreSql(builder => builder.WithCreateParameterModifier(parameters =>
+                parameters.HostConfig!.PortBindings["5432/tcp"] = [new PortBinding { HostPort = port }]));
             await container.StartAsync();
             var connectionString = container.GetConnectionString();
             Assert.True(new NpgsqlConnectionStringBuilder(connectionString).Pooling);

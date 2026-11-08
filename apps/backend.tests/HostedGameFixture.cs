@@ -7,14 +7,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Time.Testing;
-using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace backend.tests;
 
 internal sealed class HostedGameFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer database = IsolatedPostgreSql.CreateContainer();
+    private readonly IsolatedPostgreSql database = new IsolatedPostgreSql();
     private readonly AppFactory entry = new();
     private readonly Action<IServiceCollection>? configureServices;
     private WebApplicationFactory<Program>? app;

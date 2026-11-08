@@ -6,14 +6,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace backend.tests;
 
 public sealed class RetrospectiveEloTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer database = IsolatedPostgreSql.CreateContainer();
+    private readonly IsolatedPostgreSql database = new IsolatedPostgreSql();
     private readonly AppFactory entryPoint = new();
     private WebApplicationFactory<Program> app = null!;
 

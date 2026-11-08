@@ -272,7 +272,7 @@ public sealed class DatabaseFailureReportingTests
 
     private sealed class SyntheticDatabase : IAsyncDisposable
     {
-        private readonly Testcontainers.PostgreSql.PostgreSqlContainer container = IsolatedPostgreSql.CreateContainer();
+        private readonly IsolatedPostgreSql container = new IsolatedPostgreSql();
 
         public string ConnectionString => container.GetConnectionString();
 

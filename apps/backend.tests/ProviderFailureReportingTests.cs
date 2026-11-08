@@ -26,7 +26,6 @@ using Sentry;
 using Sentry.AspNetCore;
 using Sentry.Extensibility;
 using Sentry.Protocol.Envelopes;
-using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace backend.tests;
@@ -675,7 +674,7 @@ public sealed class ProviderFailureReportingTests
     private sealed class ReportingApp : IAsyncDisposable
     {
         private readonly AppFactory entry = new();
-        private PostgreSqlContainer? database;
+        private IsolatedPostgreSql? database;
         private readonly WebApplicationFactory<Program> app;
         private readonly SentTransport transport = new();
         private readonly LogRecorder logs = new();
@@ -707,7 +706,7 @@ public sealed class ProviderFailureReportingTests
 
         public static async Task<ReportingApp> WithDatabaseAsync(Func<Uri, HttpResponseMessage?> respond, Action<IServiceCollection>? configure = null)
         {
-            var database = IsolatedPostgreSql.CreateContainer();
+            var database = new IsolatedPostgreSql();
             await database.StartAsync();
             var app = new ReportingApp(respond, services =>
             {

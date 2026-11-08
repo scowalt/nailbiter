@@ -78,7 +78,7 @@ public sealed class EspnStandingsReportingTests
     [Fact]
     public async Task Database_failure_is_sent_once_at_error_with_its_sqlstate()
     {
-        await using var database = IsolatedPostgreSql.CreateContainer();
+        await using var database = new IsolatedPostgreSql();
         await database.StartAsync();
         var options = new DbContextOptionsBuilder<ExcitementDbContext>().UseNpgsql(database.GetConnectionString()).Options;
         await using (var db = new ExcitementDbContext(options))

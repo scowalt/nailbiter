@@ -8,7 +8,6 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Testcontainers.PostgreSql;
 
 namespace backend.tests;
 
@@ -55,7 +54,7 @@ public sealed class MoneyPuckQualificationHarness : IAsyncDisposable
 {
     public const string Source = "moneypuck_qualification";
     public static readonly string[] Teams = ["ANA", "BOS", "BUF", "CGY", "CAR", "CHI", "COL", "CBJ", "DAL", "DET", "EDM", "FLA", "LA", "MIN", "MTL", "NSH", "NJ", "NYI", "NYR", "OTT", "PHI", "PIT", "SJ", "SEA", "STL", "TB", "TOR", "UTAH", "VAN", "VGK", "WSH", "WPG"];
-    private readonly PostgreSqlContainer database = IsolatedPostgreSql.CreateContainer();
+    private readonly IsolatedPostgreSql database = new IsolatedPostgreSql();
     private readonly AppFactory entryPoint = new();
     public MoneyPuckQualificationClock Clock { get; } = new();
     public MoneyPuckQualificationHandler Handler { get; } = new();

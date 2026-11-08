@@ -33,7 +33,7 @@ public sealed class DatabaseSafeguardTests
 
         var serverArguments = compose.RootElement.GetProperty("services").GetProperty("timescaledb")
             .GetProperty("command").EnumerateArray().Select(value => value.GetString()!).ToArray();
-        await using var database = IsolatedPostgreSql.CreateBuilder().WithCommand(serverArguments).Build();
+        await using var database = new IsolatedPostgreSql(builder => builder.WithCommand(serverArguments));
         await database.StartAsync();
         var application = new NpgsqlConnectionStringBuilder(database.GetConnectionString())
         {

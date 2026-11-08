@@ -14,14 +14,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.Extensions.Http;
-using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace backend.tests;
 
 public sealed class ProHypeLifecycleTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer database = IsolatedPostgreSql.CreateContainer();
+    private readonly IsolatedPostgreSql database = new IsolatedPostgreSql();
     private readonly AppFactory entry = new();
     private readonly FakeTimeProvider clock = new(new DateTimeOffset(ProHypeTests.Now));
     private WebApplicationFactory<Program> app = null!;
