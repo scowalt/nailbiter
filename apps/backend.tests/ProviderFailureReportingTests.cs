@@ -234,6 +234,22 @@ public sealed class ProviderFailureReportingTests
     }
 
     [Fact]
+    public async Task Kalshi_refusal_does_not_outlive_its_scrape_pass()
+    {
+        await using var app = new ReportingApp(_ => Status(HttpStatusCode.Forbidden));
+
+        foreach (var _ in Enumerable.Range(0, 2))
+        {
+            using var scope = app.Services.CreateScope();
+            var kalshi = scope.ServiceProvider.GetRequiredService<KalshiOddsService>();
+            Assert.Null(await kalshi.GetLiveOddsAsync("nba", "BOS", "NYK", LiveStart, CancellationToken.None));
+        }
+
+        Assert.Equal(2, app.Provider.Requests.Count(KalshiRequest));
+        Assert.Equal(2, (await app.SentEventsAsync()).Count);
+    }
+
+    [Fact]
     public async Task Kalshi_world_cup_markets_failure_is_sent_once()
     {
         await using var app = new ReportingApp();

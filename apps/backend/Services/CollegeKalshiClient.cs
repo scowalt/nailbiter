@@ -13,9 +13,14 @@ public sealed class CollegeKalshiClient(HttpClient http, ILogger<CollegeKalshiCl
     private const string Series = "KXNCAAFGAME";
     private static readonly TimeZoneInfo Eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
 
+    private bool accessRefused;
+
     private async Task<JsonElement> Get(string url, CancellationToken ct)
     {
-        using var json = JsonDocument.Parse(await http.GetStringAsync(url, ct));
+        string body;
+        try { body = await http.GetStringAsync(url, ct); }
+        catch (KalshiAccessRefusedException) { accessRefused = true; throw; }
+        using var json = JsonDocument.Parse(body);
         return json.RootElement.Clone();
     }
 
@@ -107,6 +112,7 @@ public sealed class CollegeKalshiClient(HttpClient http, ILogger<CollegeKalshiCl
 
     private async Task<GameWinnerProbability?> Observe(CollegeMarketPair pair, DateTime now, bool pregame, CancellationToken ct)
     {
+        if (accessRefused) return null;
         try
         {
             var home = (await Get($"{Base}/markets/{Uri.EscapeDataString(pair.HomeTicker)}", ct)).At("market");
@@ -127,7 +133,7 @@ public sealed class CollegeKalshiClient(HttpClient http, ILogger<CollegeKalshiCl
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            logger.Log(ProviderFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "College game quotes unavailable for {Ticker}", pair.HomeTicker);
+            logger.Log(KalshiFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "College game quotes unavailable for {Ticker}", pair.HomeTicker);
             return null;
         }
     }

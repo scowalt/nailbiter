@@ -22,6 +22,8 @@ type PregameOddsService [<ActivatorUtilitiesConstructor>]
 
     static let supportedSports = [| "nba"; "nfl"; "nhl"; "mlb"; "world_cup" |]
 
+    let mutable kalshiRefused = false
+
     static let tryParseMoneyline (odds: string) =
         OddsConverter.TryParseMoneyline(odds)
 
@@ -116,6 +118,10 @@ type PregameOddsService [<ActivatorUtilitiesConstructor>]
                             let! kalshiOdds = task {
                                 if backend.Scoring.ProHypePolicy.Supports(sportLower) && verifiedSeason.HasValue
                                    && espnEvent.Date > now && not (isNull (box kalshiService)) then
+                                    if kalshiRefused then
+                                        kalshiFetchFailed <- true
+                                        return None
+                                    else
                                     try
                                         let! quote = kalshiService.GetPregameOddsAsync(sportLower, homeComp.Team.Abbreviation,
                                                                                       awayComp.Team.Abbreviation, espnEvent.Date, now, ct)
@@ -125,7 +131,8 @@ type PregameOddsService [<ActivatorUtilitiesConstructor>]
                                         return raise (OperationCanceledException(ct))
                                     | ex ->
                                         kalshiFetchFailed <- true
-                                        logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch Kalshi pregame odds for {Game}", espnEvent.ShortName)
+                                        if ex :? KalshiAccessRefusedException then kalshiRefused <- true
+                                        logger.Log((if KalshiFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch Kalshi pregame odds for {Game}", espnEvent.ShortName)
                                         return None
                                 else return None
                             }
