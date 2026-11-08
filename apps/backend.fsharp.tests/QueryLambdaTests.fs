@@ -621,3 +621,18 @@ let ``the scan reports each refused subquery on one bounded line`` () =
 let ``a refusal reason collapses to one line and is cut at the limit`` () =
     Assert.Equal("a b c", summarize "a\n   b\r\n\tc")
     Assert.Equal(reasonLimit + 3, (summarize (String('x', 500))).Length)
+
+let private compilesASubqueryOnTheContext () =
+    EF.CompileQuery<ExcitementDbContext, Game>(fun (db: ExcitementDbContext) ->
+        db.Games.Where(fun g -> db.OddsSnapshots.Any(fun o -> o.DrawMoneyline <> Nullable())))
+
+[<Fact>]
+let ``the scan accepts the navigation and join forms it recommends`` () =
+    for name in [ nameof correlatesANavigation; nameof correlatesAJoin ] do
+        Assert.Empty(problems (controlSites name))
+
+[<Fact>]
+let ``a compiled query reading the context is not advised as a correlated subquery`` () =
+    let report = Assert.Single(problems (controlSites (nameof compilesASubqueryOnTheContext)))
+    Assert.StartsWith(hiddenTreeHelp, report)
+    Assert.DoesNotContain("InvalidCastException", report)
