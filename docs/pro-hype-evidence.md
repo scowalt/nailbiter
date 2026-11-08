@@ -14,7 +14,7 @@ Home, league and detail consumers resolve the same whole result and authoritativ
 
 ## Start hype on live games
 
-Each pregame resolution of an upcoming, unstarted game also writes its displayed total and derived-score credit to `start_hype`, or deletes the row when hype is unavailable. College football games starting within a day are written by the same 30-second background loop. The cutoff that ends pregame also ends these writes, so the row holds the score shown at the start. The home page shows it beside excitement on live cards and orders **Live now** by the mean of start hype and excitement, using whichever is available and placing games with neither last in start order. League and detail pages do not show it. `039_StartHype.sql` adds the table.
+Each pregame resolution of an upcoming, unstarted game also writes its displayed total and derived-score credit to `start_hype`, or deletes the row when hype is unavailable. College football games starting within a day are written by the same 30-second background loop. The cutoff that ends pregame also ends these writes, so the row holds the score shown at the start. The home page shows it beside excitement on live cards and orders **Live now** by the mean of start hype and excitement, using whichever is available and placing games with neither last in start order. A game in which either team's current win probability is above 99% ranks after every other live game, because its result is all but settled. Its card's probability bar shows that team at `>99%` or `100%`. These decided games keep the same ordering among themselves. League and detail pages do not show it. `039_StartHype.sql` adds the table.
 
 ## Durable lifecycle
 

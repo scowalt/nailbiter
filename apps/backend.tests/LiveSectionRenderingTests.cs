@@ -17,9 +17,9 @@ public sealed class LiveSectionRenderingTests
     };
 
     private static AngleSharp.Html.Dom.IHtmlDocument Render(List<Game> games, Dictionary<string, double?> excitement,
-        Dictionary<string, double?> hype, Dictionary<string, DerivedHypeCredit> credits)
+        Dictionary<string, double?> hype, Dictionary<string, DerivedHypeCredit> credits, Dictionary<string, OddsSnapshot>? odds = null)
     {
-        var content = HomePageRenderer.RenderWithHypeCredits(games, new Dictionary<string, OddsSnapshot>(), excitement, hype,
+        var content = HomePageRenderer.RenderWithHypeCredits(games, odds ?? [], excitement, hype,
             new Dictionary<string, TeamRankInfo>(), credits);
         return new HtmlParser().ParseDocument("<!doctype html>" + Layout.renderPage("Synthetic live", "Synthetic games", null, content));
     }
@@ -40,6 +40,27 @@ public sealed class LiveSectionRenderingTests
         Assert.Equal("Hype90", page.QuerySelector("#hype-hyped-dull")!.TextContent.Replace(" ", ""));
         Assert.Equal("Excitement10", page.QuerySelector("#excitement-hyped-dull")!.TextContent.Replace(" ", ""));
         Assert.Null(page.QuerySelector("#hype-excitement-only"));
+    }
+
+    [Fact]
+    public void Live_now_ranks_games_one_team_wins_more_than_99_percent_of_the_time_after_every_undecided_game()
+    {
+        var games = new List<Game> { Live("home-runaway", 17), Live("close-dull", 18), Live("unscored-close", 19),
+            Live("at-99", 20), Live("away-runaway", 21), Live("unpriced", 22) };
+        var excitement = new Dictionary<string, double?>
+        {
+            ["home-runaway"] = 95, ["close-dull"] = 20, ["at-99"] = 50, ["away-runaway"] = 70, ["unpriced"] = 10
+        };
+        OddsSnapshot Odds(string id, double home) => new() { GameId = id, HomeWinProbability = home, AwayWinProbability = 1 - home };
+        var odds = new Dictionary<string, OddsSnapshot>
+        {
+            ["home-runaway"] = Odds("home-runaway", 0.995), ["close-dull"] = Odds("close-dull", 0.6),
+            ["unscored-close"] = Odds("unscored-close", 0.5), ["at-99"] = Odds("at-99", 0.99),
+            ["away-runaway"] = Odds("away-runaway", 0.008)
+        };
+        using var page = Render(games, excitement, [], [], odds);
+        Assert.Equal(["at-99", "close-dull", "unpriced", "unscored-close", "home-runaway", "away-runaway"],
+            page.QuerySelectorAll("#home-section-live a[href^='/game/']").Select(a => a.GetAttribute("href")![6..]));
     }
 
     [Fact]
