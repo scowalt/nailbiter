@@ -16,6 +16,27 @@ namespace backend.tests;
 public sealed class IsolatedPostgreSqlTests
 {
     [Fact]
+    public async Task Start_survives_a_host_port_taken_before_Docker_binds_it()
+    {
+        using var occupant = new TcpListener(IPAddress.IPv6Any, 0);
+        occupant.Server.DualMode = true;
+        occupant.Start();
+        var takenPort = ((IPEndPoint)occupant.LocalEndpoint).Port;
+        var builds = 0;
+        await using var database = new IsolatedPostgreSql(builder => builds++ == 0
+            ? builder.WithCreateParameterModifier(parameters =>
+                parameters.HostConfig!.PortBindings["5432/tcp"] =
+                    [new PortBinding { HostPort = takenPort.ToString(CultureInfo.InvariantCulture) }])
+            : builder);
+
+        await database.StartAsync();
+
+        Assert.NotEqual(takenPort, new NpgsqlConnectionStringBuilder(database.GetConnectionString()).Port);
+        await using var connection = new NpgsqlConnection(database.GetConnectionString());
+        await connection.OpenAsync();
+    }
+
+    [Fact]
     public async Task Real_host_initializes_second_database_after_owned_OS_port_reuse_with_normal_pooling()
     {
         using var reservation = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp)
