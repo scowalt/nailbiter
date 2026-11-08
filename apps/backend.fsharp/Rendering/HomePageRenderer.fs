@@ -191,7 +191,7 @@ module HomePageRenderer =
                             match teamRanks.TryGetValue($"{game.Sport}:{PlayoffRatingPolicy.gameSeason game}:{game.SeasonType.GetValueOrDefault()}:{game.AwayTeamAbbreviation}") with
                             | true, rank ->
                                 match rank.DisplayRank with
-                                | Some text -> Elem.span [ cls "team-rank"; yield! FormatHelpers.playoffDisplayConventionAttributes rank.PlayoffDisplayOverride.IsSome ] [ Text.enc text ]
+                                | Some text -> Elem.span [ cls "team-rank" ] [ Text.enc text ]
                                 | None -> ()
                             | _ -> ()
                         ]
@@ -213,7 +213,7 @@ module HomePageRenderer =
                             match teamRanks.TryGetValue($"{game.Sport}:{PlayoffRatingPolicy.gameSeason game}:{game.SeasonType.GetValueOrDefault()}:{game.HomeTeamAbbreviation}") with
                             | true, rank ->
                                 match rank.DisplayRank with
-                                | Some text -> Elem.span [ cls "team-rank"; yield! FormatHelpers.playoffDisplayConventionAttributes rank.PlayoffDisplayOverride.IsSome ] [ Text.enc text ]
+                                | Some text -> Elem.span [ cls "team-rank" ] [ Text.enc text ]
                                 | None -> ()
                             | _ -> ()
                         ]

@@ -652,12 +652,6 @@
     }
   }
 
-  .team-rank-override {
-    font-size: var(--text-xs);
-    line-height: var(--text-xs-line-height);
-    color: color-mix(in oklab, var(--color-text-secondary) 70%, transparent);
-  }
-
   .league-at {
     margin-inline: 0.5rem;
     font-size: var(--text-xs);

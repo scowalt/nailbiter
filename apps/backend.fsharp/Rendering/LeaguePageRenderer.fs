@@ -37,11 +37,7 @@ module LeaguePageRenderer =
 
         let homeWinProb = latestOdds |> Option.map (fun o -> o.HomeWinProbability) |> Option.defaultValue 0.5
         let liveClass = if isLive then " is-live" else ""
-        let displayOverride team =
-            match teamRanks.TryGetValue($"{game.Sport}:{PlayoffRatingPolicy.gameSeason game}:{game.SeasonType.GetValueOrDefault()}:{team}") with
-            | true, rank -> rank.PlayoffDisplayOverride.IsSome
-            | _ -> false
-        let responsiveRows = game.Sport = "cfb" || (game.Sport = "nfl" && (displayOverride game.HomeTeamAbbreviation || displayOverride game.AwayTeamAbbreviation))
+        let responsiveRows = game.Sport = "cfb"
 
         let card = Elem.a [ Attr.href $"/game/{game.Id}"; cls $"league-game{liveClass}" ] [
             Elem.div [ cls (if responsiveRows then "league-game-body-stacked" else "league-game-body") ] [
@@ -58,7 +54,7 @@ module LeaguePageRenderer =
                             match teamRanks.TryGetValue($"{game.Sport}:{PlayoffRatingPolicy.gameSeason game}:{game.SeasonType.GetValueOrDefault()}:{game.AwayTeamAbbreviation}") with
                             | true, rank ->
                                 match rank.DisplayRank with
-                                | Some text -> Elem.span [ cls (if rank.PlayoffDisplayOverride.IsSome then "team-rank-override" else "team-rank"); yield! FormatHelpers.playoffDisplayConventionAttributes rank.PlayoffDisplayOverride.IsSome ] [ Text.enc text ]
+                                | Some text -> Elem.span [ cls "team-rank" ] [ Text.enc text ]
                                 | None -> ()
                             | _ -> ()
                         ]
@@ -79,7 +75,7 @@ module LeaguePageRenderer =
                             match teamRanks.TryGetValue($"{game.Sport}:{PlayoffRatingPolicy.gameSeason game}:{game.SeasonType.GetValueOrDefault()}:{game.HomeTeamAbbreviation}") with
                             | true, rank ->
                                 match rank.DisplayRank with
-                                | Some text -> Elem.span [ cls (if rank.PlayoffDisplayOverride.IsSome then "team-rank-override" else "team-rank"); yield! FormatHelpers.playoffDisplayConventionAttributes rank.PlayoffDisplayOverride.IsSome ] [ Text.enc text ]
+                                | Some text -> Elem.span [ cls "team-rank" ] [ Text.enc text ]
                                 | None -> ()
                             | _ -> ()
                         ]

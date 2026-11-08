@@ -261,6 +261,27 @@ let ``Qualification JSON observation and evidence survive microsecond truncation
         Assert.True(outcome.ExpiresAt.IsNone)
 
 [<Theory>]
+[<InlineData(0.05, true)>]
+[<InlineData(0.06, false)>]
+let ``An NHL market with no buyers selects half its ask and keeps the ask as the bound`` (ask: float) accepted =
+    let row = precisionQuote 0
+    row.PlayoffProbability <- Nullable(ask / 2.0)
+    let e = PlayoffQuoteEvidence.Parse(row.PlayoffEvidenceJson)
+    e.Bid <- Nullable 0M
+    e.BidSize <- Nullable 0M
+    e.BidExplicitlyEmpty <- true
+    e.Ask <- Nullable(decimal ask)
+    row.PlayoffEvidenceJson <- JsonSerializer.Serialize(e)
+    let selected = select "off" [row]
+    if accepted then
+        Assert.Equal(Some(ask / 2.0), selected.Probability)
+        Assert.Equal(Some ask, selected.UpperBound)
+    else
+        Assert.True(selected.Probability.IsNone)
+        Assert.True(selected.UpperBound.IsNone)
+        Assert.Equal("insufficient_depth", (selected.Providers |> List.find (fun p -> p.Source = "kalshi")).Reason)
+
+[<Theory>]
 [<InlineData("later_microsecond", "future_observation")>]
 [<InlineData("evidence_after_observation_tick", "future_observation")>]
 [<InlineData("observation_after_now_tick", "future_observation")>]

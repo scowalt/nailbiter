@@ -54,6 +54,7 @@ module PlayoffRatingPolicy =
           Source: string option
           IsFinal: bool
           IsAssumed: bool
+          UpperBound: float option
           Reason: string }
 
     type SelectionRequest =
@@ -68,6 +69,7 @@ module PlayoffRatingPolicy =
           Probability: float option
           IsFinal: bool
           IsAssumed: bool
+          UpperBound: float option
           EvidenceAt: DateTime option
           FetchedAt: DateTime option
           ExpiresAt: DateTime option
@@ -79,6 +81,7 @@ module PlayoffRatingPolicy =
           Probability: float option
           IsFinal: bool
           IsAssumed: bool
+          UpperBound: float option
           EvidenceAt: DateTime option
           FetchedAt: DateTime option
           ExpiresAt: DateTime option
@@ -96,6 +99,7 @@ module PlayoffRatingPolicy =
           Probability = None
           IsFinal = false
           IsAssumed = false
+          UpperBound = None
           EvidenceAt = None
           FetchedAt = None
           ExpiresAt = None
@@ -191,32 +195,11 @@ module PlayoffRatingPolicy =
                             { observed with Probability = value; IsFinal = true; Reason = "accepted"; ExpiresAt = None }
                         else { observed with Reason = "unverified_final" }
                     elif request.Now - evidenceAt >= maxAge then { observed with Reason = "expired" }
-                    else { observed with Probability = value; Reason = "accepted" }
-
-    let displayOnlyLowProbability (request: SelectionRequest) (ratings: seq<TeamRating>) =
-        if request.Sport <> "nfl" || request.Season < 1 || request.Season > 9998 then false
-        else
-            ratings
-            |> Seq.filter (fun r -> r.Sport = request.Sport && r.Season = request.Season && r.Source = kalshiSource
-                                    && teamKey request.Sport r.TeamAbbreviation = teamKey request.Sport request.Team)
-            |> latest
-            |> Option.exists (fun row ->
-                let e = PlayoffQuoteEvidence.Parse(row.PlayoffEvidenceJson)
-                let ticker = $"KXNFLPLAYOFF-{(request.Season + 1) % 100:D2}"
-                let suffix = match request.Team with | "JAX" -> ["JAX"; "JAC"] | "WSH" -> ["WSH"; "WAS"] | "LAR" -> ["LAR"; "LA"] | team -> [team]
-                row.SourceSeason = Nullable request.Season && not row.PlayoffProbability.HasValue && not row.PlayoffProbabilityIsFinal
-                && row.FetchedAt <= request.Now && request.Now - row.FetchedAt < maxAge
-                && not (isNull e) && e.Version = 1 && e.ValidationPolicy = "kalshi-qualification-v1"
-                && e.Provider = kalshiSource && e.Sport = request.Sport && e.Season = request.Season
-                && e.Team = request.Team && e.ContractVerified && e.EventId = ticker
-                && (suffix |> List.exists (fun team -> e.MarketId = ticker + "-" + team))
-                && e.State = "unavailable" && e.ReasonCode = "insufficient_depth" && not e.ResolutionBlocked
-                && e.ObservedAt.HasValue && e.ObservedAt.Value <> DateTime.MinValue && e.ObservedAt.Value <= request.Now
-                && not (afterPersistedTimestamp e.ObservedAt.Value row.FetchedAt) && request.Now - e.ObservedAt.Value < maxAge
-                && not (String.IsNullOrWhiteSpace e.RefreshId)
-                && e.Bid = Nullable 0M && e.BidSize = Nullable 0M && e.BidExplicitlyEmpty && not e.AskExplicitlyEmpty
-                && e.Ask.HasValue && e.Ask.Value > 0.01M && e.Ask.Value <= 0.02M
-                && e.AskSize.HasValue && e.AskSize.Value > 0M)
+                    else
+                        let upperBound =
+                            if not (isNull envelope) && envelope.BidExplicitlyEmpty && envelope.Ask.HasValue then Some(float envelope.Ask.Value)
+                            else None
+                        { observed with Probability = value; UpperBound = upperBound; Reason = "accepted" }
 
     let private assessPlayoffStatus (request: SelectionRequest) row =
         let empty = missing playoffStatusSource "missing_model"
@@ -333,6 +316,7 @@ module PlayoffRatingPolicy =
               Probability = s.Probability
               IsFinal = s.IsFinal
               IsAssumed = s.IsAssumed
+              UpperBound = s.UpperBound
               EvidenceAt = s.EvidenceAt
               FetchedAt = s.FetchedAt
               ExpiresAt = s.ExpiresAt
@@ -343,6 +327,7 @@ module PlayoffRatingPolicy =
               Probability = None
               IsFinal = false
               IsAssumed = false
+              UpperBound = None
               EvidenceAt = None
               FetchedAt = providers |> List.tryPick (fun p -> p.FetchedAt)
               ExpiresAt = None
@@ -389,6 +374,7 @@ module PlayoffRatingPolicy =
               Source = if selection.Source = Some p.Source then selection.Source else None
               IsFinal = selection.Source = Some p.Source && selection.IsFinal
               IsAssumed = selection.Source = Some p.Source && selection.IsAssumed
+              UpperBound = if selection.Source = Some p.Source then selection.UpperBound else None
               Reason = if selection.Source = Some p.Source then selection.Reason else p.Reason })
 
     let selectSnapshot (request: SelectionRequest) (ratings: seq<TeamRating>) =

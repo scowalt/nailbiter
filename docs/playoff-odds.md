@@ -80,13 +80,14 @@ There is no minimum trading-volume threshold. A market can pass these rules desp
 
 An extreme one-sided market can also supply an estimate, with the same identity, status, closing-time, and price checks.
 A YES bid of at least 99 cents with positive order size permits an empty ask at one dollar.
-A YES ask of at most one cent with positive order size permits an empty bid at zero dollars.
+A YES ask of at most five cents with positive order size permits an empty bid at zero dollars. The user widened this from one cent on 2026-11-08 after quiet NFL and NHL markets with 2–6 cent asks and no buyers showed as unavailable; the cap is `QualificationQuotePolicy.maxEmptyBidAsk`.
 The empty side must explicitly report zero order size. Missing or malformed prices and sizes do not count as an empty side.
 Ordinary one-sided quotes, markets with no orders on either side, and last trades remain unavailable. Missing markets also remain unavailable except for the explicit college no-market assumption below.
 
-For these extreme quotes, the importer stores the midpoint between the populated quote and the zero-or-one endpoint for scoring.
-A 99-cent bid becomes an internal estimate of 99.5%. A one-cent ask becomes an internal estimate of 0.5%.
-The UI displays `>99%` and `<1%` instead of these internal estimates.
+For these one-sided quotes, the importer stores the midpoint between the populated quote and the zero-or-one endpoint for scoring.
+A 99-cent bid becomes an internal estimate of 99.5%. A four-cent ask becomes an internal estimate of 2%.
+The UI displays `>99%` for the bid case. For the empty-bid case it displays the ask, rounded up to a whole percent, as an upper bound: a one-cent ask shows `<1%` and a four-cent ask shows `<4%`.
+Except in the NHL, whose evidence column already stores every quote, the collector keeps the accepted empty-bid quote envelope in the evidence column so pages can show the ask. Selection verifies that envelope against the stored row before showing the bound.
 These estimates still expire after one hour. A price near zero or one does not prove elimination or qualification.
 
 ## College no-market assumption
@@ -133,7 +134,7 @@ Automatic refreshes cover the season candidates above, not every historical seas
 
 Homepage cards, league cards, scheduled-game comparisons, and hype scoring use the same qualification policy.
 Missing probabilities appear as unavailable, never as zero or 50%, except for the separately sourced college no-market assumption.
-Nonfinal estimates below 1% display as `<1%`, and those above 99% display as `>99%`, including quotes with orders on both sides.
+Nonfinal estimates below 1% display as `<1%`, and those above 99% display as `>99%`, including quotes with orders on both sides. Empty-bid estimates display their ask bound, as described above.
 Exactly 1% and 99% estimates retain their numeric labels. Only confirmed final outcomes display as “Clinched playoffs” or “Missed playoffs”.
 Homepage and league cards show these labels without the “playoff odds” suffix.
 Scheduled-game comparisons use one “Playoff outlook” row for an estimate, a confirmed outcome, or “Unavailable”.

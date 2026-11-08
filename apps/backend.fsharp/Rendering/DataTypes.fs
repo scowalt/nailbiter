@@ -95,7 +95,7 @@ type PlayoffBracketData =
 type TeamRankInfo =
     { PowerRank: int option
       PlayoffOdds: float option
-      PlayoffDisplayOverride: string option
+      PlayoffUpperBound: float option
       PlayoffFetchedAt: DateTime option
       PlayoffIsFinal: bool
       PlayoffIsAssumed: bool
