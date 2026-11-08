@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -7,6 +8,7 @@ using backend.Models;
 using backend.Services;
 using backend.Services.Espn;
 using backend.Services.Nascar;
+using backend.Services.OpenF1;
 using backend.Services.PlayoffStatus;
 using backend.Services.Kalshi;
 using Microsoft.AspNetCore.Hosting;
@@ -544,6 +546,96 @@ public sealed class ProviderFailureReportingTests
         Assert.Equal(LogLevel.Warning, missing.Level);
         Assert.Equal(HttpStatusCode.NotFound, Assert.IsType<HttpRequestException>(missing.Exception).StatusCode);
         Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Fact]
+    public async Task Espn_standings_body_that_stalls_after_its_headers_is_retried_within_the_policy_and_sent_once()
+    {
+        using var provider = new StalledBodyProvider(_ => true);
+        await using var app = StalledBodyApp(provider);
+
+        using var scope = app.Services.CreateScope();
+        var elapsed = Stopwatch.StartNew();
+        var refreshed = await scope.ServiceProvider.GetRequiredService<EspnStandingsService>().RefreshNflStandingsAsync(CancellationToken.None);
+        elapsed.Stop();
+
+        Assert.Equal(0, refreshed);
+        await AssertStallSentOnceAsync<EspnStandingsService>(app, provider, elapsed.Elapsed, "Failed to refresh {Sport} standings from ESPN");
+    }
+
+    [Fact]
+    public async Task Kalshi_live_markets_body_that_stalls_after_its_headers_is_retried_within_the_policy_and_sent_once()
+    {
+        using var provider = new StalledBodyProvider(uri => uri.AbsolutePath == "/trade-api/v2/markets");
+        await using var app = StalledBodyApp(provider);
+
+        var service = app.Get<KalshiOddsService>();
+        var elapsed = Stopwatch.StartNew();
+        var odds = await service.GetLiveOddsAsync("nba", "BOS", "NYK", LiveStart, CancellationToken.None);
+        elapsed.Stop();
+
+        Assert.Null(odds);
+        await AssertStallSentOnceAsync<KalshiOddsService>(app, provider, elapsed.Elapsed, "Failed to fetch markets from Kalshi for {Sport}");
+    }
+
+    [Fact]
+    public async Task OpenF1_buffered_body_that_stalls_after_its_headers_is_retried_within_the_policy_and_sent_once()
+    {
+        using var provider = new StalledBodyProvider(_ => true);
+        await using var app = StalledBodyApp(provider);
+
+        var service = app.Get<OpenF1Service>();
+        var elapsed = Stopwatch.StartNew();
+        var meetings = await service.FetchMeetingsAsync(2026);
+        elapsed.Stop();
+
+        Assert.Empty(meetings);
+        await AssertStallSentOnceAsync<OpenF1Service>(app, provider, elapsed.Elapsed, "Failed to fetch OpenF1 data from {Url}");
+    }
+
+    [Fact]
+    public async Task Caller_cancellation_while_a_body_stalls_propagates_without_an_event()
+    {
+        using var provider = new StalledBodyProvider(_ => true);
+        await using var app = StalledBodyApp(provider, attemptTimeout: StallTotalTimeout / 2);
+        using var caller = new CancellationTokenSource();
+
+        using var scope = app.Services.CreateScope();
+        var refresh = scope.ServiceProvider.GetRequiredService<EspnStandingsService>().RefreshNflStandingsAsync(caller.Token);
+        await provider.FirstStall.WaitAsync(TimeSpan.FromSeconds(10));
+        caller.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresh);
+        Assert.Equal(1, provider.Stalled);
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    private static readonly TimeSpan StallAttemptTimeout = TimeSpan.FromMilliseconds(250);
+
+    private static readonly TimeSpan StallTotalTimeout = TimeSpan.FromSeconds(3);
+
+    private static ReportingApp StalledBodyApp(StalledBodyProvider provider, TimeSpan? attemptTimeout = null) =>
+        new(configure: services =>
+        {
+            services.ConfigureAll<HttpClientFactoryOptions>(options =>
+            {
+                options.HttpMessageHandlerBuilderActions.Add(handlers => handlers.PrimaryHandler = provider.Handler());
+                options.HttpClientActions.Add(client => client.Timeout = 2 * StallTotalTimeout);
+            });
+            services.ConfigureAll<HttpStandardResilienceOptions>(options =>
+            {
+                options.AttemptTimeout.Timeout = attemptTimeout ?? StallAttemptTimeout;
+                options.TotalRequestTimeout.Timeout = StallTotalTimeout;
+            });
+        });
+
+    private static async Task AssertStallSentOnceAsync<TCaller>(ReportingApp app, StalledBodyProvider provider, TimeSpan elapsed, string template)
+    {
+        Assert.Equal(StandardAttempts, provider.Stalled);
+        Assert.InRange(elapsed, StandardAttempts * StallAttemptTimeout, StallTotalTimeout);
+        var reported = Assert.Single(await app.SentEventsAsync());
+        Assert.Equal((typeof(TCaller).FullName, "error", template, typeof(TimeoutRejectedException).FullName),
+            (reported.Logger, reported.Level, reported.Template, reported.ExceptionTypes[^1]));
     }
 
     public static TheoryData<HttpStatusCode> KalshiAnswers => [HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden, HttpStatusCode.NotFound];
