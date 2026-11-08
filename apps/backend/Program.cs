@@ -38,7 +38,8 @@ builder.WebHost.UseSentry(o =>
             eventId?.ToString() == "ResilienceEvent")
             return null;  
 
-        if (sentryEvent.Logger == DbLoggerCategory.Database.Command.Name)
+        if (sentryEvent.Logger == DbLoggerCategory.Database.Command.Name
+            || sentryEvent.Logger == DbLoggerCategory.Database.Transaction.Name)
             return null;
 
         return sentryEvent;
