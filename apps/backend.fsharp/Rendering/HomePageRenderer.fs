@@ -181,7 +181,7 @@ module HomePageRenderer =
                         Elem.div [ cls "team-label" ] [
                             Elem.span [ cls "team-name" ] [
                                 Text.enc game.AwayTeamAbbreviation
-                                if game.Sport = "cfb" then yield! FormatHelpers.apRank game.AwayApRank
+                                if game.Sport = "cfb" then yield! FormatHelpers.pollRank game.RankPoll game.AwayPollRank
                             ]
                             match teamRanks.TryGetValue($"{game.Sport}:{PlayoffRatingPolicy.gameSeason game}:{game.SeasonType.GetValueOrDefault()}:{game.AwayTeamAbbreviation}") with
                             | true, rank ->
@@ -203,7 +203,7 @@ module HomePageRenderer =
                         Elem.div [ cls "team-label" ] [
                             Elem.span [ cls "team-name" ] [
                                 Text.enc game.HomeTeamAbbreviation
-                                if game.Sport = "cfb" then yield! FormatHelpers.apRank game.HomeApRank
+                                if game.Sport = "cfb" then yield! FormatHelpers.pollRank game.RankPoll game.HomePollRank
                             ]
                             match teamRanks.TryGetValue($"{game.Sport}:{PlayoffRatingPolicy.gameSeason game}:{game.SeasonType.GetValueOrDefault()}:{game.HomeTeamAbbreviation}") with
                             | true, rank ->

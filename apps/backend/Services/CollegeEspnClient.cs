@@ -85,15 +85,23 @@ public sealed class CollegeEspnClient(HttpClient http, TimeProvider time, IMemor
         return result;
     }
 
-    public async Task<(DateTime Date, Dictionary<string, int> Ranks)?> ApPollAsync(int season, CancellationToken ct)
+    public async Task<(CollegePoll Poll, DateTime Date, Dictionary<string, int> Ranks)?> RankingsAsync(int season, CancellationToken ct) =>
+        SelectPoll(await Get(EspnSiteApi.url($"{Path}/rankings?seasons={season}"), ct), season, time.GetUtcNow().UtcDateTime);
+
+    public static (CollegePoll Poll, DateTime Date, Dictionary<string, int> Ranks)? SelectPoll(JsonElement rankings, int season, DateTime now)
     {
-        var data = await Get(EspnSiteApi.url($"{Path}/rankings?seasons={season}"), ct);
-        var poll = data.At("rankings").Items().SingleOrDefault(p => p.At("id").Text() == "1" && p.At("type").Text() == "ap");
+        var polls = rankings.At("rankings").Items().ToList();
+        return Read(polls.SingleOrDefault(p => p.At("id").Text() == "21" && p.At("type").Text() == "cfp"), CollegePoll.Cfp, season, now)
+            ?? Read(polls.SingleOrDefault(p => p.At("id").Text() == "1" && p.At("type").Text() == "ap"), CollegePoll.Ap, season, now);
+    }
+
+    private static (CollegePoll Poll, DateTime Date, Dictionary<string, int> Ranks)? Read(JsonElement poll, CollegePoll kind, int season, DateTime now)
+    {
         var date = poll.At("lastUpdated").Date() ?? poll.At("date").Date();
-        if (poll.At("season", "year").Int() != season || date is null || date > time.GetUtcNow().UtcDateTime) return null;
+        if (poll.At("season", "year").Int() != season || date is null || date > now) return null;
         var ranks = poll.At("ranks").Items().Where(r => r.At("current").Int() is >= 1 and <= 25)
             .ToDictionary(r => r.At("team", "id").Text(), r => r.At("current").Int()!.Value);
-        return (date.Value, ranks);
+        return kind == CollegePoll.Cfp && ranks.Count == 0 ? null : (kind, date.Value, ranks);
     }
 
     public async Task<CollegeSchedule> ScheduleAsync(DateTime date, int season, bool traverse, CancellationToken ct)

@@ -1,5 +1,7 @@
 namespace backend.Models;
 
+public enum CollegePoll { Ap, Cfp }
+
 public class CollegeTeam
 {
     public int Season { get; set; }
@@ -8,8 +10,9 @@ public class CollegeTeam
     public required string Name { get; set; }
     public double? Fpi { get; set; }
     public DateTime FpiUpdatedAt { get; set; }
-    public int? ApRank { get; set; }
-    public DateTime? ApUpdatedAt { get; set; }
+    public int? PollRank { get; set; }
+    public CollegePoll? Poll { get; set; }
+    public DateTime? PollUpdatedAt { get; set; }
     public DateTime FetchedAt { get; set; }
 }
 

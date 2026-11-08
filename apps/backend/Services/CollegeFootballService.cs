@@ -50,16 +50,17 @@ public sealed class CollegeFootballService(
                 { db.CollegeTeams.Remove(removed); teams.Remove(removed); }
                 try
                 {
-                    var ap = await espn.ApPollAsync(season, ct);
-                    if (ap is not null)
+                    var rankings = await espn.RankingsAsync(season, ct);
+                    if (rankings is { } poll)
                         foreach (var team in teams)
                         {
-                            team.ApRank = ap.Value.Ranks.TryGetValue(team.EspnId, out var rank) ? rank : null;
-                            team.ApUpdatedAt = ap.Value.Date;
+                            team.PollRank = poll.Ranks.TryGetValue(team.EspnId, out var rank) ? rank : null;
+                            team.Poll = poll.Poll;
+                            team.PollUpdatedAt = poll.Date;
                         }
                 }
                 catch (Exception ex) when (ex is HttpRequestException or JsonException)
-                { logger.LogWarning(ex, "AP poll unavailable; existing evidence will expire normally"); }
+                { logger.LogWarning(ex, "College rankings unavailable; existing evidence will expire normally"); }
             }
             catch (Exception ex) when (teams.Count > 0 && !ct.IsCancellationRequested)
             {
@@ -222,8 +223,11 @@ public sealed class CollegeFootballService(
             membership.TryGetValue(homeId, out var ht); membership.TryGetValue(awayId, out var at);
             game.HomeFpi = CollegeFootballPolicy.Fresh(ht?.FpiUpdatedAt, now, TimeSpan.FromDays(8)) ? ht?.Fpi : null;
             game.AwayFpi = CollegeFootballPolicy.Fresh(at?.FpiUpdatedAt, now, TimeSpan.FromDays(8)) ? at?.Fpi : null;
-            game.HomeApRank = CollegeFootballPolicy.Fresh(ht?.ApUpdatedAt, now, TimeSpan.FromDays(8)) ? ht?.ApRank : null;
-            game.AwayApRank = CollegeFootballPolicy.Fresh(at?.ApUpdatedAt, now, TimeSpan.FromDays(8)) ? at?.ApRank : null;
+            CollegePoll? FreshPoll(CollegeTeam? team) => CollegeFootballPolicy.Fresh(team?.PollUpdatedAt, now, TimeSpan.FromDays(8)) ? team?.Poll : null;
+            var homePoll = FreshPoll(ht); var awayPoll = FreshPoll(at);
+            game.RankPoll = homePoll ?? awayPoll;
+            game.HomePollRank = homePoll is not null && homePoll == game.RankPoll ? ht?.PollRank : null;
+            game.AwayPollRank = awayPoll is not null && awayPoll == game.RankPoll ? at?.PollRank : null;
             game.RatingsObservedAt = now;
             if (state == "pre")
             {

@@ -90,7 +90,7 @@ public sealed class GroupedHomePageTests : IAsyncLifetime
         var game = Game(id, hour, sport: "cfb");
         game.SeasonYear = 2026; game.HomeTeamAbbreviation = "OSU"; game.AwayTeamAbbreviation = "MICH";
         game.HomeTeamId = "194"; game.AwayTeamId = "130";
-        game.HomeApRank = 2; game.AwayApRank = 7;
+        game.HomePollRank = 2; game.AwayPollRank = 7; game.RankPoll = CollegePoll.Ap;
         game.HomeFpi = homeFpi; game.AwayFpi = awayFpi;
         game.RatingsObservedAt = clock.Now.UtcDateTime;
         game.CollegeCompetition = competition;

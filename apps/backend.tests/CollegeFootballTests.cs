@@ -46,9 +46,18 @@ public sealed class CollegeFootballTests : IAsyncLifetime
         public bool MissingHistory;
         public bool WrongSeason;
         public bool WrongCfpSeason;
+        public bool CommitteePoll;
+        public int CommitteeSeason = 2026;
+        public string CommitteeUpdated = "2026-09-14T03:21Z";
         public bool FailQuotes;
         public string? OmitEvent;
         public int RosterSeason = 2026;
+
+        private static object Poll(string id, string type, int season, string updated, params (string Team, int Rank)[] ranks) => new
+        {
+            id, type, season = new { year = season }, lastUpdated = updated,
+            ranks = ranks.Select(r => new { current = r.Rank, team = new { id = r.Team } })
+        };
 
         public static JsonObject Event(string id, string homeId, string home, string awayId, string away, string state = "pre", string date = "2026-09-16T19:00:00Z", string note = "", int seasonType = 2, int period = 0, int week = 3) =>
             JsonSerializer.SerializeToNode(new
@@ -101,10 +110,8 @@ public sealed class CollegeFootballTests : IAsyncLifetime
             };
             else if (uri.AbsolutePath.EndsWith("/rankings")) response = new
             {
-                rankings = new[] { new {
-                id = "1", type = "ap", season = new { year = 2026 }, lastUpdated = "2026-09-13T21:19Z",
-                ranks = new[] { new { current = 5, team = new { id = "2483" } } }
-            } }
+                rankings = new[] { Poll("1", "ap", 2026, "2026-09-13T21:19Z", ("2483", 5)) }
+                    .Concat(CommitteePoll ? [Poll("21", "cfp", CommitteeSeason, CommitteeUpdated, ("2483", 11), ("68", 23))] : [])
             };
             else if (uri.AbsolutePath.EndsWith("/scoreboard")) response = new
             {
@@ -278,13 +285,13 @@ public sealed class CollegeFootballTests : IAsyncLifetime
         broadcaster.Unsubscribe("game:1", pregameUpdates);
         var game = Assert.Single(await Games());
         Assert.Equal("2483", game.HomeTeamId); Assert.NotNull(game.HomeMarketTicker);
-        Assert.Equal(25, game.HomeFpi); Assert.Null(game.AwayFpi); Assert.Equal(5, game.HomeApRank);
+        Assert.Equal(25, game.HomeFpi); Assert.Null(game.AwayFpi); Assert.Equal(5, game.HomePollRank); Assert.Equal(CollegePoll.Ap, game.RankPoll);
         foreach (var path in new[] { "/", "/cfb?week=3&season=2026&type=2", "/game/1" })
         {
             using var document = await new AngleSharp.Html.Parser.HtmlParser().ParseDocumentAsync(await client.GetStringAsync(path), CancellationToken.None);
             var text = document.Body!.TextContent;
             var rank = Assert.Single(document.QuerySelectorAll("sup"));
-            Assert.Equal("5", rank.TextContent); Assert.Equal("AP rank 5", rank.GetAttribute("aria-label"));
+            Assert.Equal("5", rank.TextContent); Assert.Equal("AP rank 5", rank.GetAttribute("aria-label")); Assert.Equal("AP rank 5", rank.GetAttribute("title"));
             Assert.StartsWith("ORE", rank.ParentElement!.TextContent);
             Assert.Contains("Hype unavailable", text); Assert.Contains("CFP", text);
             Assert.DoesNotContain("Regular season", text); Assert.DoesNotContain("Live probability unavailable", text);
@@ -299,6 +306,51 @@ public sealed class CollegeFootballTests : IAsyncLifetime
         }
         Assert.Contains("2026 Week 3", await Text("/cfb"));
         Assert.DoesNotContain("Previous Day", await Text("/cfb"));
+    }
+
+    private async Task<List<(string Team, string Rank, string Label)>> RankBadges(string path)
+    {
+        using var document = await new AngleSharp.Html.Parser.HtmlParser().ParseDocumentAsync(await client.GetStringAsync(path), CancellationToken.None);
+        return document.QuerySelectorAll("sup[aria-label]")
+            .Select(s => (s.ParentElement!.TextContent.Trim()[..3], s.TextContent, s.GetAttribute("aria-label")!)).OrderBy(b => b.Item1).ToList();
+    }
+
+    [Fact]
+    public async Task Committee_ranks_replace_AP_ranks_once_published_and_label_the_poll()
+    {
+        provider.CommitteePoll = true;
+        provider.Events.Add(Provider.Event("1", "2483", "ORE", "68", "BOIS")); provider.List("26SEP16", "ORE", "BSU");
+        await Run();
+        var game = Assert.Single(await Games());
+        Assert.Equal(CollegePoll.Cfp, game.RankPoll); Assert.Equal(11, game.HomePollRank); Assert.Equal(23, game.AwayPollRank);
+        foreach (var path in new[] { "/", "/cfb?week=3&season=2026&type=2", "/game/1" })
+            Assert.Equal([("BOI", "23", "CFP rank 23"), ("ORE", "11", "CFP rank 11")], await RankBadges(path));
+    }
+
+    [Theory]
+    [InlineData(2025, "2026-09-14T03:21Z")]
+    [InlineData(2026, "2026-09-17T03:21Z")]
+    public async Task Committee_ranks_for_another_season_or_a_future_date_fall_back_to_AP(int season, string updated)
+    {
+        provider.CommitteePoll = true; provider.CommitteeSeason = season; provider.CommitteeUpdated = updated;
+        provider.Events.Add(Provider.Event("1", "2483", "ORE", "68", "BOIS")); provider.List("26SEP16", "ORE", "BSU");
+        await Run();
+        var game = Assert.Single(await Games());
+        Assert.Equal(CollegePoll.Ap, game.RankPoll); Assert.Equal(5, game.HomePollRank); Assert.Null(game.AwayPollRank);
+        foreach (var path in new[] { "/", "/cfb?week=3&season=2026&type=2", "/game/1" })
+            Assert.Equal([("ORE", "5", "AP rank 5")], await RankBadges(path));
+    }
+
+    [Theory]
+    [InlineData("""{"rankings":[{"id":"21","type":"cfp","season":{"year":2026},"lastUpdated":"2026-11-04T03:21Z","ranks":[]},{"id":"1","type":"ap","season":{"year":2026},"lastUpdated":"2026-11-01T22:08Z","ranks":[{"current":4,"team":{"id":"87"}}]}]}""", "Ap")]
+    [InlineData("""{"rankings":[{"id":"21","type":"cfp","season":{"year":2026},"date":"2026-11-03T08:00Z","ranks":[{"current":26,"team":{"id":"87"}},{"current":3,"team":{"id":"87"}}]}]}""", "Cfp")]
+    [InlineData("""{"rankings":[{"id":"1","type":"usa","season":{"year":2026},"lastUpdated":"2026-11-01T22:08Z","ranks":[{"current":4,"team":{"id":"87"}}]}]}""", null)]
+    public void Poll_selection_requires_a_ranked_committee_poll_and_ignores_other_polls(string json, string? expected)
+    {
+        using var document = JsonDocument.Parse(json);
+        var selected = CollegeEspnClient.SelectPoll(document.RootElement, 2026, new DateTime(2026, 11, 7, 0, 0, 0, DateTimeKind.Utc));
+        Assert.Equal(expected, selected?.Poll.ToString());
+        if (expected is not null) Assert.Equal(expected == "Cfp" ? 3 : 4, Assert.Single(selected!.Value.Ranks).Value);
     }
 
     [Theory]
@@ -567,7 +619,7 @@ public sealed class CollegeFootballTests : IAsyncLifetime
         Assert.Equal(1, await Run(history: true));
         clock.Now = clock.Now.AddDays(1);
         Assert.Equal(1, await Run(history: true));
-        var game = Assert.Single(await Games()); Assert.True(game.IsHistoricalImport); Assert.Null(game.HomeFpi); Assert.Null(game.HomeApRank);
+        var game = Assert.Single(await Games()); Assert.True(game.IsHistoricalImport); Assert.Null(game.HomeFpi); Assert.Null(game.HomePollRank); Assert.Null(game.RankPoll);
         using var scope = app.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
         var samples = await db.OddsSnapshots.ToListAsync(); Assert.Equal(2, samples.Count); Assert.All(samples, s => Assert.True(s.IsHistorical));
         var closing = await db.PregameOdds.SingleAsync(); Assert.Equal(-2800, closing.HomeMoneyline); Assert.Equal(-24.5, closing.Spread); Assert.Equal(53.5, closing.OverUnder);
@@ -974,7 +1026,7 @@ public sealed class CollegeFootballTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Complete_regular_season_evidence_produces_hype_without_AP_rank_for_both_teams()
+    public async Task Complete_regular_season_evidence_produces_hype_without_a_poll_rank_for_both_teams()
     {
         provider.Events.Add(Provider.Event("1", "2483", "ORE", "68", "BOIS")); provider.List("26SEP16", "ORE", "BSU"); await Run();
         using var scope = app.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
@@ -988,7 +1040,7 @@ public sealed class CollegeFootballTests : IAsyncLifetime
             PlayoffProbability = .6,
             FetchedAt = clock.Now.UtcDateTime
         });
-        await db.SaveChangesAsync(); var game = Assert.Single(await Games()); Assert.Null(game.AwayApRank); Assert.NotNull(game.AwayFpi);
+        await db.SaveChangesAsync(); var game = Assert.Single(await Games()); Assert.Null(game.AwayPollRank); Assert.NotNull(game.AwayFpi);
         Assert.NotNull(await scope.ServiceProvider.GetRequiredService<HypeScoreService>().CalculateHypeScoreAsync(game, null));
     }
 
@@ -1003,13 +1055,43 @@ public sealed class CollegeFootballTests : IAsyncLifetime
         Assert.Equal("text", dataType);
     }
 
+    [Fact]
+    public async Task Poll_migration_keeps_legacy_AP_ranks_labeled_AP_leaves_the_old_columns_empty_and_can_be_applied_twice()
+    {
+        provider.Events.Add(Provider.Event("1", "2483", "ORE", "68", "BOIS")); provider.List("26SEP16", "ORE", "BSU");
+        await Run();
+        using var scope = app.Services.CreateScope(); var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+        await db.Database.ExecuteSqlRawAsync("""
+            ALTER TABLE college_teams RENAME COLUMN poll_rank TO ap_rank;
+            ALTER TABLE college_teams RENAME COLUMN poll_updated_at TO ap_updated_at;
+            ALTER TABLE college_teams DROP COLUMN poll;
+            ALTER TABLE games RENAME COLUMN home_poll_rank TO home_ap_rank;
+            ALTER TABLE games RENAME COLUMN away_poll_rank TO away_ap_rank;
+            ALTER TABLE games DROP COLUMN rank_poll;
+            """);
+        var unchanged = "SELECT count(*)::int AS \"Value\" FROM games WHERE home_ap_rank IS NOT NULL OR away_ap_rank IS NOT NULL";
+        Assert.Equal(1, await db.Database.SqlQueryRaw<int>(unchanged).SingleAsync());
+        var legacy = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", "027_CollegeFootball.sql"));
+        var polls = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", "040_CollegePolls.sql"));
+        await db.Database.ExecuteSqlRawAsync(polls); await db.Database.ExecuteSqlRawAsync(legacy); await db.Database.ExecuteSqlRawAsync(polls);
+        var game = Assert.Single(await Games());
+        Assert.Equal(CollegePoll.Ap, game.RankPoll); Assert.Equal(5, game.HomePollRank); Assert.Null(game.AwayPollRank);
+        var teams = await db.CollegeTeams.AsNoTracking().ToListAsync();
+        Assert.All(teams, t => { Assert.Equal(CollegePoll.Ap, t.Poll); Assert.NotNull(t.PollUpdatedAt); });
+        Assert.Equal(5, teams.Single(t => t.EspnId == "2483").PollRank); Assert.Null(teams.Single(t => t.EspnId == "68").PollRank);
+        Assert.Equal(4, await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM information_schema.columns WHERE column_name IN ('ap_rank', 'ap_updated_at', 'home_ap_rank', 'away_ap_rank')").SingleAsync());
+        Assert.Equal(0, await db.Database.SqlQueryRaw<int>(unchanged).SingleAsync());
+        Assert.Equal(0, await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM college_teams WHERE ap_rank IS NOT NULL OR ap_updated_at IS NOT NULL").SingleAsync());
+        Assert.Equal(2, await db.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM pg_constraint WHERE conname IN ('ck_college_teams_poll', 'ck_games_rank_poll')").SingleAsync());
+    }
+
     [Theory]
     [InlineData(2027, 1, 2026)]
     [InlineData(2026, 9, 2026)]
     public void College_seasons_use_start_year(int year, int month, int expected) => Assert.Equal(expected, CollegeFootballPolicy.SeasonAt(new DateTime(year, month, 10)));
 
     [Fact]
-    public void College_strength_does_not_saturate_at_NFL_bounds_and_AP_is_not_an_input()
+    public void College_strength_does_not_saturate_at_NFL_bounds_and_poll_ranks_are_not_an_input()
     {
         Assert.True(CollegeFootballPolicy.Quality(35, 35) > CollegeFootballPolicy.Quality(25, 25));
         Assert.Null(CollegeFootballPolicy.Quality(25, null));
