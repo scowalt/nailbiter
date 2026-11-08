@@ -135,11 +135,15 @@ public sealed class ProviderFailureReportingTests
     {
         var circuitBreak = TimeSpan.FromMilliseconds(500);
         await using var app = new ReportingApp(uri => uri.AbsolutePath == "/trade-api/v2/markets" ? Unreachable : NotFound(),
-            services => services.ConfigureAll<HttpStandardResilienceOptions>(options =>
+            services =>
             {
-                options.CircuitBreaker.MinimumThroughput = StandardAttempts;
-                options.CircuitBreaker.BreakDuration = circuitBreak;
-            }));
+                PinClock(services, new DateTimeOffset(LiveStart));
+                services.ConfigureAll<HttpStandardResilienceOptions>(options =>
+                {
+                    options.CircuitBreaker.MinimumThroughput = StandardAttempts;
+                    options.CircuitBreaker.BreakDuration = circuitBreak;
+                });
+            });
         var kalshi = app.Get<KalshiOddsService>();
 
         Assert.Null(await kalshi.GetLiveOddsAsync("nba", "BOS", "NYK", LiveStart, CancellationToken.None));
