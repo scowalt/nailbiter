@@ -44,7 +44,7 @@ type IndyCarDataService
         let ct = defaultArg ct CancellationToken.None
 
         task {
-            let! scoreboard = espnIndyCar.FetchScoreboardAsync()
+            let! scoreboard = espnIndyCar.FetchScoreboardAsync(ct = ct)
 
             if isNull (box scoreboard) || scoreboard.Leagues.Count = 0 then
                 logger.LogWarning("No IndyCar scoreboard data returned")
@@ -99,7 +99,7 @@ type IndyCarDataService
                                     | Some _ -> return eventData
                                     | None ->
                                         let! dateScoreboard =
-                                            espnIndyCar.FetchScoreboardByDateAsync(scheduledStart)
+                                            espnIndyCar.FetchScoreboardByDateAsync(scheduledStart, ct = ct)
                                         if not (isNull (box dateScoreboard)) then
                                             return dateScoreboard.Events
                                                    |> Seq.tryFind (fun e -> e.Id = eventId)
@@ -209,7 +209,7 @@ type IndyCarDataService
                         ct.ThrowIfCancellationRequested()
 
                         let! dateScoreboard =
-                            espnIndyCar.FetchScoreboardByDateAsync(staleRace.ScheduledStart)
+                            espnIndyCar.FetchScoreboardByDateAsync(staleRace.ScheduledStart, ct = ct)
 
                         if not (isNull (box dateScoreboard)) then
                             let eventMatch =
@@ -305,7 +305,7 @@ type IndyCarDataService
                 logger.LogWarning("No IndyCar races found for {Year}", year)
                 return 0
             else
-                let! scoreboard = espnIndyCar.FetchScoreboardByDateAsync(race.ScheduledStart)
+                let! scoreboard = espnIndyCar.FetchScoreboardByDateAsync(race.ScheduledStart, ct = ct)
 
                 if isNull (box scoreboard) then
                     logger.LogWarning(
@@ -327,7 +327,7 @@ type IndyCarDataService
                         return 0
                     | Some eventData ->
                         let! coreCompetitors =
-                            espnIndyCar.FetchCompetitorsAsync(race.EspnEventId)
+                            espnIndyCar.FetchCompetitorsAsync(race.EspnEventId, ct = ct)
 
                         let! existingDrivers =
                             db.IndyCarDrivers
@@ -564,7 +564,7 @@ type IndyCarDataService
                 for race in racesNeedingResults do
                     ct.ThrowIfCancellationRequested()
 
-                    let! scoreboard = espnIndyCar.FetchScoreboardByDateAsync(race.ScheduledStart)
+                    let! scoreboard = espnIndyCar.FetchScoreboardByDateAsync(race.ScheduledStart, ct = ct)
 
                     if not (isNull (box scoreboard)) then
                         let eventData =
@@ -620,7 +620,7 @@ type IndyCarDataService
                                         totalResultsAdded <- totalResultsAdded + 1
 
                                 let! coreCompetitors =
-                                    espnIndyCar.FetchCompetitorsAsync(race.EspnEventId)
+                                    espnIndyCar.FetchCompetitorsAsync(race.EspnEventId, ct = ct)
 
                                 if
                                     not (isNull (box coreCompetitors))
@@ -694,7 +694,7 @@ type IndyCarDataService
                     ct.ThrowIfCancellationRequested()
 
                     let! coreCompetitors =
-                        espnIndyCar.FetchCompetitorsAsync(race.EspnEventId)
+                        espnIndyCar.FetchCompetitorsAsync(race.EspnEventId, ct = ct)
 
                     if
                         not (isNull (box coreCompetitors))

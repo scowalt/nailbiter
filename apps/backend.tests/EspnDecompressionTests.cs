@@ -28,7 +28,7 @@ public sealed class EspnDecompressionTests
         Assert.NotNull(mlb);
         Assert.Empty(mlb.Events);
         var nascar = await scope.ServiceProvider.GetRequiredService<EspnNascarService>()
-            .FetchScoreboardAsync(null);
+            .FetchScoreboardAsync(null, null);
         Assert.NotNull(nascar);
         Assert.Empty(nascar.Events);
     }

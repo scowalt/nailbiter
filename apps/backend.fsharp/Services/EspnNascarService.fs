@@ -2,6 +2,7 @@ namespace backend.Services.EspnNascar
 
 open System
 open System.Text.Json
+open System.Threading
 open Backend.FSharp
 open backend.Services.Espn
 open Microsoft.Extensions.Logging
@@ -15,7 +16,9 @@ type EspnNascarService
     static let easternTimeZone = TimeZoneInfo.FindSystemTimeZoneById("America/New_York")
 
 
-    member _.FetchScoreboardAsync(?date: string) =
+    member _.FetchScoreboardAsync(?date: string, ?ct: CancellationToken) =
+        let ct = defaultArg ct CancellationToken.None
+
         task {
             let mutable url = $"{baseUrl}/scoreboard"
             match date with
@@ -24,9 +27,9 @@ type EspnNascarService
 
             try
                 logger.LogDebug("Fetching ESPN NASCAR scoreboard: {Url}", url)
-                let! response = httpClient.GetAsync(url)
+                let! response = httpClient.GetAsync(url, ct)
                 response.EnsureSuccessStatusCode() |> ignore
-                let! json = response.Content.ReadAsStringAsync()
+                let! json = response.Content.ReadAsStringAsync(ct)
                 return JsonSerializer.Deserialize<EspnNascarScoreboardResponse>(json, HttpHelpers.jsonOptions)
             with
             | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: ESPN NASCAR scoreboard fetch"); return Unchecked.defaultof<EspnNascarScoreboardResponse>
@@ -35,23 +38,27 @@ type EspnNascarService
                 return Unchecked.defaultof<EspnNascarScoreboardResponse>
         }
 
-    member this.FetchScoreboardByDateAsync(date: DateTime) =
+    member this.FetchScoreboardByDateAsync(date: DateTime, ?ct: CancellationToken) =
+        let ct = defaultArg ct CancellationToken.None
+
         task {
             let utcDate =
                 if date.Kind = DateTimeKind.Utc then date
                 else DateTime.SpecifyKind(date, DateTimeKind.Utc)
             let easternDate = TimeZoneInfo.ConvertTimeFromUtc(utcDate, easternTimeZone)
-            return! this.FetchScoreboardAsync(easternDate.ToString("yyyyMMdd"))
+            return! this.FetchScoreboardAsync(easternDate.ToString("yyyyMMdd"), ct)
         }
 
-    member _.FetchCompetitorsAsync(eventId: string) =
+    member _.FetchCompetitorsAsync(eventId: string, ?ct: CancellationToken) =
+        let ct = defaultArg ct CancellationToken.None
+
         task {
             let url = $"https://sports.core.api.espn.com/v2/sports/racing/leagues/nascar-premier/events/{eventId}/competitions/{eventId}/competitors?limit=50"
             try
                 logger.LogDebug("Fetching ESPN core NASCAR competitors: {Url}", url)
-                let! response = httpClient.GetAsync(url)
+                let! response = httpClient.GetAsync(url, ct)
                 response.EnsureSuccessStatusCode() |> ignore
-                let! json = response.Content.ReadAsStringAsync()
+                let! json = response.Content.ReadAsStringAsync(ct)
                 return JsonSerializer.Deserialize<EspnCoreCompetitorsResponse>(json, HttpHelpers.jsonOptions)
             with
             | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: ESPN core NASCAR competitors fetch for event {EventId}", eventId); return Unchecked.defaultof<EspnCoreCompetitorsResponse>

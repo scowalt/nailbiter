@@ -42,7 +42,7 @@ type NascarDataService
         let ct = defaultArg ct CancellationToken.None
 
         task {
-            let! scoreboard = espnNascar.FetchScoreboardAsync()
+            let! scoreboard = espnNascar.FetchScoreboardAsync(ct = ct)
 
             if isNull (box scoreboard) || scoreboard.Leagues.Count = 0 then
                 logger.LogWarning("No NASCAR scoreboard data returned")
@@ -97,7 +97,7 @@ type NascarDataService
                                     | Some _ -> return eventData
                                     | None ->
                                         let! dateScoreboard =
-                                            espnNascar.FetchScoreboardByDateAsync(scheduledStart)
+                                            espnNascar.FetchScoreboardByDateAsync(scheduledStart, ct = ct)
                                         if not (isNull (box dateScoreboard)) then
                                             return dateScoreboard.Events
                                                    |> Seq.tryFind (fun e -> e.Id = eventId)
@@ -182,7 +182,7 @@ type NascarDataService
                         ct.ThrowIfCancellationRequested()
 
                         let! dateScoreboard =
-                            espnNascar.FetchScoreboardByDateAsync(staleRace.ScheduledStart)
+                            espnNascar.FetchScoreboardByDateAsync(staleRace.ScheduledStart, ct = ct)
 
                         if not (isNull (box dateScoreboard)) then
                             let eventMatch =
@@ -267,7 +267,7 @@ type NascarDataService
                 logger.LogWarning("No NASCAR races found for {Year}", year)
                 return 0
             else
-                let! scoreboard = espnNascar.FetchScoreboardByDateAsync(race.ScheduledStart)
+                let! scoreboard = espnNascar.FetchScoreboardByDateAsync(race.ScheduledStart, ct = ct)
 
                 if isNull (box scoreboard) then
                     logger.LogWarning(
@@ -337,7 +337,7 @@ type NascarDataService
                                     count <- count + 1
 
                             if competitors |> Seq.forall (fun c -> isNull (box c.Vehicle)) then
-                                let! coreCompetitors = espnNascar.FetchCompetitorsAsync(race.Id)
+                                let! coreCompetitors = espnNascar.FetchCompetitorsAsync(race.Id, ct = ct)
 
                                 if not (isNull (box coreCompetitors)) then
                                     let! _ = db.SaveChangesAsync(ct)
@@ -421,7 +421,7 @@ type NascarDataService
                 for race in racesNeedingResults do
                     ct.ThrowIfCancellationRequested()
 
-                    let! scoreboard = espnNascar.FetchScoreboardByDateAsync(race.ScheduledStart)
+                    let! scoreboard = espnNascar.FetchScoreboardByDateAsync(race.ScheduledStart, ct = ct)
 
                     if not (isNull (box scoreboard)) then
                         let eventData =
@@ -476,7 +476,7 @@ type NascarDataService
                                         totalResultsAdded <- totalResultsAdded + 1
 
                                 let! coreCompetitors =
-                                    espnNascar.FetchCompetitorsAsync(race.Id)
+                                    espnNascar.FetchCompetitorsAsync(race.Id, ct = ct)
 
                                 if not (isNull (box coreCompetitors)) then
                                     let! _ = db.SaveChangesAsync(ct)
@@ -547,7 +547,7 @@ type NascarDataService
                 for race in races do
                     ct.ThrowIfCancellationRequested()
 
-                    let! coreCompetitors = espnNascar.FetchCompetitorsAsync(race.Id)
+                    let! coreCompetitors = espnNascar.FetchCompetitorsAsync(race.Id, ct = ct)
 
                     if
                         not (isNull (box coreCompetitors))
