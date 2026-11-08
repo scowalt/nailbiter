@@ -76,7 +76,7 @@ public sealed class NhlGuruRankingsTests
         Assert.Equal(32, await Refresh(h));
         var game = await AddGame(h);
         var original = await Resolve(h, game);
-        Assert.Equal(98.89742943548387, original.Total!.Value, 10);
+        Assert.Equal(98.661164314516128, original.Total!.Value, 10);
         Assert.Equal(NhlPowerRankingsGuruService.Source, original.Components.QualitySource);
         foreach (var path in new[] { "/", "/nhl?date=2026-10-11", "/game/" + game.Id })
         {

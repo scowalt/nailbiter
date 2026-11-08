@@ -23,6 +23,7 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
     IOptions<PlayoffRatingsOptions> options, IServiceScopeFactory scopes) : IProHypeLifecycle
 {
     private const int RegularSeasonFormulaVersion = 3;
+    private const int NhlRegularSeasonFormulaVersion = 4;
     private const int SeedingFreeCompetitionFormulaVersion = 2;
     private readonly IModel model = Mapping(databaseOptions);
 
@@ -115,12 +116,12 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
                 saved = null;
             }
         }
-        if (saved?.Identity.Phase == 2 && saved.FormulaVersion != RegularSeasonFormulaVersion) saved = null;
+        if (saved?.Identity.Phase == 2 && saved.FormulaVersion != RegularSeasonFormula(saved.Identity.Sport)) saved = null;
         if (Upcoming(game, now) && (!captureHorizon.HasValue || game.ScheduledStart < captureHorizon)
             && !state.ConfirmedStarted && evaluatedAt.Ticks >= state.LastEvaluationTicks && Complete(total, evaluation.Components))
         {
             var candidate = new Saved(Identity.Of(game), total, SnapshotComponents(game, evaluation), now, evaluation.Assessment.SupportingEvidence,
-                phase == 2 ? RegularSeasonFormulaVersion : 0);
+                phase == 2 ? RegularSeasonFormula(game.Sport) : 0);
             if (!WasRevoked(candidate, game, revoked) && (saved is null || Signature(candidate) != Signature(saved))) saved = candidate;
         }
         if (Upcoming(game, now) && !state.ConfirmedStarted)
@@ -280,6 +281,8 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
         var revision = ProEvidenceReference.Fingerprint(context);
         return references.Select(r => r.Kind == ProEvidenceKind.Competition ? r with { Revision = revision } : r).ToArray();
     }
+    private static int RegularSeasonFormula(string sport) =>
+        sport == "nhl" ? NhlRegularSeasonFormulaVersion : RegularSeasonFormulaVersion;
     private static ProEvidenceReference[] ObservationsForSaved(Saved saved, Game game, ProHypeAssessment assessment) =>
         saved.Identity.Phase == 2 && saved.FormulaVersion < SeedingFreeCompetitionFormulaVersion
             ? RawCompetitionReferences(assessment.Observations, game) : assessment.Observations;

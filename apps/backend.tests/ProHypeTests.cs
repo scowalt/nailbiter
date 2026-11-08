@@ -75,9 +75,9 @@ public sealed class ProHypeTests
     internal static JsonElement Fixture(string file) => JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ProHype", file + ".json"))).RootElement;
 
     [Theory]
-    [InlineData(0, 1, 2, .5, false, 66)]
-    [InlineData(0, 14, 15, .55, false, 49)]
-    [InlineData(83, 16, 17, .55, false, 60)]
+    [InlineData(0, 1, 2, .5, false, 59)]
+    [InlineData(0, 14, 15, .55, false, 40)]
+    [InlineData(83, 16, 17, .55, false, 54)]
     [InlineData(0, 1, 2, .5, true, 99)]
     public void Exact_approved_calibrations(int played, int homeRank, int awayRank, double probability, bool championship, int expected)
     {

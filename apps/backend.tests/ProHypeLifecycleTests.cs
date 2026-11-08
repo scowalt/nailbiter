@@ -262,7 +262,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
     {
         await Seed();
         var captured = await Resolve();
-        Assert.Equal(66, Math.Round(captured.Total!.Value));
+        Assert.Equal(59, Math.Round(captured.Total!.Value));
         clock.Advance(TimeSpan.FromDays(3));
         await app.DisposeAsync();
         app = CreateHost();
@@ -320,7 +320,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
             (await db.PregameOdds.SingleAsync()).FetchedAt = clock.GetUtcNow().UtcDateTime;
         });
         var recovered = await Resolve();
-        Assert.Equal(64.9635151236222, recovered.Total!.Value, 10);
+        Assert.Equal(57.45569693582695, recovered.Total!.Value, 10);
         Assert.Equal(3.04595910896665, recovered.Components.StakesScore, 10);
         clock.Advance(TimeSpan.FromHours(2));
         await app.DisposeAsync();
@@ -793,7 +793,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
         using (var scope = app.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
         var captured = await Resolve();
-        Assert.Equal(66.10527819999905, captured.Total!.Value, 10);
+        Assert.Equal(58.842123528570283, captured.Total!.Value, 10);
         Assert.Equal(ProQualificationEvidenceKind.PlayoffStatusModel, captured.Components.HomeQualificationEvidenceKind);
         clock.Advance(TimeSpan.FromMinutes(1));
         await Change(db =>
