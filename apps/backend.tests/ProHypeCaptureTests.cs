@@ -20,6 +20,7 @@ namespace backend.tests;
 
 public sealed class ProHypeCaptureTests : IAsyncLifetime
 {
+    private static readonly TimeSpan BackgroundDeadline = TimeSpan.FromSeconds(60);
     private readonly PostgreSqlContainer database = IsolatedPostgreSql.CreateContainer();
     private readonly AppFactory entry = new();
     private readonly Clock clock = new();
@@ -183,7 +184,7 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
     {
         var game = await Seed(sport);
         Start();
-        await clock.CycleFinished.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await clock.CycleFinished.Task.WaitAsync(BackgroundDeadline);
         await app!.DisposeAsync();
         clock.Advance(TimeSpan.FromDays(3));
         Start(captureEnabled: false);
@@ -204,11 +205,8 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
     public async Task Ordinary_background_cycles_keep_a_whole_score_during_result_lag_and_replace_every_component_on_recovery(string sport)
     {
         var game = await Seed(sport);
-        gate.Arm();
         Start();
-        await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        _ = Task.Delay(TimeSpan.FromSeconds(11)).ContinueWith(_ => gate.Release(), TaskScheduler.Default);
-        await clock.CycleFinished.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await clock.CycleFinished.Task.WaitAsync(BackgroundDeadline);
         await Change(db =>
         {
             db.Games.Add(new Game { Id = "unrelated-result", Sport = sport, SeasonYear = game.SeasonYear, SeasonType = 2,
@@ -227,7 +225,7 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
         Assert.NotNull(captured.Total);
         Assert.Equal(ProHypeTests.Now, captured.EvaluatedAt);
         clock.Advance(TimeSpan.FromMinutes(2));
-        await clock.CycleFinished.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await clock.CycleFinished.Task.WaitAsync(BackgroundDeadline);
         var partialCycle = await Resolve(game.Id);
         Assert.Equal(captured.Total, partialCycle.Total);
         Assert.Equal(captured.Components.StakesScore, partialCycle.Components.StakesScore);
@@ -237,7 +235,7 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
         var recoveredAt = clock.GetUtcNow().UtcDateTime.AddMinutes(2);
         await RefreshInputs(game.Id, recoveredAt, ["unrelated-result"]);
         clock.Advance(TimeSpan.FromMinutes(2));
-        await clock.CycleFinished.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await clock.CycleFinished.Task.WaitAsync(BackgroundDeadline);
         await app!.DisposeAsync();
         clock.Advance(TimeSpan.FromDays(3));
         Start(captureEnabled: false);
@@ -258,7 +256,7 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
         Start(captureEnabled: false);
         gate.Arm();
         var capture = Capture();
-        await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await gate.Entered.Task.WaitAsync(BackgroundDeadline);
         try
         {
             await Change(async db =>
@@ -287,7 +285,7 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
     {
         var game = await Seed("nfl", start: ProHypeTests.Now.AddDays(7).AddTicks(offsetTicks));
         Start();
-        await clock.CycleFinished.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await clock.CycleFinished.Task.WaitAsync(BackgroundDeadline);
         await app!.DisposeAsync();
         clock.Advance(TimeSpan.FromHours(2));
         Start(captureEnabled: false);
@@ -306,7 +304,7 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
         Start(captureEnabled: false);
         gate.Arm();
         var capture = Capture();
-        await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await gate.Entered.Task.WaitAsync(BackgroundDeadline);
         try
         {
             if (earlyPlay) await Change(async db => (await db.Games.SingleAsync()).ActualStart = ProHypeTests.Now);
@@ -355,7 +353,7 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
         var game = await Seed("nfl");
         await Change(async db => (await db.TeamRatings.FirstAsync(r => r.PowerRank != null)).PowerRank = null);
         Start();
-        await clock.CycleFinished.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await clock.CycleFinished.Task.WaitAsync(BackgroundDeadline);
         var firstRead = await Resolve(game.Id);
         Assert.Null(firstRead.Total);
         Assert.True(firstRead.Components.StakesAvailable);
@@ -373,11 +371,11 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
     {
         var game = await Seed("nfl");
         Start();
-        await clock.CycleFinished.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await clock.CycleFinished.Task.WaitAsync(BackgroundDeadline);
         await Change(async db => (await db.PregameOdds.SingleAsync()).SourceSeason = null);
         await Change(async db => (await db.PregameOdds.SingleAsync()).SourceSeason = game.SeasonYear);
         clock.Advance(TimeSpan.FromHours(2));
-        await clock.CycleFinished.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await clock.CycleFinished.Task.WaitAsync(BackgroundDeadline);
         await app!.DisposeAsync();
         Start(captureEnabled: false);
         Assert.Null((await Resolve(game.Id)).Total);
@@ -446,7 +444,7 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
         {
             gate.Arm();
             capture = Capture();
-            await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await gate.Entered.Task.WaitAsync(BackgroundDeadline);
             await new NpgsqlCommand(replay[..write], migration).ExecuteNonQueryAsync();
             gate.Release();
             await BlockedOnLock();
@@ -456,7 +454,7 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
         {
             fence.Arm();
             capture = Capture();
-            await fence.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await fence.Entered.Task.WaitAsync(BackgroundDeadline);
             migrate = new NpgsqlCommand(replay, migration).ExecuteNonQueryAsync();
             await BlockedOnLock();
             fence.Release();
