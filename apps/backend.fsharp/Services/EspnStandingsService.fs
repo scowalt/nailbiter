@@ -4,6 +4,7 @@ open System
 open System.Text.Json
 open backend.Data
 open backend.Models
+open backend.Services
 open Microsoft.EntityFrameworkCore
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
@@ -150,9 +151,9 @@ type EspnStandingsService
 
                 return count
             with
-            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: ESPN {Sport} standings refresh", sport); return 0
+            | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
-                logger.LogError(ex, "Failed to refresh {Sport} standings from ESPN", sport)
+                logger.Log((if DatabaseFailure.Is ex || ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to refresh {Sport} standings from ESPN", sport)
                 return 0
         }
 
