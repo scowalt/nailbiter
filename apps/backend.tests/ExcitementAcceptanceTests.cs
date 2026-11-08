@@ -104,7 +104,7 @@ public sealed class ExcitementAcceptanceTests(ITestOutputHelper output) : IAsync
                 Status = completed ? "final" : "in_progress", Period = completed ? 9 : 1,
                 GameClock = completed ? "0:00" : "14:00", HomeScore = completed ? 99 : 0, AwayScore = completed ? 93 : 0,
                 HomeFpi = completed ? 30 : -20, AwayFpi = completed ? 25 : -15,
-                HomeApRank = completed ? 1 : null, AwayApRank = completed ? 2 : null,
+                HomePollRank = completed ? 1 : null, AwayPollRank = completed ? 2 : null, RankPoll = completed ? CollegePoll.Ap : null,
                 CollegeCompetition = completed ? "cfp" : "regular"
             };
             var evidence = new ProGameEvidence

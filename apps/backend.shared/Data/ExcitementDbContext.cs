@@ -1,11 +1,16 @@
 using backend.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace backend.Data;
 
 public class ExcitementDbContext : DbContext
 {
     public ExcitementDbContext(DbContextOptions<ExcitementDbContext> options) : base(options) { }
+
+    private static readonly ValueConverter<CollegePoll, string> CollegePollConverter = new(
+        poll => poll == CollegePoll.Ap ? "ap" : "cfp",
+        text => text == "ap" ? CollegePoll.Ap : CollegePoll.Cfp);
 
     public DbSet<Game> Games => Set<Game>();
     public DbSet<ProHypeSnapshot> ProHypeSnapshots => Set<ProHypeSnapshot>();
@@ -129,8 +134,9 @@ public class ExcitementDbContext : DbContext
             entity.Property(e => e.Name).HasColumnName("name");
             entity.Property(e => e.Fpi).HasColumnName("fpi");
             entity.Property(e => e.FpiUpdatedAt).HasColumnName("fpi_updated_at");
-            entity.Property(e => e.ApRank).HasColumnName("ap_rank");
-            entity.Property(e => e.ApUpdatedAt).HasColumnName("ap_updated_at");
+            entity.Property(e => e.PollRank).HasColumnName("poll_rank");
+            entity.Property(e => e.Poll).HasColumnName("poll").HasConversion(CollegePollConverter);
+            entity.Property(e => e.PollUpdatedAt).HasColumnName("poll_updated_at");
             entity.Property(e => e.FetchedAt).HasColumnName("fetched_at");
         });
         modelBuilder.Entity<CollegeImport>(entity =>
@@ -179,8 +185,9 @@ public class ExcitementDbContext : DbContext
             entity.Property(e => e.IsHistoricalImport).HasColumnName("is_historical_import").HasDefaultValue(false);
             entity.Property(e => e.HomeFpi).HasColumnName("home_fpi");
             entity.Property(e => e.AwayFpi).HasColumnName("away_fpi");
-            entity.Property(e => e.HomeApRank).HasColumnName("home_ap_rank");
-            entity.Property(e => e.AwayApRank).HasColumnName("away_ap_rank");
+            entity.Property(e => e.HomePollRank).HasColumnName("home_poll_rank");
+            entity.Property(e => e.AwayPollRank).HasColumnName("away_poll_rank");
+            entity.Property(e => e.RankPoll).HasColumnName("rank_poll").HasConversion(CollegePollConverter);
             entity.Property(e => e.RatingsObservedAt).HasColumnName("ratings_observed_at");
             entity.Property(e => e.MarketObservedAt).HasColumnName("market_observed_at");
             entity.Property(e => e.SeriesObservationJson).HasColumnName("series_observation_json");

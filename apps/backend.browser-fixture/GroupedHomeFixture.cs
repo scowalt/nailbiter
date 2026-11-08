@@ -170,7 +170,7 @@ internal sealed class GroupedHomeFixture : TimeProvider
         var recipe = ApplyCollegeContext(game, score);
         game.CompetitionEvidence = "Synthetic fixture CFP / non-CFP bowl context";
         game.RatingsObservedAt = Now.UtcDateTime;
-        game.HomeApRank = 1; game.AwayApRank = 2;
+        game.HomePollRank = 1; game.AwayPollRank = 2; game.RankPoll = CollegePoll.Ap;
         game.HomeTeamId = "333"; game.AwayTeamId = "251";
         game.HomeColor = "9e1b32"; game.AwayColor = "e87722";
         db.Games.Add(game);

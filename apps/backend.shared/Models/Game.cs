@@ -37,8 +37,9 @@ public class Game
     public bool IsHistoricalImport { get; set; }
     public double? HomeFpi { get; set; }
     public double? AwayFpi { get; set; }
-    public int? HomeApRank { get; set; }
-    public int? AwayApRank { get; set; }
+    public int? HomePollRank { get; set; }
+    public int? AwayPollRank { get; set; }
+    public CollegePoll? RankPoll { get; set; }
     public DateTime? RatingsObservedAt { get; set; }
     public DateTime? MarketObservedAt { get; set; }
 

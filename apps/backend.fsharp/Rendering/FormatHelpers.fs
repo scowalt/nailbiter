@@ -25,11 +25,12 @@ module FormatHelpers =
               Attr.title explanation
               Attr.create "aria-description" explanation ]
 
-    let apRank (rank: Nullable<int>) =
-        [ if rank.HasValue && rank.Value >= 1 && rank.Value <= 25 then
-            Elem.sup [ Attr.class' "ap-rank"
-                       Attr.title $"AP rank {rank.Value}"
-                       Attr.create "aria-label" $"AP rank {rank.Value}" ] [ Text.raw $"{rank.Value}" ] ]
+    let pollRank (poll: Nullable<backend.Models.CollegePoll>) (rank: Nullable<int>) =
+        [ if poll.HasValue && rank.HasValue && rank.Value >= 1 && rank.Value <= 25 then
+            let label = (match poll.Value with backend.Models.CollegePoll.Cfp -> "CFP" | _ -> "AP") + $" rank {rank.Value}"
+            Elem.sup [ Attr.class' "poll-rank"
+                       Attr.title label
+                       Attr.create "aria-label" label ] [ Text.raw $"{rank.Value}" ] ]
 
     let formatExcitement (score: Nullable<float>) =
         if score.HasValue then $"{Math.Round(score.Value)}"

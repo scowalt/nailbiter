@@ -192,7 +192,7 @@ module GameDetailRenderer =
                             | None -> ()
                             Elem.span [ cls "scoreboard-abbr" ] [
                                 Text.enc game.AwayTeamAbbreviation
-                                if game.Sport = "cfb" then yield! FormatHelpers.apRank game.AwayApRank
+                                if game.Sport = "cfb" then yield! FormatHelpers.pollRank game.RankPoll game.AwayPollRank
                             ]
                             Elem.span [ cls "meta-text" ] [ Text.enc game.AwayTeam ]
                             Elem.span [ cls "detail-score"; Attr.id "detail-away-score" ] [
@@ -234,7 +234,7 @@ module GameDetailRenderer =
                             | None -> ()
                             Elem.span [ cls "scoreboard-abbr" ] [
                                 Text.enc game.HomeTeamAbbreviation
-                                if game.Sport = "cfb" then yield! FormatHelpers.apRank game.HomeApRank
+                                if game.Sport = "cfb" then yield! FormatHelpers.pollRank game.RankPoll game.HomePollRank
                             ]
                             Elem.span [ cls "meta-text" ] [ Text.enc game.HomeTeam ]
                             Elem.span [ cls "detail-score"; Attr.id "detail-home-score" ] [

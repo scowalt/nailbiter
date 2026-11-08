@@ -64,20 +64,26 @@ let ``Confirmed outcomes use qualification labels instead of percentages`` proba
 [<InlineData(1)>]
 [<InlineData(5)>]
 [<InlineData(25)>]
-let ``AP ranks are superscripts with accessible poll labels`` rank =
-    let node = FormatHelpers.apRank (Nullable rank) |> List.exactlyOne
-    let html = Falco.Markup.XmlNodeRenderer.renderNode node
-    Assert.StartsWith("<sup ", html)
-    Assert.Contains($"aria-label=\"AP rank {rank}\"", html)
-    Assert.EndsWith($">{rank}</sup>", html)
+let ``Poll ranks are superscripts labeled with the poll they come from`` rank =
+    for poll, label in [ backend.Models.CollegePoll.Ap, "AP"; backend.Models.CollegePoll.Cfp, "CFP" ] do
+        let node = FormatHelpers.pollRank (Nullable poll) (Nullable rank) |> List.exactlyOne
+        let html = Falco.Markup.XmlNodeRenderer.renderNode node
+        Assert.StartsWith("<sup ", html)
+        Assert.Contains($"aria-label=\"{label} rank {rank}\"", html)
+        Assert.Contains($"title=\"{label} rank {rank}\"", html)
+        Assert.EndsWith($">{rank}</sup>", html)
 
 [<Theory>]
 [<InlineData(0)>]
 [<InlineData(-1)>]
 [<InlineData(26)>]
-let ``Only valid AP Top 25 positions produce badges`` rank =
-    Assert.Empty(FormatHelpers.apRank (Nullable rank))
-    Assert.Empty(FormatHelpers.apRank (Nullable<int>()))
+let ``Only valid Top 25 positions produce badges`` rank =
+    Assert.Empty(FormatHelpers.pollRank (Nullable backend.Models.CollegePoll.Cfp) (Nullable rank))
+    Assert.Empty(FormatHelpers.pollRank (Nullable backend.Models.CollegePoll.Ap) (Nullable<int>()))
+
+[<Fact>]
+let ``A rank without a poll produces no badge`` () =
+    Assert.Empty(FormatHelpers.pollRank (Nullable<backend.Models.CollegePoll>()) (Nullable 5))
 
 [<Theory>]
 [<InlineData("regular")>]
@@ -86,7 +92,7 @@ let ``Only valid AP Top 25 positions produce badges`` rank =
 let ``Routine college context adds no card rows`` competition =
     let game = backend.Models.Game(Id = "1", Sport = "cfb", HomeTeam = "Oregon", HomeTeamAbbreviation = "ORE",
                                    AwayTeam = "Boise State", AwayTeamAbbreviation = "BOIS",
-                                   CollegeCompetition = competition, HomeApRank = Nullable 5, HomeFpi = Nullable 25.0)
+                                   CollegeCompetition = competition, HomePollRank = Nullable 5, RankPoll = Nullable backend.Models.CollegePoll.Ap, HomeFpi = Nullable 25.0)
     Assert.Empty(FormatHelpers.collegeContext game)
 
 [<Theory>]
