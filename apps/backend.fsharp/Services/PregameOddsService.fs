@@ -8,6 +8,7 @@ open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 open backend.Data
 open backend.Models
+open backend.Services
 open backend.Services.Espn
 open backend.Services.Kalshi
 open Backend.FSharp
@@ -124,7 +125,7 @@ type PregameOddsService [<ActivatorUtilitiesConstructor>]
                                         return raise (OperationCanceledException(ct))
                                     | ex ->
                                         kalshiFetchFailed <- true
-                                        logger.LogWarning(ex, "Failed to fetch Kalshi pregame odds for {Game}", espnEvent.ShortName)
+                                        logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch Kalshi pregame odds for {Game}", espnEvent.ShortName)
                                         return None
                                 else return None
                             }
