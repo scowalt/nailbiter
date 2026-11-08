@@ -240,6 +240,9 @@ public sealed class DatabaseFailureReportingTests
 
         Assert.Equal(new[] { "channels" }, youtube.Requests);
         Assert.Equal(2, exitCode);
+        Assert.Equal(nameof(YouTubeOutcome.InvalidResponse),
+            await database.ScalarAsync<string>("SELECT last_reason FROM highlights_operations WHERE id = 1"));
+        Assert.False(SentrySdk.IsEnabled);
         AssertReportedOnce(transport.Events.ToArray(), PostgresErrorCodes.LockNotAvailable);
     }
 
@@ -426,6 +429,7 @@ public sealed class DatabaseFailureReportingTests
             finally
             {
                 Environment.ExitCode = 0;
+                SentrySdk.Close();
                 if (host is IAsyncDisposable disposable) await disposable.DisposeAsync();
             }
         }
