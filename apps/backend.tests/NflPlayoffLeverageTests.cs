@@ -329,7 +329,6 @@ public sealed class NflPlayoffLeverageTests
     [InlineData("roles")]
     [InlineData("later-game")]
     [InlineData("incomplete-league")]
-    [InlineData("completed-result")]
     public async Task Conditional_scenarios_must_match_both_next_games_and_every_known_result(string problem)
     {
         var game = Game(); var schedules = Schedules();
@@ -345,16 +344,24 @@ public sealed class NflPlayoffLeverageTests
             game.AwayTeamAbbreviation = competitors.Single(t => t.GetProperty("homeAway").GetString() == "away").GetProperty("team").GetProperty("abbreviation").GetString()!;
         }
         if (problem == "incomplete-league") schedules = schedules.Skip(1).ToArray();
-        if (problem == "completed-result")
-        {
-            var newlyFinal = schedules.SelectMany(s => s.Events).First(e => e.GetProperty("week").GetProperty("number").GetInt32() == 7
-                && e.GetProperty("id").GetString() != "control-7-DET-GB").GetProperty("id").GetString()!;
-            schedules = schedules.Select(s => s.Events.Any(e => e.GetProperty("id").GetString() == newlyFinal)
-                ? s with { Completed = s.Completed + 1, CompletedIds = [.. s.CompletedIds, newlyFinal] } : s).ToArray();
-        }
         var handler = new Handler();
         var result = (await Collector(handler).CollectAsync([game], schedules, default))[game.Id]!;
         Assert.False(result.ScheduleVerified, result.Reason);
+        Assert.Single(handler.Requests);
+    }
+
+    [Fact]
+    public async Task A_final_the_source_has_not_yet_published_keeps_previous_evidence_instead_of_rejecting_it()
+    {
+        var game = Game(); var second = Game(); second.Id += "-second";
+        var schedules = Schedules();
+        var newlyFinal = schedules.SelectMany(s => s.Events).First(e => e.GetProperty("week").GetProperty("number").GetInt32() == 7
+            && e.GetProperty("id").GetString() != "control-7-DET-GB").GetProperty("id").GetString()!;
+        schedules = schedules.Select(s => s.Events.Any(e => e.GetProperty("id").GetString() == newlyFinal)
+            ? s with { Completed = s.Completed + 1, CompletedIds = [.. s.CompletedIds, newlyFinal] } : s).ToArray();
+        var handler = new Handler();
+        var result = await Collector(handler).CollectAsync([game, second], schedules, default);
+        Assert.Null(result[game.Id]); Assert.Null(result[second.Id]);
         Assert.Single(handler.Requests);
     }
 

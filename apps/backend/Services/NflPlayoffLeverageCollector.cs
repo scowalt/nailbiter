@@ -19,6 +19,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
     }
     private sealed record League(int Season, string Label, int Week, Contest[] Games);
     private sealed class DeniedException : HttpRequestException;
+    private const string ResultPending = "PlayoffStatus has not yet published a completed NFL result";
     private static readonly TimeZoneInfo Eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
     private static readonly Team[] Teams =
     [
@@ -169,16 +170,18 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
                 (game.Contest.Week == 0 && matches[0].Date != game.Contest.Date))
                 return "PlayoffStatus future schedule does not match the verified NFL season";
         }
+        var pending = false;
         foreach (var game in actual.Where(x => x.Contest.HomeScore.HasValue))
         {
             var matches = source.Games.Where(x => x.Key == game.Contest.Key).ToArray();
+            if (matches.Length == 1 && matches[0].Start == game.Contest.Start && !matches[0].HomeScore.HasValue) { pending = true; continue; }
             if (matches.Length != 1 || matches[0].Start != game.Contest.Start || matches[0].HomeScore != game.Contest.HomeScore || matches[0].AwayScore != game.Contest.AwayScore)
-                return "PlayoffStatus schedule predates or contradicts a completed NFL result";
+                return "PlayoffStatus schedule contradicts a completed NFL result";
         }
         foreach (var game in source.Games.Where(x => x.HomeScore.HasValue))
             if (actual.Count(x => x.Contest.Key == game.Key && x.Contest.Start == game.Start && x.Contest.HomeScore == game.HomeScore && x.Contest.AwayScore == game.AwayScore) != 1)
                 return "PlayoffStatus completed result not corroborated by NFL schedules";
-        return null;
+        return pending ? ResultPending : null;
     }
 
     private static NflCorroboratedKickoff? CorroborateKickoff(Game game, Contest source,
@@ -299,6 +302,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
                     verified = (parsed, parsed is null ? "NFL source schedule, season or publication unavailable" : VerifyResults(parsed, schedules));
                     leagues[observation.Season] = verified;
                 }
+                if (verified.Problem == ResultPending) { result[game.Id] = null; continue; }
                 var league = verified.Value;
                 if (league is null || verified.Problem is not null) { observation.Reason = verified.Problem!; continue; }
                 var home = Teams.SingleOrDefault(t => t.Abbreviation == Canonical(observation.Home));
