@@ -564,3 +564,20 @@ let ``EF Core translates a correlated subquery through a navigation or a join bu
 
     Assert.Throws<InvalidCastException>(fun () -> (correlatesADbSet db).ToQueryString() |> ignore)
     |> ignore
+
+let private reasonLines (report: string) = report.Split('\n') |> Array.skip 1
+
+[<Fact>]
+let ``the scan sends a correlated DbSet subquery to a navigation or a join`` () =
+    let report = Assert.Single(problems (controlSites (nameof correlatesADbSet)))
+    Assert.Contains("g.OddsSnapshots.Any(", report)
+    Assert.Contains("join", report)
+    Assert.DoesNotContain("lambda literal", report)
+    Assert.DoesNotContain("Hoist", report)
+
+[<Fact>]
+let ``the scan reports each refused subquery on one bounded line`` () =
+    for name in [ nameof correlatesADbSet; nameof passesAPredicateItCannotBuild ] do
+        let line = Assert.Single(reasonLines (Assert.Single(problems (controlSites name))))
+        Assert.True(line.Length <= 200, line)
+        Assert.DoesNotContain("NewDelegate", line)
