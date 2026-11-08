@@ -240,8 +240,8 @@ public static class PageRoutes
         {
             var eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
             var nowEt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, eastern);
-            var queryDate = query.TryGetValue("date", out var dateStr) && DateTime.TryParse(dateStr, out var dParsed) ? dParsed.Date : (DateTime?)null;
-            var targetDate = queryDate ?? nowEt.Date;
+            var queryDate = query.TryGetValue("date", out var dateStr) && DateOnly.TryParse(dateStr, out var dParsed) ? dParsed : (DateOnly?)null;
+            var targetDate = (queryDate ?? DateOnly.FromDateTime(nowEt)).ToDateTime(TimeOnly.MinValue);
             var etOffset = eastern.GetUtcOffset(DateTime.SpecifyKind(targetDate, DateTimeKind.Unspecified));
             var startUtc = new DateTimeOffset(targetDate, etOffset).UtcDateTime;
             var endUtc = startUtc.AddDays(1);
