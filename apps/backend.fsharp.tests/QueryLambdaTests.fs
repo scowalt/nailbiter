@@ -542,3 +542,25 @@ let ``the scan reports a tree it cannot build instead of passing it`` () =
     let report = Assert.Single(problems (controlSites (nameof passesAPredicateItCannotBuild)))
     Assert.StartsWith(hiddenTreeHelp, report)
     Assert.DoesNotContain("Hoist", report)
+
+let private correlatesADbSet (db: ExcitementDbContext) =
+    db.Games.Where(fun g -> db.OddsSnapshots.Any(fun o -> o.GameId = g.Id))
+
+let private correlatesANavigation (db: ExcitementDbContext) =
+    db.Games.Where(fun g -> g.OddsSnapshots.Any(fun o -> o.DrawMoneyline <> Nullable()))
+
+let private correlatesAJoin (db: ExcitementDbContext) =
+    db.Games.Join(db.OddsSnapshots, (fun g -> g.Id), (fun o -> o.GameId), (fun g o -> g.Id))
+
+[<Fact>]
+let ``EF Core translates a correlated subquery through a navigation or a join but rejects the DbSet form`` () =
+    use db = npgsqlContext ()
+
+    let navigation = (correlatesANavigation db).ToQueryString()
+    Assert.Contains("WHERE EXISTS", navigation)
+    Assert.Contains("o.game_id", navigation)
+
+    Assert.Contains("INNER JOIN odds_snapshots", (correlatesAJoin db).ToQueryString())
+
+    Assert.Throws<InvalidCastException>(fun () -> (correlatesADbSet db).ToQueryString() |> ignore)
+    |> ignore
