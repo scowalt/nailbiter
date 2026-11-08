@@ -65,8 +65,8 @@ type RetrospectiveEloService(logger: ILogger<RetrospectiveEloService>, servicePr
                         g.Sport = "nfl"
                         && g.SeasonYear = Nullable seasonYear
                         && g.Status = "final"
-                        && g.HomeScore.HasValue
-                        && g.AwayScore.HasValue)
+                        && g.HomeScore <> Nullable()
+                        && g.AwayScore <> Nullable())
                     .OrderBy(fun (g: Game) -> g.ScheduledStart)
                     .ToListAsync(ct)
 
