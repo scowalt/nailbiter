@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
-using Docker.DotNet.Models;
 using DotNet.Testcontainers.Configurations;
 using Testcontainers.PostgreSql;
 
@@ -19,13 +18,10 @@ internal static class IsolatedPostgreSql
             .WithDatabase($"nailbiter_test_{id}")
             .WithPassword($"nailbiter-test-{id}");
         if (TestcontainersSettings.OS.DockerEndpointAuthConfig.Endpoint.Scheme != "unix") return builder;
-        return builder.WithCreateParameterModifier(parameters =>
-        {
-            var bindings = parameters.HostConfig?.PortBindings ?? throw new InvalidOperationException("PostgreSQL port bindings missing.");
-            bindings[$"{PostgreSqlBuilder.PostgreSqlPort}/tcp"] =
-                [new PortBinding { HostPort = SelectDisposableHostPort().ToString(CultureInfo.InvariantCulture) }];
-        });
+        return builder.WithPortBinding(DockerAllocatedHostPorts, PostgreSqlBuilder.PostgreSqlPort.ToString(CultureInfo.InvariantCulture));
     }
+
+    private const string DockerAllocatedHostPorts = "61000-65535";
 
     private static void ConfigureTestcontainers()
     {

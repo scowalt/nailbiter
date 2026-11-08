@@ -90,22 +90,30 @@ Unix Docker endpoint and sets **process-local**
 path. This avoids the rootless provider's rootful Ryuk-mount default on this host;
 Ryuk remains enabled. No Docker daemon or global configuration is changed. After `EnsureCreated` and before seeding/host startup, the integrated fixture applies both `034_PlayoffSeriesObservation.sql` and `035_ProHypeLifecycle.sql`, installing the real writer journal/fence triggers for scheduled hype reads. Lifecycle 035 is the renamed undeployed script; the incoming series 034 remains unchanged. This uses only the fixture's newly created disposable database and does not invoke a production migration runner.
 
-Rootless dockerd's port allocator cannot see host-side listeners. The fixture
-therefore asks the **host OS** for one free dual-stack TCP ephemeral port for each
-owned service, then supplies that port to Docker. Ryuk uses the public
+PostgreSQL publishes 5432 on a host port that Docker allocates from
+61000-65535. Docker's allocator never gives two containers the same port, and
+the host OS never hands out ports above its ephemeral range (Linux default
+32768-60999) to other processes. Rootless dockerd's port allocator cannot see
+host-side listeners, and RootlessKit does not retry when the host port is
+taken, so a Docker-allocated port inside the ephemeral range can collide with
+any process that got its listening port from the OS. Selecting the port on the
+host and handing it to Docker does not help either. The selection is released
+before Docker binds it, so a parallel test or another container can take it in
+between (issue #83). `IsolatedPostgreSql` in `backend.tests` uses the same range.
+
+Ryuk still uses one host-OS-selected dual-stack port through the public
 `ResourceReaperPublicHostPort` callback: although obsolete, the
 [pinned 4.15.0 constructor](https://github.com/testcontainers/testcontainers-dotnet/blob/4.15.0/src/Testcontainers/Containers/ResourceReaper.cs)
 still invokes it in `WithPortBinding`; actual container bindings were runtime-verified.
-PostgreSQL selects its port in `WithCreateParameterModifier`, after Ryuk is ready
-and just before PG creation, minimizing the release-to-Docker handoff window.
+The callback returns a single port, so Ryuk cannot use a Docker-allocated range.
+Its selection runs once per process, before any PostgreSQL container exists, and
+the suite's PostgreSQL containers no longer allocate from the OS range.
 Only this obsolete assignment is warning-suppressed; its pinned-version
 rationale stays here in Markdown, not source comments. Revalidate this behavior
 on any Testcontainers upgrade.
 
-This is a fixture-only, one-probe-per-service allocation, not a generic port
-framework or a startup retry. It requires dual-stack host TCP sockets. The OS
-reservation must be released for Docker to bind, so another process can still
-win the handoff; such a failure is reported and never silently rerun. Portless's
+This is fixture-only allocation, not a generic port framework or a startup
+retry. A setup failure is reported and never silently rerun. Portless's
 actual backend `PORT` and exposure remain completely unchanged. No common/fixed
 host port, daemon/socket/proxy change, Ryuk disablement, HTTP exposure fallback,
 or other-service termination is used. Passing setup smoke does not erase earlier
