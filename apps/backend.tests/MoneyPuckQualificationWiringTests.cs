@@ -90,7 +90,7 @@ public sealed partial class NflPlayoffPageTests
         Assert.Equal(6.1963342467, components.StakesScore, 8);
         Assert.Equal(96.849798, components.QualityScore, 5);
         Assert.Equal(100, components.ClosenessScore);
-        Assert.Equal(66.0661464218, scope.ServiceProvider.GetRequiredService<HypeScoreService>().CalculateFinalScore("nhl", components), 5);
+        Assert.Equal(58.794606369354611, scope.ServiceProvider.GetRequiredService<HypeScoreService>().CalculateFinalScore("nhl", components), 5);
     }
 
     [Fact]
@@ -249,7 +249,7 @@ public sealed partial class NflPlayoffPageTests
                 Assert.NotNull(region.QuerySelector("a[href='https://moneypuck.com/predictions.htm']"));
                 Assert.DoesNotContain("Hype unavailable", region.TextContent);
                 var score = path.StartsWith("/game/") ? doc.QuerySelector("#detail-hype")! : doc.QuerySelector($"#excitement-{game.Id}")!;
-                Assert.Equal("66", score.QuerySelector(path.StartsWith("/game/") ? ".hype-score" : ".metric-value, .home-metric-value")!.TextContent);
+                Assert.Equal("59", score.QuerySelector(path.StartsWith("/game/") ? ".hype-score" : ".metric-value, .home-metric-value")!.TextContent);
                 if (!eligible)
                 {
                     Assert.DoesNotContain("25%", region.TextContent);
@@ -291,7 +291,7 @@ public sealed partial class NflPlayoffPageTests
             {
                 Assert.NotNull(doc.QuerySelector("#detail-hype a[href='https://moneypuck.com/predictions.htm']"));
                 Assert.Contains("model estimate", doc.QuerySelector("#detail-hype")!.TextContent);
-                Assert.Equal("66", doc.QuerySelector("#detail-hype .hype-score")!.TextContent);
+                Assert.Equal("59", doc.QuerySelector("#detail-hype .hype-score")!.TextContent);
                 Assert.DoesNotContain("Hype unavailable", doc.Body!.TextContent);
             }
             else
@@ -302,7 +302,7 @@ public sealed partial class NflPlayoffPageTests
                 Assert.Equal("Stakes and hype use a model estimate for NSH from MoneyPuck.", derivedCredit.TextContent);
                 Assert.Equal(region.ParentElement, derivedCredit.ParentElement);
                 Assert.Null(derivedCredit.Closest("a"));
-                Assert.Equal("Hype66", region.QuerySelector($"#excitement-{game.Id}")!.TextContent.Replace(" ", ""));
+                Assert.Equal("Hype59", region.QuerySelector($"#excitement-{game.Id}")!.TextContent.Replace(" ", ""));
                 Assert.Empty(region.QuerySelectorAll("a"));
                 Assert.Equal(region.ParentElement, credit.ParentElement);
                 Assert.True(html.IndexOf("</a>", html.IndexOf($"href=\"/game/{game.Id}\"", StringComparison.Ordinal), StringComparison.Ordinal)

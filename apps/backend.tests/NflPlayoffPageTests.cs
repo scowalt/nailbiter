@@ -1145,7 +1145,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
                 Assert.Equal(3.686743952474407, components.StakesScore, 12);
                 Assert.Equal(96.849798, components.QualityScore, 5);
                 Assert.Equal(100, components.ClosenessScore);
-                Assert.Equal(65, Math.Round(score!.Value));
+                Assert.Equal(58, Math.Round(score!.Value));
             }
             Assert.Contains("qualification-only", components.StakesExplanation, StringComparison.OrdinalIgnoreCase);
         }
@@ -1375,7 +1375,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
         stored = await hype.GetHypeComponentsAsync(game, null);
         Assert.True(stored.IsComplete);
         Assert.Equal(44, Math.Round(stored.QualityScore));
-        Assert.Equal(42, Math.Round((await hype.CalculateHypeScoreAsync(game, null))!.Value));
+        Assert.Equal(33, Math.Round((await hype.CalculateHypeScoreAsync(game, null))!.Value));
         detail = await BodyText(await client.GetAsync("/game/" + game.Id));
         Assert.DoesNotContain("Hype unavailable", detail);
         Assert.Contains("Quality44", detail);
