@@ -161,6 +161,7 @@ type KalshiPlayoffRatingsService
      timeProvider: TimeProvider) =
 
     let baseUrl = "https://api.elections.kalshi.com/trade-api/v2"
+    let mutable accessRefused = false
 
     let archivedMarkets (eventTicker: string) (ct: CancellationToken) = task {
         let markets = ResizeArray<KalshiMarket>()
@@ -212,6 +213,7 @@ type KalshiPlayoffRatingsService
         | Some league when season < 1 || season > 9998 ->
             logger.LogWarning("Invalid Kalshi playoff season {Season} for {Sport}", season, sport)
             return 0
+        | Some _ when accessRefused -> return 0
         | Some league ->
             let eventTicker = PlayoffMarkets.eventTicker sport season league
             try
@@ -248,7 +250,8 @@ type KalshiPlayoffRatingsService
                             with
                             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
                             | ex ->
-                                logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to recover archived {Sport} playoff finals for season {Season}; missing nonfinal probabilities are cleared without advancing their timestamps", sport, season)
+                                if ex :? KalshiAccessRefusedException then accessRefused <- true
+                                logger.Log((if KalshiFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to recover archived {Sport} playoff finals for season {Season}; missing nonfinal probabilities are cleared without advancing their timestamps", sport, season)
                                 return None
                     }
                     let canAssumeNoMarket =
@@ -357,7 +360,8 @@ type KalshiPlayoffRatingsService
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
-                logger.Log((if DatabaseFailure.Is ex || ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to refresh Kalshi {Sport} playoff probabilities for season {Season}", sport, season)
+                if ex :? KalshiAccessRefusedException then accessRefused <- true
+                logger.Log((if DatabaseFailure.Is ex || KalshiFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to refresh Kalshi {Sport} playoff probabilities for season {Season}", sport, season)
                 return 0
     }
 

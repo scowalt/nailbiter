@@ -74,7 +74,7 @@ public sealed class CollegeFootballService(
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             if (initialHistory) throw;
-            logger.Log(ProviderFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "College listings unavailable; refreshing known games only");
+            logger.Log(KalshiFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "College listings unavailable; refreshing known games only");
             listings = [];
         }
         var events = new Dictionary<string, JsonElement>();

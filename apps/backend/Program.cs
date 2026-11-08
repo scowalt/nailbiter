@@ -121,11 +121,14 @@ builder.Services.AddSingleton<ISseBroadcaster, SseBroadcaster>();
 builder.Services.AddEspnHttpClient<EspnOddsService>();
 
 builder.Services.AddHttpClient<KalshiOddsService>()
+    .AddHttpMessageHandler(() => new KalshiAccessRefusalHandler())
     .AddStandardResilienceHandler();
 
 builder.Services.AddMemoryCache();
 builder.Services.AddEspnHttpClient<CollegeEspnClient>();
-builder.Services.AddHttpClient<CollegeKalshiClient>().AddStandardResilienceHandler();
+builder.Services.AddHttpClient<CollegeKalshiClient>()
+    .AddHttpMessageHandler(() => new KalshiAccessRefusalHandler())
+    .AddStandardResilienceHandler();
 builder.Services.AddScoped<CollegeFootballService>();
 
 builder.Services.AddScoped<PregameOddsService>();
@@ -154,6 +157,7 @@ builder.Services.AddHttpClient<MoneyPuckService>(client => client.Timeout = Time
     .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 builder.Services.AddTransient<MoneyPuckQualificationService>();
 builder.Services.AddHttpClient<KalshiPlayoffRatingsService>()
+    .AddHttpMessageHandler(() => new KalshiAccessRefusalHandler())
     .AddStandardResilienceHandler();
 builder.Services.AddScoped<HypeScoreService>();
 builder.Services.AddHttpClient<NflPlayoffLeverageCollector>(client =>

@@ -149,13 +149,11 @@ public sealed class ProviderFailureReportingTests
             && reported.ExceptionTypes[^1] == typeof(BrokenCircuitException).FullName);
     }
 
-    [Theory]
-    [InlineData(HttpStatusCode.Forbidden)]
-    [InlineData(HttpStatusCode.OK)]
-    public async Task Kalshi_live_markets_refusal_or_unreadable_body_stays_a_warning(HttpStatusCode status)
+    [Fact]
+    public async Task Kalshi_live_markets_unreadable_body_stays_a_warning()
     {
         await using var app = new ReportingApp(uri => uri.AbsolutePath == "/trade-api/v2/markets"
-            ? new HttpResponseMessage(status) { Content = new StringContent("<html>not json</html>") } : NotFound());
+            ? Ok("<html>not json</html>") : NotFound());
 
         var odds = await app.Get<KalshiOddsService>().GetLiveOddsAsync("nba", "BOS", "NYK", LiveStart, CancellationToken.None);
 
@@ -163,6 +161,92 @@ public sealed class ProviderFailureReportingTests
         Assert.Single(app.Provider.Requests, u => u.AbsolutePath == "/trade-api/v2/markets");
         Assert.Equal(LogLevel.Warning, Assert.Single(app.Logs, l => l.Category == typeof(KalshiOddsService).FullName && l.Exception is not null).Level);
         Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Theory]
+    [MemberData(nameof(KalshiAnswers))]
+    public async Task Kalshi_live_markets_refusal_is_sent_once_and_ends_the_lookup(HttpStatusCode status)
+    {
+        await using var app = new ReportingApp(_ => Status(status));
+
+        var odds = await app.Get<KalshiOddsService>().GetLiveOddsAsync("nba", "BOS", "NYK", LiveStart, CancellationToken.None);
+
+        Assert.Null(odds);
+        await AssertKalshiAnswerReportedAsync<KalshiOddsService>(app, status, "Failed to fetch markets from Kalshi for {Sport}");
+    }
+
+    [Theory]
+    [MemberData(nameof(KalshiAnswers))]
+    public async Task Kalshi_ticker_fallback_refusal_is_sent_once_and_ends_the_lookup(HttpStatusCode status)
+    {
+        await using var app = new ReportingApp(uri => uri.AbsolutePath == "/trade-api/v2/markets"
+            ? Ok("""{"markets":[],"cursor":""}""") : Status(status));
+
+        var odds = await app.Get<KalshiOddsService>().GetLiveOddsAsync("nba", "BOS", "NYK", LiveStart, CancellationToken.None);
+
+        Assert.Null(odds);
+        await AssertKalshiAnswerReportedAsync<KalshiOddsService>(app, status, "Failed to fetch Kalshi market {Ticker}", requestsBeforeRefusal: 1);
+    }
+
+    [Theory]
+    [MemberData(nameof(KalshiAnswers))]
+    public async Task Kalshi_world_cup_markets_refusal_is_sent_once(HttpStatusCode status)
+    {
+        await using var app = new ReportingApp(_ => Status(status));
+
+        var odds = await app.Get<KalshiOddsService>().GetWorldCupThreeWayLiveOddsAsync("USA", "MEX", LiveStart, CancellationToken.None);
+
+        Assert.Null(odds);
+        await AssertKalshiAnswerReportedAsync<KalshiOddsService>(app, status, "Failed to fetch World Cup markets from Kalshi");
+    }
+
+    [Theory]
+    [MemberData(nameof(KalshiAnswers))]
+    public async Task Kalshi_same_day_mlb_schedule_check_refusal_is_sent_once(HttpStatusCode status)
+    {
+        await using var app = new ReportingApp(uri => uri.AbsolutePath switch
+        {
+            "/trade-api/v2/markets" => Ok(MlbScheduleChangeCatalog()),
+            "/trade-api/v2/milestones" => Status(status),
+            _ => NotFound()
+        }, services => PinClock(services, MlbScheduleChecked));
+
+        var odds = await app.Get<KalshiOddsService>().GetLiveOddsAsync("mlb", "CHW", "CLE", MlbOriginalStart, CancellationToken.None);
+
+        Assert.Null(odds);
+        await AssertKalshiAnswerReportedAsync<KalshiOddsService>(app, status, "Could not verify MLB schedule for {EventTicker}", requestsBeforeRefusal: 1);
+    }
+
+    [Fact]
+    public async Task Kalshi_refusal_ends_the_live_scrape_pass()
+    {
+        await using var app = new ReportingApp(_ => Status(HttpStatusCode.Forbidden));
+        var kalshi = app.Get<KalshiOddsService>();
+
+        Assert.Null(await kalshi.GetLiveOddsAsync("nba", "BOS", "NYK", LiveStart, CancellationToken.None));
+        Assert.Null(await kalshi.GetLiveOddsAsync("nba", "LAL", "GSW", LiveStart, CancellationToken.None));
+        Assert.Null(await kalshi.GetLiveOddsAsync("nhl", "BOS", "NYR", LiveStart, CancellationToken.None));
+        Assert.Null(await kalshi.GetWorldCupThreeWayLiveOddsAsync("USA", "MEX", LiveStart, CancellationToken.None));
+        Assert.Null(await kalshi.GetWorldCupAdvanceLiveOddsAsync("USA", "MEX", LiveStart, CancellationToken.None));
+
+        Assert.Single(app.Provider.Requests);
+        Assert.Single(await app.SentEventsAsync());
+    }
+
+    [Fact]
+    public async Task Kalshi_refusal_does_not_outlive_its_scrape_pass()
+    {
+        await using var app = new ReportingApp(_ => Status(HttpStatusCode.Forbidden));
+
+        foreach (var _ in Enumerable.Range(0, 2))
+        {
+            using var scope = app.Services.CreateScope();
+            var kalshi = scope.ServiceProvider.GetRequiredService<KalshiOddsService>();
+            Assert.Null(await kalshi.GetLiveOddsAsync("nba", "BOS", "NYK", LiveStart, CancellationToken.None));
+        }
+
+        Assert.Equal(2, app.Provider.Requests.Count(KalshiRequest));
+        Assert.Equal(2, (await app.SentEventsAsync()).Count);
     }
 
     [Fact]
@@ -179,15 +263,9 @@ public sealed class ProviderFailureReportingTests
     [Fact]
     public async Task Kalshi_same_day_mlb_schedule_check_failure_is_sent_once()
     {
-        var data = JsonNode.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "KalshiMlb", "schedule-change.json")))!;
-        foreach (var market in data["catalog"]!["markets"]!.AsArray())
-        {
-            market!.AsObject().Remove("occurrence_datetime");
-            market.AsObject().Remove("expected_expiration_time");
-        }
         await using var app = new ReportingApp(uri => uri.AbsolutePath switch
         {
-            "/trade-api/v2/markets" => Ok(data["catalog"]!.ToJsonString()),
+            "/trade-api/v2/markets" => Ok(MlbScheduleChangeCatalog()),
             "/trade-api/v2/milestones" => Unreachable,
             _ => NotFound()
         }, services => PinClock(services, MlbScheduleChecked));
@@ -212,6 +290,72 @@ public sealed class ProviderFailureReportingTests
 
         Assert.Equal(0, updated);
         await AssertEachFailureSentOnceAsync<PregameOddsService>(app, "Failed to fetch Kalshi pregame odds for {Game}");
+    }
+
+    [Theory]
+    [MemberData(nameof(KalshiAnswers))]
+    public async Task Kalshi_pregame_catalog_refusal_is_sent_once(HttpStatusCode status)
+    {
+        await using var app = await PregameAppAsync(status, games: 1);
+
+        using var scope = app.Services.CreateScope();
+        var updated = await scope.ServiceProvider.GetRequiredService<PregameOddsService>()
+            .RefreshPregameOddsForSportAsync("nfl", CancellationToken.None);
+
+        Assert.Equal(0, updated);
+        await AssertKalshiAnswerReportedAsync<PregameOddsService>(app, status, "Failed to fetch Kalshi pregame odds for {Game}");
+    }
+
+    [Fact]
+    public async Task Kalshi_refusal_ends_the_pregame_pass()
+    {
+        await using var app = await PregameAppAsync(HttpStatusCode.Forbidden, games: 3);
+
+        using var scope = app.Services.CreateScope();
+        var updated = await scope.ServiceProvider.GetRequiredService<PregameOddsService>()
+            .RefreshPregameOddsForSportAsync("nfl", CancellationToken.None);
+
+        Assert.Equal(0, updated);
+        Assert.Single(app.Provider.Requests, KalshiRequest);
+        Assert.Single(await app.SentEventsAsync());
+    }
+
+    [Theory]
+    [MemberData(nameof(KalshiAnswers))]
+    public async Task College_kalshi_quote_refusal_is_sent_once(HttpStatusCode status)
+    {
+        await using var app = new ReportingApp(_ => Status(status));
+
+        var probability = await app.Get<CollegeKalshiClient>().ObserveProbabilityAsync(
+            new CollegeMarketPair("KXNCAAFGAME-26NOV07AAABBB-AAA", "KXNCAAFGAME-26NOV07AAABBB-BBB"), LiveStart, CancellationToken.None);
+
+        Assert.Null(probability);
+        await AssertKalshiAnswerReportedAsync<CollegeKalshiClient>(app, status, "College game quotes unavailable for {Ticker}");
+    }
+
+    [Fact]
+    public async Task Kalshi_refusal_ends_the_college_quote_pass()
+    {
+        await using var app = new ReportingApp(_ => Status(HttpStatusCode.Forbidden));
+        var kalshi = app.Get<CollegeKalshiClient>();
+
+        Assert.Null(await kalshi.ObserveProbabilityAsync(
+            new CollegeMarketPair("KXNCAAFGAME-26NOV07AAABBB-AAA", "KXNCAAFGAME-26NOV07AAABBB-BBB"), LiveStart, CancellationToken.None));
+        Assert.Null(await kalshi.ObserveProbabilityAsync(
+            new CollegeMarketPair("KXNCAAFGAME-26NOV07CCCDDD-CCC", "KXNCAAFGAME-26NOV07CCCDDD-DDD"), LiveStart, CancellationToken.None));
+
+        Assert.Single(app.Provider.Requests);
+        Assert.Single(await app.SentEventsAsync());
+    }
+
+    [Theory]
+    [MemberData(nameof(KalshiAnswers))]
+    public async Task College_listings_refusal_is_sent_once(HttpStatusCode status)
+    {
+        await using var app = await CollegeAppAsync(uri => uri.AbsolutePath == "/trade-api/v2/markets", status);
+
+        Assert.Equal(0, await RunCollegeAsync(app));
+        await AssertKalshiAnswerReportedAsync<CollegeFootballService>(app, status, "College listings unavailable; refreshing known games only");
     }
 
     [Fact]
@@ -240,13 +384,56 @@ public sealed class ProviderFailureReportingTests
             "Failed to refresh Kalshi {Sport} playoff probabilities for season {Season}");
     }
 
+    [Theory]
+    [MemberData(nameof(KalshiAnswers))]
+    public async Task Kalshi_playoff_probabilities_refusal_is_sent_once(HttpStatusCode status)
+    {
+        await using var app = new ReportingApp(_ => Status(status));
+
+        using var scope = app.Services.CreateScope();
+        var refreshed = await scope.ServiceProvider.GetRequiredService<KalshiPlayoffRatingsService>()
+            .RefreshAsync("nhl", 2027, CancellationToken.None);
+
+        Assert.Equal(0, refreshed);
+        await AssertKalshiAnswerReportedAsync<KalshiPlayoffRatingsService>(app, status,
+            "Failed to refresh Kalshi {Sport} playoff probabilities for season {Season}");
+    }
+
+    [Theory]
+    [MemberData(nameof(KalshiAnswers))]
+    public async Task Kalshi_playoff_archive_refusal_is_sent_once(HttpStatusCode status)
+    {
+        await using var app = await PlayoffArchiveAppAsync(() => Status(status));
+
+        using var scope = app.Services.CreateScope();
+        var refreshed = await scope.ServiceProvider.GetRequiredService<KalshiPlayoffRatingsService>()
+            .RefreshAsync("nhl", 2027, CancellationToken.None);
+
+        Assert.Equal(31, refreshed);
+        await AssertKalshiAnswerReportedAsync<KalshiPlayoffRatingsService>(app, status,
+            "Failed to recover archived {Sport} playoff finals for season {Season}; missing nonfinal probabilities are cleared without advancing their timestamps",
+            requestsBeforeRefusal: 1);
+    }
+
+    [Fact]
+    public async Task Kalshi_refusal_ends_the_playoff_refresh_pass()
+    {
+        await using var app = await ReportingApp.WithDatabaseAsync(_ => Status(HttpStatusCode.Forbidden),
+            services => PinClock(services, new DateTimeOffset(LiveStart)));
+
+        using var scope = app.Services.CreateScope();
+        var refreshed = await scope.ServiceProvider.GetRequiredService<KalshiPlayoffRatingsService>()
+            .RefreshCurrentAsync(CancellationToken.None);
+
+        Assert.Equal(0, refreshed);
+        Assert.Single(app.Provider.Requests);
+        Assert.Single(await app.SentEventsAsync());
+    }
+
     [Fact]
     public async Task Kalshi_playoff_archive_failure_is_sent_once()
     {
-        var live = JsonNode.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "NhlSeeding", "qualification.json")))!;
-        live["event"]!["markets"]!.AsArray().RemoveAt(0);
-        await using var app = await ReportingApp.WithDatabaseAsync(uri => uri.AbsolutePath == "/trade-api/v2/events/KXNHLPLAYOFF-27"
-            ? Ok(live.ToJsonString()) : Unreachable, services => PinClock(services, new DateTimeOffset(LiveStart)));
+        await using var app = await PlayoffArchiveAppAsync(() => Unreachable);
 
         using var scope = app.Services.CreateScope();
         var refreshed = await scope.ServiceProvider.GetRequiredService<KalshiPlayoffRatingsService>()
@@ -359,10 +546,63 @@ public sealed class ProviderFailureReportingTests
         Assert.Empty(await app.SentEventsAsync());
     }
 
+    public static TheoryData<HttpStatusCode> KalshiAnswers => [HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden, HttpStatusCode.NotFound];
+
+    private static bool KalshiRequest(Uri uri) => uri.AbsolutePath.StartsWith("/trade-api/", StringComparison.Ordinal);
+
+    private static async Task AssertKalshiAnswerReportedAsync<TCaller>(ReportingApp app, HttpStatusCode status, string template, int requestsBeforeRefusal = 0)
+    {
+        var sent = await app.SentEventsAsync();
+        Assert.Equal(0, app.Provider.Failures);
+        if (status == HttpStatusCode.NotFound)
+        {
+            Assert.Empty(sent);
+            return;
+        }
+        var reported = Assert.Single(sent);
+        Assert.Equal((typeof(TCaller).FullName, "error", template, "backend.Services.KalshiAccessRefusedException"),
+            (reported.Logger, reported.Level, reported.Template, reported.ExceptionTypes[^1]));
+        Assert.Equal(requestsBeforeRefusal + 1, app.Provider.Requests.Count(KalshiRequest));
+    }
+
+    private static string MlbScheduleChangeCatalog()
+    {
+        var data = JsonNode.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "KalshiMlb", "schedule-change.json")))!;
+        foreach (var market in data["catalog"]!["markets"]!.AsArray())
+        {
+            market!.AsObject().Remove("occurrence_datetime");
+            market.AsObject().Remove("expected_expiration_time");
+        }
+        return data["catalog"]!.ToJsonString();
+    }
+
+    private static Task<ReportingApp> PregameAppAsync(HttpStatusCode kalshi, int games)
+    {
+        var board = JsonNode.Parse(ProHypeTests.Fixture("nfl-pregame-401872985").GetProperty("board").GetProperty("body").GetRawText())!;
+        var events = board["events"]!.AsArray();
+        for (var i = 1; i < games; i++)
+        {
+            var copy = events[0]!.DeepClone();
+            copy["id"] = $"40187298{5 + i}";
+            events.Add(copy);
+        }
+        return ReportingApp.WithDatabaseAsync(uri => uri.AbsolutePath.EndsWith("/scoreboard", StringComparison.Ordinal)
+            ? Ok(uri.Query.Contains("dates=20261011", StringComparison.Ordinal) ? board.ToJsonString() : """{"events":[]}""")
+            : Status(kalshi), services => PinClock(services, new DateTimeOffset(2026, 10, 4, 19, 56, 0, TimeSpan.Zero)));
+    }
+
+    private static Task<ReportingApp> PlayoffArchiveAppAsync(Func<HttpResponseMessage?> archive)
+    {
+        var live = JsonNode.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "NhlSeeding", "qualification.json")))!;
+        live["event"]!["markets"]!.AsArray().RemoveAt(0);
+        return ReportingApp.WithDatabaseAsync(uri => uri.AbsolutePath == "/trade-api/v2/events/KXNHLPLAYOFF-27"
+            ? Ok(live.ToJsonString()) : archive(), services => PinClock(services, new DateTimeOffset(LiveStart)));
+    }
+
     private static readonly DateTimeOffset CollegeNow = new(2026, 9, 16, 18, 0, 0, TimeSpan.Zero);
 
-    private static Task<ReportingApp> CollegeAppAsync(Func<Uri, bool> unreachable) =>
-        ReportingApp.WithDatabaseAsync(uri => unreachable(uri) ? Unreachable : uri switch
+    private static Task<ReportingApp> CollegeAppAsync(Func<Uri, bool> failing, HttpStatusCode? answer = null) =>
+        ReportingApp.WithDatabaseAsync(uri => failing(uri) ? (answer is { } status ? Status(status) : Unreachable) : uri switch
         {
             { AbsolutePath: var path } when path.EndsWith("/powerindex", StringComparison.Ordinal) => Ok(CollegeRoster),
             { AbsolutePath: var path } when path.EndsWith("/rankings", StringComparison.Ordinal) => Ok(CollegeApPoll),
@@ -424,7 +664,9 @@ public sealed class ProviderFailureReportingTests
 
     private static HttpResponseMessage Ok(string body) => new(HttpStatusCode.OK) { Content = new StringContent(body) };
 
-    private static HttpResponseMessage NotFound() => new(HttpStatusCode.NotFound) { Content = new StringContent("{}") };
+    private static HttpResponseMessage NotFound() => Status(HttpStatusCode.NotFound);
+
+    private static HttpResponseMessage Status(HttpStatusCode status) => new(status) { Content = new StringContent("{}") };
 
     private sealed record SentEvent(string? Logger, string? Level, string? Template, string?[] ExceptionTypes);
 
