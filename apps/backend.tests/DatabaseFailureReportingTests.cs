@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
+using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using backend.Data;
@@ -216,24 +217,33 @@ public sealed class DatabaseFailureReportingTests
         });
         var mlb = new Provider(uri => uri.Host == "statsapi.mlb.com" ? MlbSchedule : EspnSummary);
         await using var youtube = new RowLockedDuringChannelRequest(database);
-        await using var app = new ReportingApp(database.ConnectionString + LockTimeout, worker: null, services =>
-        {
-            services.RemoveAll<TimeProvider>();
-            services.AddSingleton<TimeProvider>(new FakeTimeProvider(new DateTimeOffset(2026, 10, 7, 3, 0, 0, TimeSpan.Zero)));
-            services.Configure<YouTubeHighlightsOptions>(options => { options.Enabled = true; options.ApiKey = "sentinel-not-live"; });
-            services.AddHttpClient(MlbHighlightsIdentityClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => mlb);
-            services.AddHttpClient(YouTubeHighlightsClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => youtube);
-            services.ConfigureDbContext<ExcitementDbContext>(options => options.AddInterceptors(youtube));
-        });
+        var transport = new SentTransport();
 
-        using var scope = app.Services.CreateScope();
-        var result = await scope.ServiceProvider.GetRequiredService<HighlightsApplicationService>()
-            .OperateAsync(new(HighlightsOperatorAction.Attach, "database-failure-mlb", "manualVideo", Apply: true));
+        var exitCode = await ProgramEntryPoint.RunAsync(
+            [
+                "--environment=Production",
+                $"--ConnectionStrings:DefaultConnection={database.ConnectionString}{LockTimeout}",
+                "--Sentry:Dsn=https://public@sentry.invalid/1",
+                "--Highlights:YouTube:Enabled=true",
+                "--Highlights:YouTube:ApiKey=sentinel-not-live",
+                "--highlights", "attach", "database-failure-mlb", "manualVideo", "--apply"
+            ],
+            services =>
+            {
+                services.PostConfigure<SentryAspNetCoreOptions>(options => options.Transport = transport);
+                services.RemoveAll<TimeProvider>();
+                services.AddSingleton<TimeProvider>(new FakeTimeProvider(new DateTimeOffset(2026, 10, 7, 3, 0, 0, TimeSpan.Zero)));
+                services.AddHttpClient(MlbHighlightsIdentityClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => mlb);
+                services.AddHttpClient(YouTubeHighlightsClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => youtube);
+                services.ConfigureDbContext<ExcitementDbContext>(options => options.AddInterceptors(youtube));
+            });
 
         Assert.Equal(new[] { "channels" }, youtube.Requests);
-        Assert.False(result.Accepted);
-        Assert.Equal(nameof(YouTubeOutcome.InvalidResponse), result.Reason);
-        AssertSingleError(await app.SentEventsAfterFailureAsync(), PostgresErrorCodes.LockNotAvailable);
+        Assert.Equal(2, exitCode);
+        Assert.Equal(nameof(YouTubeOutcome.InvalidResponse),
+            await database.ScalarAsync<string>("SELECT last_reason FROM highlights_operations WHERE id = 1"));
+        Assert.False(SentrySdk.IsEnabled);
+        AssertReportedOnce(transport.Events.ToArray(), PostgresErrorCodes.LockNotAvailable);
     }
 
     private static ReportingApp MoneyPuckApp(SyntheticDatabase database, MoneyPuckQualificationHandler moneyPuck) =>
@@ -250,17 +260,14 @@ public sealed class DatabaseFailureReportingTests
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
     }
 
-    private static void AssertReportedOnce(IReadOnlyCollection<SentEvent> sent, string sqlState) =>
-        Assert.Contains(EfCommandLogger, AssertSingleError(sent, sqlState).BreadcrumbCategories);
-
-    private static SentEvent AssertSingleError(IReadOnlyCollection<SentEvent> sent, string sqlState)
+    private static void AssertReportedOnce(IReadOnlyCollection<SentEvent> sent, string sqlState)
     {
         Assert.DoesNotContain(sent, e => e.Logger == EfCommandLogger);
         var reported = Assert.Single(sent);
         Assert.Equal("error", reported.Level);
         var failure = Assert.Single(reported.Exceptions, e => e.Type == typeof(PostgresException).FullName);
         Assert.StartsWith(sqlState + ":", failure.Value);
-        return reported;
+        Assert.Contains(EfCommandLogger, reported.BreadcrumbCategories);
     }
 
     private sealed class SyntheticDatabase : IAsyncDisposable
@@ -364,8 +371,6 @@ public sealed class DatabaseFailureReportingTests
 
         public HttpClient Client { get; }
 
-        public IServiceProvider Services => app.Services;
-
         public async Task<IReadOnlyCollection<SentEvent>> SentEventsAfterFailureAsync()
         {
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
@@ -379,6 +384,61 @@ public sealed class DatabaseFailureReportingTests
         {
             await app.DisposeAsync();
             await entry.DisposeAsync();
+        }
+    }
+
+    private static class ProgramEntryPoint
+    {
+        private static readonly AsyncLocal<object?> CurrentRun = new();
+
+        public static async Task<int> RunAsync(string[] args, Action<IServiceCollection> configure)
+        {
+            var run = new object();
+            IHost? host = null;
+            var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            using var subscription = DiagnosticListener.AllListeners.Subscribe(new Observer<DiagnosticListener>(listener =>
+            {
+                if (listener.Name != "Microsoft.Extensions.Hosting" || CurrentRun.Value != run) return;
+                listener.Subscribe(new Observer<KeyValuePair<string, object?>>(e =>
+                {
+                    if (CurrentRun.Value != run) return;
+                    if (e.Key == "HostBuilding") ((IHostBuilder)e.Value!).ConfigureServices(configure);
+                    if (e.Key == "HostBuilt") host = (IHost)e.Value!;
+                }));
+            }));
+            var thread = new Thread(() =>
+            {
+                try
+                {
+                    CurrentRun.Value = run;
+                    typeof(Program).Assembly.EntryPoint!.Invoke(null, [args]);
+                    completed.SetResult();
+                }
+                catch (Exception e)
+                {
+                    completed.SetException(e);
+                }
+            }) { IsBackground = true };
+            using (ExecutionContext.SuppressFlow()) thread.Start();
+            try
+            {
+                await completed.Task.WaitAsync(TimeSpan.FromSeconds(60));
+                await SentrySdk.FlushAsync(TimeSpan.FromSeconds(5));
+                return Environment.ExitCode;
+            }
+            finally
+            {
+                Environment.ExitCode = 0;
+                SentrySdk.Close();
+                if (host is IAsyncDisposable disposable) await disposable.DisposeAsync();
+            }
+        }
+
+        private sealed class Observer<T>(Action<T> next) : IObserver<T>
+        {
+            public void OnNext(T value) => next(value);
+            public void OnError(Exception error) { }
+            public void OnCompleted() { }
         }
     }
 
