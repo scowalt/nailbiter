@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Npgsql;
+using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace backend.tests;
@@ -46,7 +47,9 @@ public sealed class DatabaseSafeguardTests
 
         await using var slowQuery = new NpgsqlCommand("SELECT pg_sleep(35)", connection) { CommandTimeout = 0 };
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(45));
-        var failure = await Assert.ThrowsAsync<PostgresException>(() => slowQuery.ExecuteScalarAsync(deadline.Token));
+        var timedOut = Assert.ThrowsAsync<PostgresException>(() => slowQuery.ExecuteScalarAsync(deadline.Token));
+        await StallTheDatabaseAcrossItsStatementTimeoutAsync(database);
+        var failure = await timedOut;
         Assert.Equal(PostgresErrorCodes.QueryCanceled, failure.SqlState);
         Assert.Contains("statement timeout", failure.MessageText);
         await using var recoveredQuery = new NpgsqlCommand("SELECT 1", connection);
@@ -56,5 +59,13 @@ public sealed class DatabaseSafeguardTests
         await migration.OpenAsync();
         await using var migrationSetting = new NpgsqlCommand("SHOW statement_timeout", migration);
         Assert.Equal("0", await migrationSetting.ExecuteScalarAsync());
+    }
+
+    private static async Task StallTheDatabaseAcrossItsStatementTimeoutAsync(PostgreSqlContainer database)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(25));
+        await database.PauseAsync();
+        await Task.Delay(TimeSpan.FromSeconds(21));
+        await database.UnpauseAsync();
     }
 }
