@@ -105,6 +105,11 @@ module HomePageRenderer =
         | None, Some value -> Some value
         | None, None -> None
 
+    let private decided (odds: IDictionary<string, OddsSnapshot>) (game: Game) =
+        match odds.TryGetValue game.Id with
+        | true, o -> o.HomeWinProbability > 0.99 || o.HomeWinProbability < 0.01
+        | _ -> false
+
     let private homeSection (game: Game) hypeScores =
         match game.Status with
         | "in_progress" -> "live"
@@ -302,7 +307,7 @@ module HomePageRenderer =
                             let cards = games |> Seq.filter (fun g -> homeSection g hypeScores = key) |> Seq.toList
                             let cards =
                                 if key <> "live" then cards
-                                else cards |> List.sortBy (fun g -> liveRank scores hypeScores g |> Option.map (~-) |> Option.defaultValue infinity)
+                                else cards |> List.sortBy (fun g -> decided odds g, liveRank scores hypeScores g |> Option.map (~-) |> Option.defaultValue infinity)
                             if not cards.IsEmpty then
                                 Elem.section [ cls "home-section"; Attr.id $"home-section-{key}"; Attr.create "aria-labelledby" $"home-heading-{key}"; Attr.create "data-single-game" (if cards.Length = 1 then "true" else "false") ] [
                                     Elem.h2 [ cls "home-section-title"; Attr.id $"home-heading-{key}" ] [ Text.raw label ]
