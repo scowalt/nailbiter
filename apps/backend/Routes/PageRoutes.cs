@@ -242,9 +242,10 @@ public static class PageRoutes
             var nowEt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, eastern);
             var queryDate = query.TryGetValue("date", out var dateStr) && DateOnly.TryParse(dateStr, out var dParsed) ? dParsed : (DateOnly?)null;
             var targetDate = (queryDate ?? DateOnly.FromDateTime(nowEt)).ToDateTime(TimeOnly.MinValue);
-            var etOffset = eastern.GetUtcOffset(DateTime.SpecifyKind(targetDate, DateTimeKind.Unspecified));
-            var startUtc = new DateTimeOffset(targetDate, etOffset).UtcDateTime;
-            var endUtc = startUtc.AddDays(1);
+            DateTime EasternMidnightUtc(DateTime date) =>
+                new DateTimeOffset(date, eastern.GetUtcOffset(DateTime.SpecifyKind(date, DateTimeKind.Unspecified))).UtcDateTime;
+            var startUtc = EasternMidnightUtc(targetDate);
+            var endUtc = EasternMidnightUtc(targetDate.AddDays(1));
 
             games = await svc.GetGamesByDateRangeAsync(sportDb, startUtc, endUtc, ct);
 
