@@ -204,7 +204,10 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
     public async Task Ordinary_background_cycles_keep_a_whole_score_during_result_lag_and_replace_every_component_on_recovery(string sport)
     {
         var game = await Seed(sport);
+        gate.Arm();
         Start();
+        await gate.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        _ = Task.Delay(TimeSpan.FromSeconds(11)).ContinueWith(_ => gate.Release(), TaskScheduler.Default);
         await clock.CycleFinished.Task.WaitAsync(TimeSpan.FromSeconds(10));
         await Change(db =>
         {
