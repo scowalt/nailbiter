@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
+using System.Text.Json;
 using backend.Data;
 using backend.Models;
 using Microsoft.AspNetCore.Builder;
@@ -35,7 +36,7 @@ public sealed class AbortedRequestReportingTests
     public async Task Client_abort_during_a_blocked_query_is_not_reported_as_an_error(string path)
     {
         await using var app = await ReportingApp.StartAsync(connectionOptions: "");
-        await using var oddsLock = await app.LockOddsSnapshotsAsync();
+        await using var oddsLock = await app.LockAsync("odds_snapshots", "ACCESS EXCLUSIVE");
 
         using var abort = new CancellationTokenSource();
         var request = app.Client.GetAsync(path, abort.Token);
@@ -46,6 +47,30 @@ public sealed class AbortedRequestReportingTests
 
         Assert.Equal(StatusCodes.Status499ClientClosedRequest, status);
         Assert.DoesNotContain(app.Events, e => e.Path == path && e.IsQueryCancellation);
+    }
+
+    [Fact]
+    public async Task Client_abort_during_a_pro_hype_save_sends_nothing()
+    {
+        const string path = "/nba";
+        await using var app = await ReportingApp.StartAsync(connectionOptions: "");
+        await app.AddGameAsync(new Game
+        {
+            Id = "aborted-save-game", Sport = "nba", Status = "scheduled", SeasonYear = 2027, SeasonType = 2,
+            HomeTeam = "Home", AwayTeam = "Away", HomeTeamAbbreviation = "HOM", AwayTeamAbbreviation = "AWY",
+            ScheduledStart = new DateTime(2027, 1, 15, 19, 0, 0, DateTimeKind.Utc)
+        });
+        await using var snapshotLock = await app.LockAsync("pro_hype_snapshots", "SHARE");
+
+        using var abort = new CancellationTokenSource();
+        var request = app.Client.GetAsync(path + "?date=2027-01-15", abort.Token);
+        await snapshotLock.WaitForBlockedQueryAsync();
+        abort.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
+        Assert.Equal(StatusCodes.Status499ClientClosedRequest, await app.RequestCompleted(path));
+        await SentrySdk.FlushAsync(TimeSpan.FromSeconds(5));
+
+        Assert.DoesNotContain(app.Sent, e => e.Path == path);
     }
 
     [Fact]
@@ -67,7 +92,7 @@ public sealed class AbortedRequestReportingTests
     {
         const string path = "/api/games/" + GameId + "/odds";
         await using var app = await ReportingApp.StartAsync(connectionOptions: ";Options=-c statement_timeout=1000");
-        await using var oddsLock = await app.LockOddsSnapshotsAsync();
+        await using var oddsLock = await app.LockAsync("odds_snapshots", "ACCESS EXCLUSIVE");
 
         await Record.ExceptionAsync(() => app.Client.GetAsync(path));
         await app.RequestCompleted(path);
@@ -77,6 +102,8 @@ public sealed class AbortedRequestReportingTests
         var timeout = Assert.IsType<PostgresException>(reported.Exception);
         Assert.Equal(PostgresErrorCodes.QueryCanceled, timeout.SqlState);
     }
+
+    private sealed record SentEvent(string? Path, string? Logger, string? Message);
 
     private sealed record ReportedEvent(string? Path, Exception? Exception, bool Handled)
     {
@@ -122,6 +149,7 @@ public sealed class AbortedRequestReportingTests
 
         public HttpClient Client { get; }
         public IEnumerable<ReportedEvent> Events => recorder.Events;
+        public IEnumerable<SentEvent> Sent => recorder.Sent;
 
         public static async Task<ReportingApp> StartAsync(string connectionOptions, params IInterceptor[] interceptors)
         {
@@ -141,14 +169,22 @@ public sealed class AbortedRequestReportingTests
             return started;
         }
 
-        public async Task<OddsLock> LockOddsSnapshotsAsync()
+        public async Task AddGameAsync(Game game)
+        {
+            using var scope = app.Services.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+            db.Games.Add(game);
+            await db.SaveChangesAsync();
+        }
+
+        public async Task<TableLock> LockAsync(string table, string mode)
         {
             var connection = new NpgsqlConnection(database.GetConnectionString());
             await connection.OpenAsync();
             var transaction = await connection.BeginTransactionAsync();
-            await using var command = new NpgsqlCommand("LOCK TABLE odds_snapshots IN ACCESS EXCLUSIVE MODE", connection, transaction);
+            await using var command = new NpgsqlCommand($"LOCK TABLE {table} IN {mode} MODE", connection, transaction);
             await command.ExecuteNonQueryAsync();
-            return new OddsLock(database.GetConnectionString(), connection, transaction);
+            return new TableLock(database.GetConnectionString(), table, connection, transaction);
         }
 
         public Task<int> RequestCompleted(string path) =>
@@ -163,14 +199,14 @@ public sealed class AbortedRequestReportingTests
         }
     }
 
-    private sealed class OddsLock(string connectionString, NpgsqlConnection connection, NpgsqlTransaction transaction) : IAsyncDisposable
+    private sealed class TableLock(string connectionString, string table, NpgsqlConnection connection, NpgsqlTransaction transaction) : IAsyncDisposable
     {
         public async Task WaitForBlockedQueryAsync()
         {
             await using var observer = new NpgsqlConnection(connectionString);
             await observer.OpenAsync();
             await using var command = new NpgsqlCommand(
-                "SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query ILIKE '%odds_snapshots%'",
+                $"SELECT count(*) FROM pg_stat_activity WHERE wait_event_type = 'Lock' AND query ILIKE '%{table}%'",
                 observer);
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             while ((long)(await command.ExecuteScalarAsync(timeout.Token))! == 0)
@@ -213,8 +249,25 @@ public sealed class AbortedRequestReportingTests
     private sealed class SentryRecorder : ITransport, ISentryEventProcessor
     {
         public ConcurrentQueue<ReportedEvent> Events { get; } = new();
+        public ConcurrentQueue<SentEvent> Sent { get; } = new();
 
-        public Task SendEnvelopeAsync(Envelope envelope, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public async Task SendEnvelopeAsync(Envelope envelope, CancellationToken cancellationToken = default)
+        {
+            using var stream = new MemoryStream();
+            await envelope.SerializeAsync(stream, null, cancellationToken);
+            var lines = System.Text.Encoding.UTF8.GetString(stream.ToArray()).Split('\n');
+            for (var i = 1; i + 1 < lines.Length; i++)
+            {
+                using var header = JsonDocument.Parse(lines[i]);
+                if (header.RootElement.GetProperty("type").GetString() != "event") continue;
+                using var payload = JsonDocument.Parse(lines[++i]);
+                var root = payload.RootElement;
+                var url = root.TryGetProperty("request", out var request) && request.TryGetProperty("url", out var u) ? u.GetString() : null;
+                var message = root.TryGetProperty("logentry", out var entry) && entry.TryGetProperty("message", out var m) ? m.GetString() : null;
+                var logger = root.TryGetProperty("logger", out var l) ? l.GetString() : null;
+                Sent.Enqueue(new SentEvent(url is null ? null : new Uri(url).AbsolutePath, logger, message));
+            }
+        }
 
         public SentryEvent? Process(SentryEvent sentryEvent)
         {
