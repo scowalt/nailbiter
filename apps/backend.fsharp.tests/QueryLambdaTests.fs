@@ -128,16 +128,16 @@ let private buildsATreeWhenRun (node: Expression) =
        && (typeof<Expression>.IsAssignableFrom node.Type || typeof<Expr>.IsAssignableFrom node.Type)
 
 let private parametersRead (expression: Expression) =
-    let names = ResizeArray<string>()
+    let read = ResizeArray<ParameterExpression>()
 
     let visitor =
         { new ExpressionVisitor() with
             override _.VisitParameter node =
-                names.Add node.Name
+                read.Add node
                 node }
 
     visitor.Visit expression |> ignore
-    names |> Seq.distinct |> List.ofSeq
+    read |> Seq.distinctBy (fun parameter -> parameter.Name) |> List.ofSeq
 
 let private expand (node: Expression) =
     match node with
@@ -145,15 +145,19 @@ let private expand (node: Expression) =
         call.Method.DeclaringType.FullName = "Microsoft.FSharp.Linq.RuntimeHelpers.LeafExpressionConverter"
         && call.Method.Name.StartsWith "QuotationTo"
         ->
-        match parametersRead call with
-        | [] ->
+        let read = parametersRead call
+        let rows = read |> List.filter (fun parameter -> not (typeof<DbContext>.IsAssignableFrom parameter.Type))
+
+        match read, rows with
+        | [], _ ->
             try
                 match Expression.Lambda<Func<obj>>(Expression.Convert(call, typeof<obj>)).Compile().Invoke() with
                 | :? Expression as tree -> Ok tree
                 | other -> Error(CannotBuild(summarize $"{call.Method.Name} returned {other}"))
             with ex ->
                 Error(CannotBuild(summarize $"{call.Method.Name} failed: {ex.Message}"))
-        | names -> Error(ReadsOuterParameters names)
+        | _, [] -> Error(CannotBuild(summarize $"{call.Method.Name} reads the context parameter {read.Head.Name}"))
+        | _, _ -> Error(ReadsOuterParameters(rows |> List.map (fun parameter -> parameter.Name)))
     | :? ConstantExpression as constant when (constant.Value :? Expression) -> Ok(constant.Value :?> Expression)
     | _ -> Error(CannotBuild(summarize $"a {node.NodeType} node of type {node.Type.Name}: {node}"))
 
