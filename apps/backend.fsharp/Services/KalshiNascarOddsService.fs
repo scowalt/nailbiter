@@ -79,7 +79,7 @@ type KalshiNascarOddsService(httpClient: System.Net.Http.HttpClient, logger: ILo
                     logger.LogDebug("Fetched {Count} NASCAR markets from Kalshi", markets.Count)
                     return markets
                 with
-                | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: Kalshi NASCAR markets fetch"); return ResizeArray<KalshiMarket>()
+                | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
                 | ex ->
                     logger.LogWarning(ex, "Failed to fetch NASCAR markets from Kalshi")
                     return ResizeArray<KalshiMarket>()

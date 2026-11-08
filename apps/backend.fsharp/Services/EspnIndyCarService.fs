@@ -4,6 +4,7 @@ open System
 open System.Text.Json
 open System.Threading
 open Backend.FSharp
+open backend.Services
 open backend.Services.Espn
 open backend.Services.EspnNascar
 open Microsoft.Extensions.Logging
@@ -33,9 +34,9 @@ type EspnIndyCarService
                 let! json = response.Content.ReadAsStringAsync(ct)
                 return JsonSerializer.Deserialize<EspnNascarScoreboardResponse>(json, HttpHelpers.jsonOptions)
             with
-            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: ESPN IndyCar scoreboard fetch"); return Unchecked.defaultof<EspnNascarScoreboardResponse>
+            | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
-                logger.LogError(ex, "Failed to fetch ESPN IndyCar scoreboard from {Url}", url)
+                logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch ESPN IndyCar scoreboard from {Url}", url)
                 return Unchecked.defaultof<EspnNascarScoreboardResponse>
         }
 
@@ -78,7 +79,7 @@ type EspnIndyCarService
                                 if not (isNull (box comp)) then
                                     competitors.Add(comp)
                             with
-                            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: resolving IndyCar competitor ref")
+                            | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
                             | ex ->
                                 logger.LogWarning(ex, "Failed to resolve competitor ref: {Url}", resolvedUrl)
                     | false, _ ->
@@ -90,7 +91,7 @@ type EspnIndyCarService
                 result <- { Count = competitors.Count; Items = competitors }
                 return result
             with
-            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: ESPN core IndyCar competitors fetch for event {EventId}", eventId); return Unchecked.defaultof<EspnCoreCompetitorsResponse>
+            | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
                 logger.LogWarning(ex, "Failed to fetch ESPN core IndyCar competitors for event {EventId} (falling back to scoreboard data)", eventId)
                 return Unchecked.defaultof<EspnCoreCompetitorsResponse>

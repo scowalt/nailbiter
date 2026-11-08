@@ -79,7 +79,7 @@ type KalshiF1OddsService(httpClient: System.Net.Http.HttpClient, logger: ILogger
                     logger.LogDebug("Fetched {Count} F1 markets from Kalshi", markets.Count)
                     return markets
                 with
-                | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: Kalshi F1 markets fetch"); return ResizeArray<KalshiMarket>()
+                | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
                 | ex ->
                     logger.LogWarning(ex, "Failed to fetch F1 markets from Kalshi")
                     return ResizeArray<KalshiMarket>()

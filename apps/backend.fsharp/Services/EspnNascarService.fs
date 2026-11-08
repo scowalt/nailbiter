@@ -4,6 +4,7 @@ open System
 open System.Text.Json
 open System.Threading
 open Backend.FSharp
+open backend.Services
 open backend.Services.Espn
 open Microsoft.Extensions.Logging
 
@@ -32,9 +33,9 @@ type EspnNascarService
                 let! json = response.Content.ReadAsStringAsync(ct)
                 return JsonSerializer.Deserialize<EspnNascarScoreboardResponse>(json, HttpHelpers.jsonOptions)
             with
-            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: ESPN NASCAR scoreboard fetch"); return Unchecked.defaultof<EspnNascarScoreboardResponse>
+            | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
-                logger.LogError(ex, "Failed to fetch ESPN NASCAR scoreboard from {Url}", url)
+                logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch ESPN NASCAR scoreboard from {Url}", url)
                 return Unchecked.defaultof<EspnNascarScoreboardResponse>
         }
 
@@ -61,7 +62,7 @@ type EspnNascarService
                 let! json = response.Content.ReadAsStringAsync(ct)
                 return JsonSerializer.Deserialize<EspnCoreCompetitorsResponse>(json, HttpHelpers.jsonOptions)
             with
-            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: ESPN core NASCAR competitors fetch for event {EventId}", eventId); return Unchecked.defaultof<EspnCoreCompetitorsResponse>
+            | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
                 logger.LogWarning(ex, "Failed to fetch ESPN core NASCAR competitors for event {EventId}", eventId)
                 return Unchecked.defaultof<EspnCoreCompetitorsResponse>

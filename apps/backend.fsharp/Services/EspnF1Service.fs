@@ -4,6 +4,7 @@ open System
 open System.Text.Json
 open System.Threading
 open Backend.FSharp
+open backend.Services
 open backend.Services.Espn
 open backend.Services.EspnNascar
 open Microsoft.Extensions.Logging
@@ -33,9 +34,9 @@ type EspnF1Service
                 let! json = response.Content.ReadAsStringAsync(ct)
                 return JsonSerializer.Deserialize<EspnNascarScoreboardResponse>(json, HttpHelpers.jsonOptions)
             with
-            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: ESPN F1 scoreboard fetch"); return Unchecked.defaultof<EspnNascarScoreboardResponse>
+            | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
-                logger.LogError(ex, "Failed to fetch ESPN F1 scoreboard from {Url}", url)
+                logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch ESPN F1 scoreboard from {Url}", url)
                 return Unchecked.defaultof<EspnNascarScoreboardResponse>
         }
 
@@ -76,6 +77,7 @@ type EspnF1Service
                         competitionId <- parts.[idx + 1].Split('?').[0]
                     | _ -> ()
             with
+            | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
             | ex -> logger.LogWarning(ex, "Could not resolve F1 competition ID for event {EventId}, using event ID", eventId)
 
             let listUrl = $"https://sports.core.api.espn.com/v2/sports/racing/leagues/f1/events/{eventId}/competitions/{competitionId}/competitors?limit=50"
@@ -102,7 +104,7 @@ type EspnF1Service
                                 if not (isNull (box comp)) then
                                     competitors.Add(comp)
                             with
-                            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: resolving F1 competitor ref")
+                            | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
                             | ex ->
                                 logger.LogWarning(ex, "Failed to resolve competitor ref: {Url}", resolvedUrl)
                     | false, _ ->
@@ -114,7 +116,7 @@ type EspnF1Service
                 result <- { Count = competitors.Count; Items = competitors }
                 return result
             with
-            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: ESPN core F1 competitors fetch for event {EventId}", eventId); return Unchecked.defaultof<EspnCoreCompetitorsResponse>
+            | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
                 logger.LogWarning(ex, "Failed to fetch ESPN core F1 competitors for event {EventId} (falling back to scoreboard data)", eventId)
                 return Unchecked.defaultof<EspnCoreCompetitorsResponse>
