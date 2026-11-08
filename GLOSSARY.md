@@ -181,4 +181,7 @@ A team's relative strength compared with other teams in its league. A power rank
 ESPN's numerical estimate of a football team's strength, expressed as its expected point margin against an average opponent on a neutral field. FPI is not a poll position or a playoff seed.
 
 **AP Top 25 ranking**:
-A team's position in the Associated Press's college football poll. An unranked team is outside the poll's Top 25, not necessarily a team with unknown strength.
+A team's position in the Associated Press's college football poll. An unranked team is outside the poll's Top 25, not necessarily a team with unknown strength. Nailbiter shows it until the committee ranking is published.
+
+**College Football Playoff committee ranking (CFP ranking)**:
+A team's position in the Top 25 published by the College Football Playoff selection committee, starting in the first week of November. After its first publication in a season, it replaces the AP Top 25 ranking in Nailbiter's rank badges. It is a ranking of teams, not a playoff qualification probability.
