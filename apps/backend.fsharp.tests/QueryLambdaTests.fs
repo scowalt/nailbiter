@@ -95,10 +95,27 @@ let private convertLambda (converter: MethodInfo) (quotation: Expr) =
     with :? TargetInvocationException as ex ->
         NotReplayed $"QuotationToLambdaExpression failed: {ex.InnerException.Message}"
 
+type private Hidden =
+    | ReadsOuterParameters of names: string list
+    | CannotBuild of reason: string
+
 type private TreeScan =
     { Blocks: int
       Expanded: int
-      Hidden: string list }
+      Hidden: Hidden list }
+
+let private describe hidden =
+    match hidden with
+    | ReadsOuterParameters names ->
+        $"""the inner lambda reads {String.concat ", " names} from the enclosing lambda"""
+    | CannotBuild reason -> reason
+
+let private reasonLimit = 120
+
+let private summarize (text: string) =
+    let line = String.Join(" ", text.Split([| ' '; '\r'; '\n'; '\t' |], StringSplitOptions.RemoveEmptyEntries))
+
+    if line.Length <= reasonLimit then line else line.Substring(0, reasonLimit) + "..."
 
 let private buildsATreeWhenRun (node: Expression) =
     let holdsATree =
@@ -110,38 +127,40 @@ let private buildsATreeWhenRun (node: Expression) =
     || node.NodeType <> ExpressionType.Quote
        && (typeof<Expression>.IsAssignableFrom node.Type || typeof<Expr>.IsAssignableFrom node.Type)
 
-let private readsAParameter (expression: Expression) =
-    let mutable reads = false
+let private parametersRead (expression: Expression) =
+    let names = ResizeArray<string>()
 
     let visitor =
         { new ExpressionVisitor() with
             override _.VisitParameter node =
-                reads <- true
+                names.Add node.Name
                 node }
 
     visitor.Visit expression |> ignore
-    reads
+    names |> Seq.distinct |> List.ofSeq
 
 let private expand (node: Expression) =
     match node with
     | :? MethodCallExpression as call when
         call.Method.DeclaringType.FullName = "Microsoft.FSharp.Linq.RuntimeHelpers.LeafExpressionConverter"
         && call.Method.Name.StartsWith "QuotationTo"
-        && not (readsAParameter call)
         ->
-        try
-            match Expression.Lambda<Func<obj>>(Expression.Convert(call, typeof<obj>)).Compile().Invoke() with
-            | :? Expression as tree -> Ok tree
-            | other -> Error $"{call.Method.Name} returned {other}"
-        with ex ->
-            Error $"{call.Method.Name} failed: {ex.Message}"
+        match parametersRead call with
+        | [] ->
+            try
+                match Expression.Lambda<Func<obj>>(Expression.Convert(call, typeof<obj>)).Compile().Invoke() with
+                | :? Expression as tree -> Ok tree
+                | other -> Error(CannotBuild(summarize $"{call.Method.Name} returned {other}"))
+            with ex ->
+                Error(CannotBuild(summarize $"{call.Method.Name} failed: {ex.Message}"))
+        | names -> Error(ReadsOuterParameters names)
     | :? ConstantExpression as constant when (constant.Value :? Expression) -> Ok(constant.Value :?> Expression)
-    | _ -> Error $"a {node.NodeType} node of type {node.Type.Name}: {node}"
+    | _ -> Error(CannotBuild(summarize $"a {node.NodeType} node of type {node.Type.Name}: {node}"))
 
 let rec private scanTree (expression: Expression) =
     let mutable blocks = 0
     let mutable expanded = 0
-    let hidden = ResizeArray<string>()
+    let hidden = ResizeArray<Hidden>()
 
     let visitor =
         { new ExpressionVisitor() with
@@ -391,43 +410,59 @@ let private queryExpressionHelp =
     "query { } expressions are not checked by QueryLambdaTests. Write EF queries as method chains "
     + "(.Where(fun ...)), or extend QueryLambdaTests.fs to translate query expressions."
 
+let private correlatedHelp =
+    "These query lambdas hold an inner lambda that reads a parameter of the outer lambda, such as "
+    + "db.OddsSnapshots.Any(fun o -> o.GameId = g.Id), so QueryLambdaTests cannot build it. EF Core "
+    + "rejects that form as well, with an InvalidCastException. Query through a collection navigation on "
+    + "the outer row, such as g.OddsSnapshots.Any(fun o -> ...), or join the tables."
+
 let private hiddenTreeHelp =
     "These query lambdas contain an expression tree that EF Core builds only when the query runs, and "
     + "QueryLambdaTests cannot build it, so it cannot tell whether that tree has a block. Write the inner "
     + "query as a lambda literal inside the outer one, or extend the expansion in QueryLambdaTests.fs."
 
 let private problems sites =
-    let report help (found: QuotationSite list) =
+    let report help (found: (QuotationSite * string list) list) =
         if found.IsEmpty then
             None
         else
             found
-            |> List.map (fun site ->
-                let reasons =
-                    match site.Replay with
-                    | NotReplayed reason -> [ reason ]
-                    | Lambda _
-                    | QueryExpression -> (treeScan site).Hidden
-
+            |> List.map (fun (site, reasons) ->
                 match reasons with
                 | [] -> $"  {site.Location} in {site.Method}"
                 | _ -> $"""  {site.Location} in {site.Method} ({String.concat "; " reasons})""")
             |> String.concat "\n"
             |> fun lines -> Some $"{help} Each line number is where the query statement starts.\n{lines}"
 
+    let withoutReasons = List.map (fun site -> site, [])
+
     let notReplayed inGenericCode =
         sites
-        |> List.filter (fun site ->
+        |> List.choose (fun site ->
             match site.Replay with
-            | NotReplayed _ -> site.InGenericCode = inGenericCode
+            | NotReplayed reason when site.InGenericCode = inGenericCode -> Some(site, [ reason ])
+            | NotReplayed _
             | Lambda _
-            | QueryExpression -> false)
+            | QueryExpression -> None)
 
-    [ report queryExpressionHelp (sites |> List.filter (fun site -> site.Replay = QueryExpression))
+    let hiddenBy keep =
+        sites
+        |> List.choose (fun site ->
+            match (treeScan site).Hidden |> List.filter keep |> List.map describe with
+            | [] -> None
+            | reasons -> Some(site, reasons))
+
+    let readsOuterParameters hidden =
+        match hidden with
+        | ReadsOuterParameters _ -> true
+        | CannotBuild _ -> false
+
+    [ report queryExpressionHelp (sites |> List.filter (fun site -> site.Replay = QueryExpression) |> withoutReasons)
       report genericHelp (notReplayed true)
       report unreplayedHelp (notReplayed false)
-      report hiddenTreeHelp (sites |> List.filter (fun site -> not (treeScan site).Hidden.IsEmpty))
-      report blockedHelp (sites |> List.filter (fun site -> blocksIn site > 0)) ]
+      report correlatedHelp (hiddenBy readsOuterParameters)
+      report hiddenTreeHelp (hiddenBy (readsOuterParameters >> not))
+      report blockedHelp (sites |> List.filter (fun site -> blocksIn site > 0) |> withoutReasons) ]
     |> List.choose id
 
 [<Fact>]
@@ -581,3 +616,8 @@ let ``the scan reports each refused subquery on one bounded line`` () =
         let line = Assert.Single(reasonLines (Assert.Single(problems (controlSites name))))
         Assert.True(line.Length <= 200, line)
         Assert.DoesNotContain("NewDelegate", line)
+
+[<Fact>]
+let ``a refusal reason collapses to one line and is cut at the limit`` () =
+    Assert.Equal("a b c", summarize "a\n   b\r\n\tc")
+    Assert.Equal(reasonLimit + 3, (summarize (String('x', 500))).Length)
