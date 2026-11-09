@@ -435,7 +435,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
         return $"<html><body><table>{rows}</table></body></html>";
     }
 
-    private static string KalshiFinalEvidence(string sport, string team, int season, double probability, DateTime observedAt)
+    internal static string KalshiFinalEvidence(string sport, string team, int season, double probability, DateTime observedAt)
     {
         var ticker = $"KXNHLPLAYOFF-{season % 100:D2}";
         var evidence = new PlayoffQuoteEvidence

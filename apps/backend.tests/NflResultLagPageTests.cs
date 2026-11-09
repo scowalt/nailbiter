@@ -66,7 +66,7 @@ public sealed partial class NflPlayoffPageTests
             await lifecycle.CaptureAsync();
             captured = (await lifecycle.ResolveAsync(game.Id)).Total;
         }
-        Assert.Equal(58, Math.Round(captured!.Value));
+        Assert.Equal(65, Math.Round(captured!.Value));
 
         clock.Now = new DateTimeOffset(2026, 10, 18, 20, 30, 0, TimeSpan.Zero);
         source.ServerDate = clock.Now.UtcDateTime;
@@ -87,7 +87,7 @@ public sealed partial class NflPlayoffPageTests
         using var doc = await new HtmlParser().ParseDocumentAsync(await browser.GetStringAsync("/nfl?week=7&season=2026&type=2"));
         var card = doc.QuerySelector($"a[href='/game/{game.Id}']")!;
         Assert.DoesNotContain("Hype unavailable", card.TextContent);
-        Assert.Matches(@"Hype\s*58", card.TextContent);
+        Assert.Matches(@"Hype\s*65", card.TextContent);
     }
 
     private static ProCompetitionEvidenceService.Schedule[] Rewrite(ProCompetitionEvidenceService.Schedule[] schedules, string id, Action<JsonNode> change) =>

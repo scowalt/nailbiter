@@ -79,6 +79,8 @@ public sealed class NflPlayoffLeverageTests
         HomeOdds = new() { Reference = "https://www.playoffstatus.com/nfl/lionswhatif.html", PublishedAt = now, WinLower = swing, WinUpper = swing, LossLower = 0, LossUpper = 0 },
         AwayOdds = new() { Reference = "https://www.playoffstatus.com/nfl/packerswhatif.html", PublishedAt = now, WinLower = swing, WinUpper = swing, LossLower = 0, LossUpper = 0 }
     };
+    internal static NflSeedProbabilities Seeds(double[] win, double[] loss) =>
+        new([.. win.Select(p => new ProbabilityInterval(p, p))], [.. loss.Select(p => new ProbabilityInterval(p, p))]);
     private static ProHypeResult Score(Game game, ProGameEvidence context, ProQualification? home = null, ProQualification? away = null,
         DateTime? now = null, string[]? completed = null) =>
         ProHypePolicy.Calculate(game, context, Ranks(game), home ?? Q(), away ?? Q(), Odds(game), completed ?? [], now ?? Now);
@@ -117,8 +119,8 @@ public sealed class NflPlayoffLeverageTests
 
     [Theory]
     [InlineData("nflschedule.html", "e64c66689b238d79b74a26591ba67fdfb11b017a018fd08df2734dfe9aabd8f1")]
-    [InlineData("packerswhatif.html", "77cd9d54ef8ebd6500025bda0f2aff329e822c2b3b64228cee7537cbf0fcef1c")]
-    [InlineData("lionswhatif.html", "e44a3f9ce64d092591510abf01803508ebec28c28a41207f5c1ce04b45f758bf")]
+    [InlineData("packerswhatif.html", "8e24dae9ec70175b4bcfdd21ae59cfd947130ad6cb3072240e2a10fb370bd78b")]
+    [InlineData("lionswhatif.html", "49c2477af66f545091d5415df5018f126a8c013932f99ae331836290c770835c")]
     [InlineData("synthetic-espn-controls.csv", "88c68873e47b2a27a903290eef73ab6632467b207381f3cd1a351852bbfe1a40")]
     public void Independently_generated_fixtures_match_the_reviewed_byte_inventory(string file, string expected)
     {
@@ -137,9 +139,10 @@ public sealed class NflPlayoffLeverageTests
         Assert.Equal(.82, e.AwayOdds.WinLower!.Value, 8); Assert.Equal(.57, e.AwayOdds.LossLower!.Value, 8);
         Assert.Equal(3, handler.Requests.Count);
         var result = Score(game, context);
-        Assert.Equal(20, result.Stakes.Value!.Value, 8);
-        Assert.Equal(58, Math.Round(result.Total!.Value));
+        Assert.Equal(34.4, result.Stakes.Value!.Value, 8);
+        Assert.Equal(65, Math.Round(result.Total!.Value));
         Assert.Contains("PlayoffStatus model", result.Stakes.Explanation);
+        Assert.Contains("playoff-position Stakes from qualification, division title and No. 1 seed scenarios", result.Stakes.Explanation);
         Assert.Null(context.HomeProgress.SeedingUnresolved); Assert.Null(context.AwayProgress.SeedingUnresolved);
         Assert.Equal(result.Stakes.Value, Score(game, context, Q(.01), Q(.99)).Stakes.Value);
         (e.HomeOdds, e.AwayOdds) = (e.AwayOdds, e.HomeOdds);
@@ -157,15 +160,15 @@ public sealed class NflPlayoffLeverageTests
     [InlineData(null)]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Regular_season_NFL_stakes_use_only_qualification_even_at_the_last_game(bool? seeding)
+    public async Task Regular_season_NFL_stakes_ignore_the_seeding_unresolved_flag_even_at_the_last_game(bool? seeding)
     {
         var game = Game(); var context = await Captured(game);
         context.HomeProgress.Completed = context.AwayProgress.Completed = 16;
         context.HomeProgress.SeedingUnresolved = context.AwayProgress.SeedingUnresolved = seeding;
         var result = Score(game, context);
         Assert.NotNull(result.Stakes.Value);
-        Assert.Equal(20, result.Stakes.Value.Value, 8);
-        Assert.Equal(58.3933971774, result.Total!.Value, 10);
+        Assert.Equal(34.4, result.Stakes.Value.Value, 8);
+        Assert.Equal(64.8733971774, result.Total!.Value, 10);
     }
 
     [Theory]
@@ -208,8 +211,8 @@ public sealed class NflPlayoffLeverageTests
         Assert.NotNull(evidence.HomeOdds); Assert.NotNull(evidence.AwayOdds);
         var context = Context(game); context.NflPlayoffLeverage = evidence;
         var result = Score(game, context);
-        Assert.Equal(20, result.Stakes.Value!.Value, 8);
-        Assert.Equal(58, Math.Round(result.Total!.Value));
+        Assert.Equal(34.4, result.Stakes.Value!.Value, 8);
+        Assert.Equal(65, Math.Round(result.Total!.Value));
     }
 
     [Theory]
@@ -248,7 +251,7 @@ public sealed class NflPlayoffLeverageTests
         foreach (var played in new[] { 0, 5, 10, 16 })
         {
             context.HomeProgress.Completed = context.AwayProgress.Completed = played;
-            Assert.Equal(20, Score(game, context).Stakes.Value!.Value, 8);
+            Assert.Equal(34.4, Score(game, context).Stakes.Value!.Value, 8);
         }
         foreach (var invalid in new int?[] { null, -1, 17, 18 })
         {
@@ -257,11 +260,11 @@ public sealed class NflPlayoffLeverageTests
         }
         context.HomeProgress.Completed = context.AwayProgress.Completed = 16;
         context.HomeProgress.SeedingUnresolved = context.AwayProgress.SeedingUnresolved = true;
-        Assert.Equal(20, Score(game, context).Stakes.Value!.Value, 8);
+        Assert.Equal(34.4, Score(game, context).Stakes.Value!.Value, 8);
         context.HomeProgress.SeedingUnresolved = null;
-        Assert.Equal(20, Score(game, context).Stakes.Value!.Value, 8);
+        Assert.Equal(34.4, Score(game, context).Stakes.Value!.Value, 8);
         context.AwayProgress.SeedingUnresolved = null;
-        Assert.Equal(20, Score(game, context).Stakes.Value!.Value, 8);
+        Assert.Equal(34.4, Score(game, context).Stakes.Value!.Value, 8);
     }
 
     [Theory]
@@ -404,8 +407,8 @@ public sealed class NflPlayoffLeverageTests
         Assert.True(supported.ScheduleVerified, supported.Reason);
         Assert.NotNull(supported.HomeOdds); Assert.NotNull(supported.AwayOdds);
         var context = Context(game); context.NflPlayoffLeverage = supported;
-        Assert.Equal(20, Score(game, context).Stakes.Value!.Value, 8);
-        Assert.Equal(58, Math.Round(Score(game, context).Total!.Value));
+        Assert.Equal(34.4, Score(game, context).Stakes.Value!.Value, 8);
+        Assert.Equal(65, Math.Round(Score(game, context).Total!.Value));
         var blocked = results[affected.Id]!;
         Assert.False(blocked.ScheduleVerified);
         Assert.Null(blocked.HomeOdds); Assert.Null(blocked.AwayOdds);
@@ -510,7 +513,7 @@ public sealed class NflPlayoffLeverageTests
     {
         var game = Game(); var context = await Captured(game);
         context.NflPlayoffLeverage!.HomeOdds = null;
-        Assert.Equal(20, Score(game, context, Q(0, true)).Stakes.Value!.Value, 8);
+        Assert.Equal(34.4, Score(game, context, Q(0, true)).Stakes.Value!.Value, 8);
         context.NflPlayoffLeverage = null;
         Assert.Equal(0, Score(game, context, Q(0, true), Q(0, true)).Stakes.Value);
         context.HomeProgress.SeedingUnresolved = true;
@@ -530,5 +533,82 @@ public sealed class NflPlayoffLeverageTests
         Assert.Equal(100, Score(game, context).Stakes.Value);
         game.Status = "in_progress";
         Assert.Null(Score(game, context).Total);
+    }
+
+    [Fact]
+    public async Task A_near_locked_team_with_a_large_seeding_swing_gets_playoff_position_stakes()
+    {
+        var game = Game(); var context = await Captured(game);
+        var evidence = context.NflPlayoffLeverage!;
+        evidence.HomeOdds = evidence.HomeOdds! with { WinLower = .5, WinUpper = .5, LossLower = .5, LossUpper = .5, Seeds = null };
+        evidence.AwayOdds = evidence.AwayOdds! with { WinLower = .97, WinUpper = .97, LossLower = .94, LossUpper = .94,
+            Seeds = Seeds([.40, .25, .15, .10, .04, .02, .01], [.10, .15, .20, .15, .20, .10, .04]) };
+        Assert.Equal(26.4, Score(game, context).Stakes.Value!.Value, 8);
+        evidence.AwayOdds = evidence.AwayOdds with { Seeds = null };
+        Assert.Equal(2.4, Score(game, context).Stakes.Value!.Value, 8);
+    }
+
+    [Theory]
+    [InlineData("<td>&lt;1%</td>", 34.4)]
+    [InlineData("<td>1%</td>", 34.4)]
+    [InlineData("<td>0%</td>", 35.2)]
+    public async Task Threshold_seed_cells_count_at_their_conservative_bound_and_stay_available(string lossTopSeed, double expected)
+    {
+        var game = Game();
+        var context = await Captured(game, new Handler { Transform = (path, body) =>
+            path.EndsWith("packerswhatif.html") ? body.Replace("<td>&lt;1%</td>", lossTopSeed) : body });
+        var result = Score(game, context);
+        Assert.Equal(expected, result.Stakes.Value!.Value, 8);
+        Assert.DoesNotContain("seed scenarios unavailable", result.Stakes.Explanation);
+    }
+
+    [Theory]
+    [InlineData("<td>&lt;1%</td>", "<td>~1%</td>")]
+    [InlineData("<td>&lt;1%</td>", "<td></td>")]
+    [InlineData("<td>9%</td>", "<td>60%</td>")]
+    [InlineData("<td>16%</td>", "<td>0%</td>")]
+    public async Task Unusable_seed_cells_keep_the_forecast_and_fall_back_to_the_qualification_swing(string cell, string replacement)
+    {
+        var game = Game();
+        var context = await Captured(game, new Handler { Transform = (path, body) =>
+            path.EndsWith("packerswhatif.html") ? body.Replace(cell, replacement) : body });
+        var away = context.NflPlayoffLeverage!.AwayOdds!;
+        Assert.Null(away.Seeds);
+        Assert.Equal(.82, away.WinLower!.Value, 8);
+        var result = Score(game, context);
+        Assert.Equal(28.8, result.Stakes.Value!.Value, 8);
+        Assert.Contains("qualification-only regular-season Stakes; seed scenarios unavailable", result.Stakes.Explanation);
+    }
+
+    [Fact]
+    public async Task A_clinched_team_with_a_forecast_keeps_its_seeding_stakes_but_an_eliminated_team_does_not()
+    {
+        var game = Game(); var context = await Captured(game);
+        var clinched = Score(game, context, Q(1, true), Q(0, true));
+        Assert.Equal(12.8, clinched.Stakes.Value!.Value, 8);
+        Assert.Contains("Confirmed qualified; playoff-position Stakes", clinched.Stakes.Explanation);
+        Assert.Equal(0, Score(game, context, Q(0, true), Q(0, true)).Stakes.Value);
+        context.NflPlayoffLeverage!.HomeOdds = context.NflPlayoffLeverage.HomeOdds! with { Seeds = null };
+        Assert.Equal(0, Score(game, context, Q(1, true), Q(0, true)).Stakes.Value);
+        context.NflPlayoffLeverage.HomeOdds = null;
+        Assert.Equal(0, Score(game, context, Q(1, true), Q(0, true)).Stakes.Value);
+    }
+
+    [Fact]
+    public async Task Legacy_forecasts_without_seed_cells_keep_their_stored_shape_and_score_on_qualification()
+    {
+        var game = Game(); var context = await Captured(game);
+        var e = context.NflPlayoffLeverage!;
+        e.HomeOdds = e.HomeOdds! with { Seeds = null };
+        e.AwayOdds = e.AwayOdds! with { Seeds = null };
+        var legacy = JsonSerializer.Serialize(context);
+        Assert.Equal(["Reference", "PublishedAt", "WinLower", "WinUpper", "LossLower", "LossUpper"],
+            System.Text.Json.Nodes.JsonNode.Parse(legacy)!["NflPlayoffLeverage"]!["HomeOdds"]!.AsObject().Select(p => p.Key));
+        var parsed = ProGameEvidence.Parse(legacy)!;
+        Assert.Equal(legacy, JsonSerializer.Serialize(parsed));
+        var result = Score(game, parsed);
+        Assert.Equal(20, result.Stakes.Value!.Value, 8);
+        Assert.Equal(58, Math.Round(result.Total!.Value));
+        Assert.Contains("seed scenarios unavailable", result.Stakes.Explanation);
     }
 }

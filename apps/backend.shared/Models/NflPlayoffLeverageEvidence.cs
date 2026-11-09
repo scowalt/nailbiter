@@ -42,4 +42,10 @@ public sealed record NflConditionalPlayoffOdds
     public double? WinUpper { get; set; }
     public double? LossLower { get; set; }
     public double? LossUpper { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public NflSeedProbabilities? Seeds { get; set; }
 }
+
+public sealed record NflSeedProbabilities(ProbabilityInterval[] Win, ProbabilityInterval[] Loss);
+
+public sealed record ProbabilityInterval(double Lower, double Upper);

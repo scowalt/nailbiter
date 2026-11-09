@@ -2,6 +2,9 @@ using backend.Models;
 
 namespace backend.Scoring;
 
+public sealed record NflPlayoffPosition(ProbabilityInterval DivisionTitle, ProbabilityInterval TopSeed);
+public sealed record NflPlayoffPositions(NflPlayoffPosition Win, NflPlayoffPosition Loss);
+
 public static class NflPlayoffLeveragePolicy
 {
     public const string Source = "playoffstatus_nfl_conditional_v1";
@@ -9,6 +12,7 @@ public static class NflPlayoffLeveragePolicy
     public static readonly TimeSpan PublicationMaxAge = TimeSpan.FromDays(7);
     public static readonly TimeSpan MaxKickoffDifference = TimeSpan.FromMinutes(30);
     private static readonly TimeZoneInfo Eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+    private const double SeedAndNoPlayoffCellRounding = 8 * .005;
 
     public static bool ValidCorroboratedKickoff(Game game, NflCorroboratedKickoff? match) => match is not null &&
         !string.IsNullOrWhiteSpace(game.Id) && game.WeekNumber is >= 1 and <= 18 && match.Week == game.WeekNumber &&
@@ -56,7 +60,34 @@ public static class NflPlayoffLeveragePolicy
         reference.Scheme == "https" && reference.Host == "www.playoffstatus.com" && reference.Query == "" && reference.Fragment == "" &&
         reference.AbsolutePath.StartsWith("/nfl/", StringComparison.Ordinal) && reference.AbsolutePath.EndsWith("whatif.html", StringComparison.Ordinal);
 
-    public static (double Lower, double Upper) Stakes(NflConditionalPlayoffOdds odds) =>
-        (80 * Math.Max(0, odds.WinLower!.Value - odds.LossUpper!.Value),
-         80 * Math.Max(0, odds.WinUpper!.Value - odds.LossLower!.Value));
+    public static NflPlayoffPositions? Positions(NflConditionalPlayoffOdds? odds)
+    {
+        if (odds?.Seeds is not { } seeds || !Valid(odds)) return null;
+        var win = Position(seeds.Win, odds.WinLower!.Value, odds.WinUpper!.Value);
+        var loss = Position(seeds.Loss, odds.LossLower!.Value, odds.LossUpper!.Value);
+        return win is null || loss is null ? null : new(win, loss);
+    }
+
+    private static NflPlayoffPosition? Position(ProbabilityInterval[]? seeds, double playoffsLower, double playoffsUpper)
+    {
+        if (seeds is not { Length: 7 } || seeds.Any(s => s is null || !ProHypePolicy.Probability(s.Lower) ||
+            !ProHypePolicy.Probability(s.Upper) || s.Lower > s.Upper)) return null;
+        if (seeds.Sum(s => s.Lower) > playoffsUpper + SeedAndNoPlayoffCellRounding ||
+            seeds.Sum(s => s.Upper) < playoffsLower - SeedAndNoPlayoffCellRounding) return null;
+        var top = seeds[..4];
+        return new(new(Math.Min(1, top.Sum(s => s.Lower)), Math.Min(1, top.Sum(s => s.Upper))), seeds[0]);
+    }
+
+    public static (double Lower, double Upper) Stakes(NflConditionalPlayoffOdds odds, bool clinched)
+    {
+        var (lower, upper) = clinched ? (0d, 0d) :
+            (80 * Math.Max(0, odds.WinLower!.Value - odds.LossUpper!.Value),
+             80 * Math.Max(0, odds.WinUpper!.Value - odds.LossLower!.Value));
+        var seeding = Positions(odds) is { } p
+            ? 80 * (.5 * Proven(p.Win.DivisionTitle, p.Loss.DivisionTitle) + .5 * Proven(p.Win.TopSeed, p.Loss.TopSeed))
+            : 0;
+        return (Math.Min(100, lower + seeding), Math.Min(100, upper + seeding));
+    }
+
+    private static double Proven(ProbabilityInterval win, ProbabilityInterval loss) => Math.Max(0, win.Lower - loss.Upper);
 }

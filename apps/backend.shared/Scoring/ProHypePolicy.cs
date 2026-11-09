@@ -171,14 +171,15 @@ public static class ProHypePolicy
                 var current = NflPlayoffLeveragePolicy.Select(game, context, now, completed);
                 var original = evidence is null ? null : NflPlayoffLeveragePolicy.Select(game,
                     new ProGameEvidence { NflPlayoffLeverage = evidence, CompletedGameIds = evidence.CompletedGameIds }, evidence.ObservedAt);
-                foreach (var (team, final, usable, valid) in new[] {
-                    (game.HomeTeamAbbreviation, Final(home), current?.HomeOdds, original?.HomeOdds),
-                    (game.AwayTeamAbbreviation, Final(away), current?.AwayOdds, original?.AwayOdds) })
+                foreach (var (team, qualification, scored, usable, valid) in new[] {
+                    (game.HomeTeamAbbreviation, home, result.NflPlayoffLeverage?.HomeOdds, current?.HomeOdds, original?.HomeOdds),
+                    (game.AwayTeamAbbreviation, away, result.NflPlayoffLeverage?.AwayOdds, current?.AwayOdds, original?.AwayOdds) })
                 {
                     var reference = ProEvidenceReference.Conditional(evidence, team, context.ObservedAt,
                         usable is not null ? ProEvidenceState.Accepted : valid is not null ? ProEvidenceState.Gap : ProEvidenceState.Rejected);
                     observations.Add(reference);
-                    if (result.Stakes.Value.HasValue && !final) support.Add(reference);
+                    if (result.Stakes.Value.HasValue && (!Final(qualification)
+                        || qualification.Probability == 1 && NflPlayoffLeveragePolicy.Positions(scored) is not null)) support.Add(reference);
                 }
             }
         }
@@ -268,6 +269,11 @@ public static class ProHypePolicy
                 var note = $"{team}: {source} observed {qualification.ObservedAt?.ToString("O") ?? "never"}. ";
                 var trustedFinal = qualification.IsFinal && qualification.EvidenceKind == ProQualificationEvidenceKind.Kalshi &&
                     qualification.Probability is 0 or 1 && qualification.ObservedAt is DateTime finalAt && finalAt <= now;
+                if (trustedFinal && qualification.Probability == 1 && game.Sport == "nfl" && NflPlayoffLeveragePolicy.Positions(conditional) is not null)
+                {
+                    var (seedingLower, seedingUpper) = NflPlayoffLeveragePolicy.Stakes(conditional!, clinched: true);
+                    return new(seedingLower, seedingUpper, note + "Confirmed qualified; playoff-position Stakes from PlayoffStatus division title and No. 1 seed scenarios");
+                }
                 if (trustedFinal)
                     return new(0, 0, note + (qualification.Probability == 0 ? "Confirmed eliminated" : "Confirmed qualified")
                         + "; qualification-only regular-season Stakes");
@@ -289,13 +295,15 @@ public static class ProHypePolicy
                     return new(null, null, note + "Verified season schedule/completed games unavailable or contradictory");
                 if (!progress.ScheduleVerified)
                     return new(null, null, note + "Consistent team schedule not yet verified; awaiting competition refresh");
-                var (qualificationLower, qualificationUpper) = game.Sport == "nfl"
-                    ? NflPlayoffLeveragePolicy.Stakes(conditional!)
-                    : (80 * PlayoffSwingEstimate.Swing(qualification.Probability!.Value, n - g),
-                       80 * PlayoffSwingEstimate.Swing(qualification.Probability.Value, n - g));
-                return new(qualificationLower, qualificationUpper,
-                    note + $"{g}/{n} completed; qualification-only regular-season Stakes"
-                    + (game.Sport == "nfl" ? "" : " from estimated playoff swing"));
+                if (game.Sport == "nfl")
+                {
+                    var (lower, upper) = NflPlayoffLeveragePolicy.Stakes(conditional!, clinched: false);
+                    return new(lower, upper, note + $"{g}/{n} completed; " + (NflPlayoffLeveragePolicy.Positions(conditional) is null
+                        ? "qualification-only regular-season Stakes; seed scenarios unavailable"
+                        : "playoff-position Stakes from qualification, division title and No. 1 seed scenarios"));
+                }
+                var estimate = 80 * PlayoffSwingEstimate.Swing(qualification.Probability!.Value, n - g);
+                return new(estimate, estimate, note + $"{g}/{n} completed; qualification-only regular-season Stakes from estimated playoff swing");
             }
             var h = Team(home, evidence.HomeProgress, game.HomeTeamAbbreviation, nflLeverage?.HomeOdds);
             var a = Team(away, evidence.AwayProgress, game.AwayTeamAbbreviation, nflLeverage?.AwayOdds);

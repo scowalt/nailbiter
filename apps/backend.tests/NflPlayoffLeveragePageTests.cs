@@ -41,8 +41,8 @@ public sealed partial class NflPlayoffPageTests
             ? body.Replace(">18%<", ">41%<").Replace(">32%<", ">42%<")
             : path.EndsWith("lionswhatif.html") || path.EndsWith("forty-ninerswhatif.html")
                 ? body.Replace(">26%<", ">44%<").Replace(">36%<", ">45%<") : body;
-        var expectedStakes = smallSwing ? 1.6 : 20;
-        var expectedHype = smallSwing ? 50 : 58;
+        var expectedStakes = smallSwing ? 1.6 : 34.4;
+        var expectedHype = smallSwing ? 50 : 65;
         var schedules = NflPlayoffLeverageTests.Schedules(score => decimalScores ? score + ".0" : score);
         if (corroboratedKickoff)
         {
@@ -150,14 +150,15 @@ public sealed partial class NflPlayoffPageTests
             using var doc = await new HtmlParser().ParseDocumentAsync(rendered);
             if (path.StartsWith("/game/"))
             {
-                Assert.Contains(smallSwing ? "Stakes2" : "Stakes20", string.Concat(doc.QuerySelector("#detail-hype")!.TextContent.Where(c => !char.IsWhiteSpace(c))));
+                Assert.Contains(smallSwing ? "Stakes2" : "Stakes34", string.Concat(doc.QuerySelector("#detail-hype")!.TextContent.Where(c => !char.IsWhiteSpace(c))));
                 var forecast = doc.QuerySelector("#nfl-playoff-leverage")!;
                 Assert.Contains("GB", forecast.TextContent); Assert.Contains(game.HomeTeamAbbreviation, forecast.TextContent);
                 Assert.Contains(smallSwing ? "59%" : "82%", forecast.TextContent); Assert.Contains("57%", forecast.TextContent);
                 Assert.Contains(smallSwing ? "56%" : "74%", forecast.TextContent); Assert.Contains("54%", forecast.TextContent);
                 Assert.Contains("Model estimates from", forecast.TextContent);
                 Assert.Contains("PlayoffStatus", forecast.TextContent);
-                Assert.Contains("Stakes uses the larger playoff qualification swing.", forecast.TextContent);
+                Assert.Contains(smallSwing ? "Stakes uses the larger playoff qualification swing."
+                    : "Stakes uses the larger swing in playoff position: making the playoffs, the division title and the No. 1 seed.", forecast.TextContent);
                 Assert.DoesNotContain("seeding", forecast.TextContent, StringComparison.OrdinalIgnoreCase);
                 var outlook = doc.QuerySelector("#detail-comparison")!.Children.Single(row =>
                     row.Children.Length == 3 && row.Children[1].TextContent == "Playoff outlook");
@@ -167,6 +168,12 @@ public sealed partial class NflPlayoffPageTests
                 Assert.Contains(smallSwing ? "59%" : "82%", rows[1].Children[0].TextContent);
                 Assert.Contains(game.HomeTeamAbbreviation, rows[0].Children[2].TextContent);
                 Assert.Contains(smallSwing ? "56%" : "74%", rows[1].Children[2].TextContent);
+                if (smallSwing) Assert.Equal(3, rows.Length);
+                else
+                {
+                    Assert.Equal(["52% / 23–24%", "Division title", "54% / 30%"], rows[3].Children.Select(c => c.TextContent));
+                    Assert.Equal(["9% / <1%", "No. 1 seed", "12% / 4%"], rows[4].Children.Select(c => c.TextContent));
+                }
             }
             else
             {
