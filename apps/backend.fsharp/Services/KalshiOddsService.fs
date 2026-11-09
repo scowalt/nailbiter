@@ -1074,15 +1074,9 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                     match reversedResult with
                     | Some _ -> return reversedTicker
                     | None ->
-                        try
-                            let! markets = this.FetchMarketsAsync(sport, ct)
+                        let! markets = this.FetchMarketsAsync(sport, ct)
 
-                            match this.MatchGameMarkets(markets, kalshiHome, kalshiAway, easternDate) with
-                            | KalshiOddsServiceMappings.Matched(home, _) -> return home.Ticker
-                            | _ -> return null
-                        with
-                        | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: Kalshi market ticker search"); return null
-                        | ex ->
-                            logger.LogDebug(ex, "Failed to search for Kalshi market ticker")
-                            return null
+                        match this.MatchGameMarkets(markets, kalshiHome, kalshiAway, easternDate) with
+                        | KalshiOddsServiceMappings.Matched(home, _) -> return home.Ticker
+                        | _ -> return null
         }
