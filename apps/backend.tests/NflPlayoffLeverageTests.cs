@@ -117,8 +117,8 @@ public sealed class NflPlayoffLeverageTests
 
     [Theory]
     [InlineData("nflschedule.html", "e64c66689b238d79b74a26591ba67fdfb11b017a018fd08df2734dfe9aabd8f1")]
-    [InlineData("packerswhatif.html", "77cd9d54ef8ebd6500025bda0f2aff329e822c2b3b64228cee7537cbf0fcef1c")]
-    [InlineData("lionswhatif.html", "e44a3f9ce64d092591510abf01803508ebec28c28a41207f5c1ce04b45f758bf")]
+    [InlineData("packerswhatif.html", "8e24dae9ec70175b4bcfdd21ae59cfd947130ad6cb3072240e2a10fb370bd78b")]
+    [InlineData("lionswhatif.html", "49c2477af66f545091d5415df5018f126a8c013932f99ae331836290c770835c")]
     [InlineData("synthetic-espn-controls.csv", "88c68873e47b2a27a903290eef73ab6632467b207381f3cd1a351852bbfe1a40")]
     public void Independently_generated_fixtures_match_the_reviewed_byte_inventory(string file, string expected)
     {

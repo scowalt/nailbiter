@@ -354,14 +354,19 @@ def nfl_leverage():
     writer.writerow(['week', 'home', 'away', 'start', 'home_score', 'away_score'])
     writer.writerows(rows)
     emit(prefix + 'synthetic-espn-controls.csv', buffer.getvalue())
-    for team, name, opponent, probabilities in [('GB', 'Green Bay Packers', 'Lions', (18, 32, 43)), ('DET', 'Detroit Lions', 'Packers', (26, 36, 46))]:
+    seeds = {
+        'GB': [(18, '9 13 14 16 12 10 8'), (32, '4 9 11 13 12 10 9'), (43, '&lt;1 5 8 10 13 11 10')],
+        'DET': [(26, '12 15 14 13 9 6 5'), (36, '8 11 12 11 10 7 5'), (46, '4 7 9 10 10 8 6')],
+    }
+    for team, name, opponent in [('GB', 'Green Bay Packers', 'Lions'), ('DET', 'Detroit Lions', 'Packers')]:
         completed = [row for row in rows if row[4] and team in row[1:3]]
         wins = sum(int(row[4] if row[1] == team else row[5]) > int(row[5] if row[1] == team else row[4]) for row in completed)
         ties = sum(row[4] == row[5] for row in completed)
         losses = len(completed) - wins - ties
         content = [f'<h3>Next Game - {opponent}</h3><table>', '<tr>' + ''.join(f'<th>{label}</th>' for label in ['Scenario', 'W', 'L', 'T', *[f'Seed {n}' for n in range(1, 8)], 'No Playoffs']) + '</tr>', '<tr><th colspan="12">Independent synthetic scenarios</th></tr>']
-        for label, w, loss, no_playoffs in [('Win Next Game', wins + 1, losses, probabilities[0]), ('Current Standings', wins, losses, probabilities[1]), ('Lose Next Game', wins, losses + 1, probabilities[2])]:
-            cells = [label, w, loss, ties, f'{100 - no_playoffs}%', *['0%'] * 6, f'{no_playoffs}%']
+        win, current, lose = seeds[team]
+        for label, w, loss, (no_playoffs, seed) in [('Win Next Game', wins + 1, losses, win), ('Current Standings', wins, losses, current), ('Lose Next Game', wins, losses + 1, lose)]:
+            cells = [label, w, loss, ties, *[f'{cell}%' for cell in seed.split()], f'{no_playoffs}%']
             content.append('<tr>' + ''.join(f'<td>{value}</td>' for value in cells) + '</tr>')
         content.append('</table>')
         emit(prefix + slugs[team] + 'whatif.html', document(name + ' What If?', '\n'.join(content)))
