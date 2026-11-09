@@ -1,8 +1,6 @@
-using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using backend.Data;
-using Docker.DotNet.Models;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -16,23 +14,53 @@ namespace backend.tests;
 public sealed class IsolatedPostgreSqlTests
 {
     [Fact]
-    public async Task Real_host_initializes_second_database_after_owned_OS_port_reuse_with_normal_pooling()
+    public async Task PostgreSQL_starts_above_the_OS_ephemeral_range_when_another_listener_takes_the_requested_host_port()
     {
-        using var reservation = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp)
-        {
-            DualMode = true,
-            ExclusiveAddressUse = true
-        };
-        reservation.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
-        var port = ((IPEndPoint)reservation.LocalEndPoint!).Port.ToString(CultureInfo.InvariantCulture);
-        reservation.Close();
-        for (var index = 0; index < 2; index++)
+        var competitors = new List<Socket>();
+        try
         {
             await using var container = IsolatedPostgreSql.CreateBuilder()
                 .WithCreateParameterModifier(parameters =>
-                    parameters.HostConfig!.PortBindings["5432/tcp"] = [new PortBinding { HostPort = port }])
+                {
+                    foreach (var binding in parameters.HostConfig!.PortBindings.Values.SelectMany(bindings => bindings))
+                        if (ushort.TryParse(binding.HostPort, out var port) && port != 0)
+                            competitors.Add(Listen(port));
+                })
                 .Build();
             await container.StartAsync();
+            var ephemeralUpperBound = int.Parse(File.ReadAllText("/proc/sys/net/ipv4/ip_local_port_range").Split('\t', ' ')[^1]);
+            Assert.InRange(container.GetMappedPublicPort(5432), ephemeralUpperBound + 1, ushort.MaxValue);
+            await using var connection = new NpgsqlConnection(container.GetConnectionString());
+            await connection.OpenAsync();
+            await using var command = new NpgsqlCommand("select 1", connection);
+            Assert.Equal(1, await command.ExecuteScalarAsync());
+        }
+        finally
+        {
+            foreach (var competitor in competitors) competitor.Dispose();
+        }
+    }
+
+    private static Socket Listen(ushort port)
+    {
+        var socket = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp) { DualMode = true };
+        socket.Bind(new IPEndPoint(IPAddress.IPv6Any, port));
+        socket.Listen();
+        return socket;
+    }
+
+    [Fact]
+    public async Task Real_host_initializes_second_database_after_host_port_reuse_with_normal_pooling()
+    {
+        ushort? port = null;
+        for (var index = 0; index < 2; index++)
+        {
+            var builder = IsolatedPostgreSql.CreateBuilder();
+            if (port is { } reused) builder = builder.WithPortBinding(reused, 5432);
+            await using var container = builder.Build();
+            await container.StartAsync();
+            port ??= container.GetMappedPublicPort(5432);
+            Assert.Equal(port, container.GetMappedPublicPort(5432));
             var connectionString = container.GetConnectionString();
             Assert.True(new NpgsqlConnectionStringBuilder(connectionString).Pooling);
             await using var factory = new AppFactory().WithWebHostBuilder(builder => builder.ConfigureServices(services =>

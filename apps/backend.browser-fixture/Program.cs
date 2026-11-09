@@ -74,23 +74,13 @@ internal static class FixtureProgram
 #pragma warning restore CS0618
         await using var database = new PostgreSqlBuilder("postgres:16-alpine")
             .WithDatabase("nailbiter_browser_fixture").WithUsername("fixture").WithPassword(Guid.NewGuid().ToString("N"))
-            .WithCreateParameterModifier(parameters =>
-            {
-                var selectedPort = SelectDisposableHostPort();
-                Console.WriteLine($"Disposable PostgreSQL host port: {selectedPort}");
-                var bindings = parameters.HostConfig?.PortBindings
-                    ?? throw new InvalidOperationException("PostgreSQL publication parameters are missing.");
-                bindings[$"{PostgreSqlBuilder.PostgreSqlPort}/tcp"] =
-                    [new Docker.DotNet.Models.PortBinding
-                    {
-                        HostPort = selectedPort.ToString(CultureInfo.InvariantCulture)
-                    }];
-            })
+            .WithPortBinding("61000-65535", PostgreSqlBuilder.PostgreSqlPort.ToString(CultureInfo.InvariantCulture))
             .Build();
         var root = Directory.CreateTempSubdirectory("nailbiter-browser-fixture-").FullName;
         try
         {
             await database.StartAsync(shutdown.Token);
+            Console.WriteLine($"Disposable PostgreSQL host port: {database.GetMappedPublicPort(PostgreSqlBuilder.PostgreSqlPort)}");
             Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
             Environment.SetEnvironmentVariable("ASPNETCORE_CONTENTROOT", root);
             Environment.SetEnvironmentVariable("ASPNETCORE_TEST_CONTENTROOT_BACKEND", root);
