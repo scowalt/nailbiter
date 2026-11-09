@@ -96,6 +96,156 @@ public sealed class CollegeEventFailureReportingTests
     }
 
 
+    public static TheoryData<string> CollectorSites() => new(RunSites.Keys);
+
+    public static TheoryData<string> ClientSites() => new(FetchSites.Keys);
+
+    public static TheoryData<string, HttpStatusCode, string> ClientProviderAnswers()
+    {
+        var cases = new TheoryData<string, HttpStatusCode, string>();
+        foreach (var site in FetchSites.Keys)
+        {
+            cases.Add(site, HttpStatusCode.NotFound, "{}");
+            cases.Add(site, HttpStatusCode.OK, "<html>maintenance</html>");
+        }
+        return cases;
+    }
+
+    [Theory]
+    [MemberData(nameof(CollectorSites))]
+    public async Task Own_fault_below_a_collector_fetch_is_sent_once_at_error(string name)
+    {
+        var site = RunSites[name];
+        await using var app = await CollegeApp.StartAsync(id => id == Failing && name == "event" ? Fault : FinalHeader(id),
+            answer: uri => site.Targets(uri) ? Fault : null, staleTeams: true);
+
+        await app.RunAsync(CancellationToken.None);
+
+        await AssertHealthyGameFinalAsync(app);
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(CollegeFootballService), site.Template, typeof(InvalidOperationException));
+    }
+
+    [Theory]
+    [InlineData("roster", """{"requestedSeason":{"year":2025}}""")]
+    [InlineData("listings", """{"cursor":""}""")]
+    public async Task Collector_answer_its_parser_rejects_is_a_warning_without_an_event(string name, string body)
+    {
+        var site = RunSites[name];
+        await using var app = await CollegeApp.StartAsync(FinalHeader, answer: uri => site.Targets(uri) ? Ok(body) : null, staleTeams: true);
+
+        await app.RunAsync(CancellationToken.None);
+
+        await AssertHealthyGameFinalAsync(app);
+        var rejected = Assert.Single(app.Logs, l => l.Category == typeof(CollegeFootballService).FullName && l.Exception is not null);
+        Assert.Equal(LogLevel.Warning, rejected.Level);
+        Assert.IsType<InvalidDataException>(rejected.Exception);
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Fact]
+    public async Task Client_deadline_on_an_event_is_sent_once_at_error()
+    {
+        await using var app = await CollegeApp.StartAsync(id => id == Failing ? Hang : FinalHeader(id),
+            configure: services => services.ConfigureAll<HttpClientFactoryOptions>(options =>
+                options.HttpClientActions.Add(client => client.Timeout = TimeSpan.FromMilliseconds(500))));
+
+        await app.RunAsync(CancellationToken.None);
+
+        await AssertHealthyGameFinalAsync(app);
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(CollegeFootballService), Template, typeof(TaskCanceledException));
+    }
+
+    [Theory]
+    [InlineData("quotes")]
+    [InlineData("history")]
+    public async Task Own_fault_below_a_college_client_fetch_is_sent_once_at_error(string name)
+    {
+        var site = FetchSites[name];
+        await using var app = await CollegeApp.StartAsync(FinalHeader, answer: uri => site.Targets(uri) ? Fault : null);
+
+        await site.Run(app.Services);
+
+        AssertSentOnceAtError(await app.SentEventsAsync(), site.Client, site.Template, typeof(InvalidOperationException));
+    }
+
+    [Theory]
+    [InlineData("play bounds")]
+    [InlineData("closing lines")]
+    public async Task Own_fault_below_a_historical_espn_fetch_propagates_to_the_import(string name)
+    {
+        var site = FetchSites[name];
+        await using var app = await CollegeApp.StartAsync(FinalHeader, answer: uri => site.Targets(uri) ? Fault : null);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => site.Run(app.Services));
+
+        Assert.DoesNotContain(app.Logs, l => l.Category == site.Client.FullName && l.Exception is not null);
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Theory]
+    [MemberData(nameof(ClientSites))]
+    public async Task College_client_server_errors_after_retries_are_sent_once_at_error(string name)
+    {
+        var site = FetchSites[name];
+        await using var app = await CollegeApp.StartAsync(FinalHeader, answer: uri => site.Targets(uri) ? Unavailable : null);
+
+        await site.Run(app.Services);
+
+        AssertSentOnceAtError(await app.SentEventsAsync(), site.Client, site.Template, typeof(HttpRequestException));
+    }
+
+    [Theory]
+    [MemberData(nameof(ClientProviderAnswers))]
+    public async Task Missing_or_unreadable_college_client_answer_is_a_warning_without_an_event(string name, HttpStatusCode status, string body)
+    {
+        var site = FetchSites[name];
+        await using var app = await CollegeApp.StartAsync(FinalHeader,
+            answer: uri => site.Targets(uri) ? _ => Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body) }) : null);
+
+        await site.Run(app.Services);
+
+        var failure = Assert.Single(app.Logs, l => l.Category == site.Client.FullName && l.Exception is not null);
+        Assert.Equal(LogLevel.Warning, failure.Level);
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    private static readonly CollegeMarketPair Pair = new("KXNCAAFGAME-26SEP13RICEORE-ORE", "KXNCAAFGAME-26SEP13RICEORE-RICE");
+
+    private static readonly Dictionary<string, RunSite> RunSites = new()
+    {
+        ["event"] = new(_ => false, Template),
+        ["roster"] = new(uri => uri.AbsolutePath.EndsWith("/powerindex", StringComparison.Ordinal),
+            "College roster refresh unavailable; retaining verified season membership and expiring old metric evidence"),
+        ["listings"] = new(uri => uri.AbsolutePath == "/trade-api/v2/markets", "College listings unavailable; refreshing known games only"),
+    };
+
+    private static readonly Dictionary<string, FetchSite> FetchSites = new()
+    {
+        ["quotes"] = new(typeof(CollegeKalshiClient), "College game quotes unavailable for {Ticker}",
+            uri => uri.AbsolutePath.StartsWith("/trade-api/v2/markets/", StringComparison.Ordinal),
+            services => services.GetRequiredService<CollegeKalshiClient>().ObserveProbabilityAsync(Pair, Now.UtcDateTime, CancellationToken.None)),
+        ["history"] = new(typeof(CollegeKalshiClient), "College market history unavailable for {Ticker}",
+            uri => uri.AbsolutePath == "/trade-api/v2/historical/cutoff",
+            services => services.GetRequiredService<CollegeKalshiClient>().HistoryAsync(Pair, Now.UtcDateTime.AddDays(-3), Now.UtcDateTime.AddDays(-3).AddHours(4), CancellationToken.None)),
+        ["play bounds"] = new(typeof(CollegeEspnClient), "Historical play bounds unavailable for {Event}",
+            uri => uri.AbsolutePath.EndsWith("/plays", StringComparison.Ordinal),
+            services => services.GetRequiredService<CollegeEspnClient>().PlayWindowAsync(Healthy, CancellationToken.None)),
+        ["closing lines"] = new(typeof(CollegeEspnClient), "Closing lines unavailable for college event {Event}",
+            uri => uri.AbsolutePath.EndsWith("/odds", StringComparison.Ordinal),
+            services => services.GetRequiredService<CollegeEspnClient>().ClosingOddsAsync(Healthy, CancellationToken.None)),
+    };
+
+    private sealed record RunSite(Func<Uri, bool> Targets, string Template);
+
+    private sealed record FetchSite(Type Client, string Template, Func<Uri, bool> Targets, Func<IServiceProvider, Task> Run);
+
+    private static void AssertSentOnceAtError(IReadOnlyCollection<SentEvent> sent, Type logger, string template, Type exception)
+    {
+        var reported = Assert.Single(sent);
+        Assert.Equal((logger.FullName, "error", template), (reported.Logger, reported.Level, reported.Template));
+        Assert.Contains(exception.FullName, reported.ExceptionTypes);
+    }
+
     private static async Task AssertHealthyGameFinalAsync(CollegeApp app)
     {
         var game = await app.GameAsync(Healthy);
@@ -117,6 +267,12 @@ public sealed class CollegeEventFailureReportingTests
           "competitors":[{"homeAway":"home","score":"34","team":{"id":"2483","abbreviation":"ORE","displayName":"Oregon"}},
                          {"homeAway":"away","score":"27","team":{"id":"242","abbreviation":"RICE","displayName":"Rice"}}]}]}}
         """);
+
+    private static Func<CancellationToken, Task<HttpResponseMessage>> Fault =>
+        _ => throw new InvalidOperationException("Synthetic fault below the fetch");
+
+    private static Func<CancellationToken, Task<HttpResponseMessage>> Unavailable =>
+        _ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("{}") });
 
     private static Func<CancellationToken, Task<HttpResponseMessage>> Unreachable =>
         _ => Task.FromException<HttpResponseMessage>(new HttpRequestException("synthetic provider connection failure"));
@@ -159,10 +315,11 @@ public sealed class CollegeEventFailureReportingTests
         private readonly LogRecorder logs = new();
 
         private CollegeApp(PostgreSqlContainer database, Func<string, Func<CancellationToken, Task<HttpResponseMessage>>> summary,
-            Action<HttpStandardResilienceOptions>? resilience)
+            Action<HttpStandardResilienceOptions>? resilience, Func<Uri, Func<CancellationToken, Task<HttpResponseMessage>>?>? answer,
+            Action<IServiceCollection>? configure)
         {
             this.database = database;
-            Provider = new SyntheticProvider(uri => uri switch
+            Provider = new SyntheticProvider(uri => answer?.Invoke(uri) ?? uri switch
             {
                 { AbsolutePath: var path } when path.EndsWith("/summary", StringComparison.Ordinal) => summary(SyntheticProvider.EventId(uri)),
                 { AbsolutePath: var path } when path.EndsWith("/powerindex", StringComparison.Ordinal) => Ok(Roster),
@@ -199,20 +356,26 @@ public sealed class CollegeEventFailureReportingTests
                     services.RemoveAll<IDbContextOptionsConfiguration<ExcitementDbContext>>();
                     services.RemoveAll<DbContextOptions<ExcitementDbContext>>();
                     services.AddDbContext<ExcitementDbContext>(options => options.UseNpgsql(database.GetConnectionString()));
+                    configure?.Invoke(services);
                 });
             });
         }
 
         public static async Task<CollegeApp> StartAsync(Func<string, Func<CancellationToken, Task<HttpResponseMessage>>> summary,
-            Action<HttpStandardResilienceOptions>? resilience = null)
+            Action<HttpStandardResilienceOptions>? resilience = null, Func<Uri, Func<CancellationToken, Task<HttpResponseMessage>>?>? answer = null,
+            bool staleTeams = false, Action<IServiceCollection>? configure = null)
         {
             var database = IsolatedPostgreSql.CreateContainer();
             await database.StartAsync();
-            var app = new CollegeApp(database, summary, resilience);
+            var app = new CollegeApp(database, summary, resilience, answer, configure);
             using var scope = app.app.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
             await db.Database.EnsureCreatedAsync();
             db.Games.AddRange(KnownGame(Failing), KnownGame(Healthy));
+            if (staleTeams)
+                db.CollegeTeams.AddRange(
+                    new CollegeTeam { Season = 2026, EspnId = "2483", Abbreviation = "ORE", Name = "Oregon", FetchedAt = Now.UtcDateTime.AddHours(-7) },
+                    new CollegeTeam { Season = 2026, EspnId = "242", Abbreviation = "RICE", Name = "Rice", FetchedAt = Now.UtcDateTime.AddHours(-7) });
             await db.SaveChangesAsync();
             return app;
         }
@@ -220,6 +383,8 @@ public sealed class CollegeEventFailureReportingTests
         public SyntheticProvider Provider { get; }
 
         public IEnumerable<LoggedEntry> Logs => logs.Entries;
+
+        public IServiceProvider Services => app.Services;
 
         public async Task RunAsync(CancellationToken ct)
         {
