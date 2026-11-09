@@ -298,6 +298,44 @@ public sealed class DatabaseFailureReportingTests
         Assert.Empty(moneyPuck.Requests);
     }
 
+    [Theory]
+    [InlineData("own fault")]
+    [InlineData("database failure")]
+    public async Task MoneyPuck_admission_failure_after_a_cycle_backs_off(string failure)
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        var clock = new FakeTimeProvider(Now);
+        using var moneyPuck = new MoneyPuckQualificationHandler();
+        await using var app = new ReportingApp(database.ConnectionString + LockTimeout, typeof(MoneyPuckRefreshBackgroundService), services =>
+        {
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(clock);
+            services.AddHttpClient<MoneyPuckService>().ConfigurePrimaryHttpMessageHandler(() => moneyPuck);
+        });
+        Assert.True(await database.ScalarAsync<bool>("SELECT EXISTS (SELECT 1 FROM moneypuck_refresh_state WHERE id = 1 AND NOT active)", until: finished => finished));
+        await using var tableLock = failure == "database failure"
+            ? await database.HoldLockAsync("LOCK TABLE moneypuck_refresh_state IN ACCESS EXCLUSIVE MODE")
+            : null;
+        if (failure == "own fault")
+            await database.ScalarAsync<int>("""
+                DELETE FROM moneypuck_refresh_state;
+                CREATE FUNCTION skip_insert() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+                CREATE TRIGGER skip_insert BEFORE INSERT ON moneypuck_refresh_state FOR EACH ROW EXECUTE FUNCTION skip_insert();
+                SELECT 1
+                """);
+
+        await Task.Delay(200, CancellationToken.None);
+        clock.Advance(TimeSpan.FromDays(1));
+        foreach (var step in Enumerable.Repeat(TimeSpan.FromSeconds(1), 30).Concat(Enumerable.Repeat(TimeSpan.FromMinutes(10), 12)))
+        {
+            await Task.Delay(200, CancellationToken.None);
+            clock.Advance(step);
+        }
+
+        var admissions = (await app.SentEventsAsync()).Count(e => e.Logger == typeof(MoneyPuckRefreshGate).FullName);
+        Assert.InRange(admissions, 1, 3);
+    }
+
     [Fact]
     public async Task MoneyPuck_finalize_deadline_is_reported_once_and_the_cycle_stays_blocked()
     {
@@ -500,6 +538,12 @@ public sealed class DatabaseFailureReportingTests
         }
 
         public HttpClient Client { get; }
+
+        public async Task<IReadOnlyCollection<SentEvent>> SentEventsAsync()
+        {
+            await SentrySdk.FlushAsync(TimeSpan.FromSeconds(5));
+            return transport.Events.ToArray();
+        }
 
         public async Task<IReadOnlyCollection<SentEvent>> SentEventsAfterFailureAsync()
         {
