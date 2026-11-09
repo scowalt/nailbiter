@@ -319,8 +319,8 @@ public sealed class OddsProviderReportingTests
     public async Task Scrape_loop_shutdown_mid_fetch_ends_quietly()
     {
         var clock = new FakeTimeProvider(Now);
-        await using var app = new OddsApp(_ => Hang, services => PinClock(services, clock));
-        var loop = ActivatorUtilities.CreateInstance<OddsScrapeBackgroundService>(app.Services);
+        await using var app = new OddsApp(_ => Hang);
+        var loop = LoopOn(app, clock);
 
         await loop.StartAsync(CancellationToken.None);
         await AdvanceUntilAsync(clock, () => app.Provider.HangStarted.IsCompleted, TimeSpan.FromSeconds(30));
@@ -337,11 +337,10 @@ public sealed class OddsProviderReportingTests
         var clock = new FakeTimeProvider(Now);
         await using var app = new OddsApp(_ => NoEvents, services =>
         {
-            PinClock(services, clock);
             services.RemoveAll<IGameUpdateService>();
             services.AddSingleton<IGameUpdateService>(_ => throw new InvalidOperationException("synthetic update service failure"));
         });
-        var loop = ActivatorUtilities.CreateInstance<OddsScrapeBackgroundService>(app.Services);
+        var loop = LoopOn(app, clock);
         var failures = () => app.FailuresFrom(typeof(OddsScrapeBackgroundService));
 
         await loop.StartAsync(CancellationToken.None);
@@ -361,12 +360,8 @@ public sealed class OddsProviderReportingTests
         await using var database = await OddsDatabase.StartAsync();
         await using var tableLock = await database.HoldLockAsync("LOCK TABLE games IN ACCESS EXCLUSIVE MODE");
         var useDatabase = database.Use(LockTimeout);
-        await using var app = new OddsApp(_ => NoEvents, services =>
-        {
-            useDatabase(services);
-            PinClock(services, clock);
-        });
-        var loop = ActivatorUtilities.CreateInstance<OddsScrapeBackgroundService>(app.Services);
+        await using var app = new OddsApp(_ => NoEvents, useDatabase);
+        var loop = LoopOn(app, clock);
         var failures = () => app.FailuresFrom(typeof(OddsScrapeBackgroundService));
 
         await loop.StartAsync(CancellationToken.None);
@@ -417,6 +412,9 @@ public sealed class OddsProviderReportingTests
         services.RemoveAll<TimeProvider>();
         services.AddSingleton(clock);
     }
+
+    private static OddsScrapeBackgroundService LoopOn(OddsApp app, TimeProvider clock) =>
+        ActivatorUtilities.CreateInstance<OddsScrapeBackgroundService>(app.Services, clock);
 
     private static async Task AdvanceUntilAsync(FakeTimeProvider clock, Func<bool> done, TimeSpan deadline)
     {
