@@ -6,6 +6,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace backend.Services;
 
+internal static class CollegeFailure
+{
+    public static LogLevel Level(Exception ex, Func<Exception, bool> outage) =>
+        ex is HttpRequestException && !outage(ex) || ex is JsonException or InvalidDataException ? LogLevel.Warning : LogLevel.Error;
+}
+
 public sealed class CollegeFootballService(
     ExcitementDbContext db, CollegeEspnClient espn, CollegeKalshiClient kalshi,
     IGameUpdateService updates, TimeProvider time, ILogger<CollegeFootballService> logger)
@@ -64,7 +70,7 @@ public sealed class CollegeFootballService(
             }
             catch (Exception ex) when (teams.Count > 0 && !ct.IsCancellationRequested)
             {
-                logger.Log(ProviderFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "College roster refresh unavailable; retaining verified season membership and expiring old metric evidence");
+                logger.Log(CollegeFailure.Level(ex, ProviderFailure.Is), ex, "College roster refresh unavailable; retaining verified season membership and expiring old metric evidence");
             }
         }
         var membership = teams.ToDictionary(t => t.EspnId);
@@ -74,7 +80,7 @@ public sealed class CollegeFootballService(
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
             if (initialHistory) throw;
-            logger.Log(KalshiFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "College listings unavailable; refreshing known games only");
+            logger.Log(CollegeFailure.Level(ex, KalshiFailure.Is), ex, "College listings unavailable; refreshing known games only");
             listings = [];
         }
         var events = new Dictionary<string, JsonElement>();
@@ -92,7 +98,7 @@ public sealed class CollegeFootballService(
             foreach (var game in known.Where(g => !events.ContainsKey(g.Id)))
             {
                 try { events[game.Id] = await espn.EventAsync(game.Id, ct); }
-                catch (Exception ex) when (!ct.IsCancellationRequested) { logger.Log(ProviderFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "College event {Event} missing; preserving stored state", game.Id); }
+                catch (Exception ex) when (!ct.IsCancellationRequested) { logger.Log(CollegeFailure.Level(ex, ProviderFailure.Is), ex, "College event {Event} missing; preserving stored state", game.Id); }
             }
         }
         var changed = new List<Game>();

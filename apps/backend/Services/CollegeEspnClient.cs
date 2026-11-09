@@ -170,7 +170,7 @@ public sealed class CollegeEspnClient(HttpClient http, TimeProvider time, IMemor
             return timestamps.Count >= 2 ? (timestamps.Min(), timestamps.Max()) : null;
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException)
-        { logger.LogWarning(ex, "Historical play bounds unavailable for {Event}", eventId); return null; }
+        { logger.Log(CollegeFailure.Level(ex, ProviderFailure.Is), ex, "Historical play bounds unavailable for {Event}", eventId); return null; }
     }
 
     public async Task<PregameOdds?> ClosingOddsAsync(string eventId, CancellationToken ct)
@@ -200,7 +200,7 @@ public sealed class CollegeEspnClient(HttpClient http, TimeProvider time, IMemor
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException)
         {
-            logger.LogWarning(ex, "Closing lines unavailable for college event {Event}", eventId);
+            logger.Log(CollegeFailure.Level(ex, ProviderFailure.Is), ex, "Closing lines unavailable for college event {Event}", eventId);
         }
         return null;
     }
