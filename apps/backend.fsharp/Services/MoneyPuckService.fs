@@ -131,7 +131,8 @@ type MoneyPuckRefreshBackgroundService(serviceProvider: IServiceProvider, logger
                 let service = scope.ServiceProvider.GetRequiredService<MoneyPuckService>()
                 let! result = service.RefreshNhlAsync(stoppingToken)
                 let delay = if result.NextAttemptAt.HasValue then result.NextAttemptAt.Value - timeProvider.GetUtcNow().UtcDateTime else MoneyPuckRefreshGate.Interval
-                do! Task.Delay(max (TimeSpan.FromSeconds(1.0)) delay, timeProvider, stoppingToken)
+                let wait = if delay > TimeSpan.Zero then max (TimeSpan.FromSeconds(1.0)) delay else MoneyPuckRefreshGate.AdmissionRetry
+                do! Task.Delay(wait, timeProvider, stoppingToken)
             with
             | :? OperationCanceledException when stoppingToken.IsCancellationRequested -> ()
             | ex ->

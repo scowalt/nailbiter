@@ -15,6 +15,7 @@ type MoneyPuckRefreshGate(serviceProvider: IServiceProvider, timeProvider: TimeP
     let mutable denied = false
     let mutable deniedUntil = Nullable<DateTime>()
     static member internal Interval = TimeSpan.FromHours(24.0)
+    static member internal AdmissionRetry = TimeSpan.FromHours(1.0)
     member internal _.NextAttempt = nextAttempt
     member internal _.TryEnterAsync(ct: CancellationToken) = task {
         let! entered = gate.WaitAsync(0, ct)
