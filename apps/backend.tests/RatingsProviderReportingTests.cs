@@ -42,7 +42,7 @@ public sealed class RatingsProviderReportingTests
             (services, ct) => services.GetRequiredService<EspnPowerIndexService>().RefreshNflRatingsAsync(ct)),
     };
 
-    private static readonly Fetch NhlGuru = new(typeof(NhlPowerRankingsGuruService), null,
+    private static readonly Fetch NhlGuru = new(typeof(NhlPowerRankingsGuruService), "NHL Power Rankings Guru collection interrupted; original observations preserved",
         (services, ct) => services.GetRequiredService<PowerRankingsGuruService>().RefreshNhlRatingsAsync(ct));
 
     [Theory]
@@ -193,7 +193,7 @@ public sealed class RatingsProviderReportingTests
     }
 
     [Fact]
-    public async Task Nhl_guru_client_deadline_is_a_warning_and_not_caller_cancellation()
+    public async Task Nhl_guru_client_deadline_is_sent_once_at_error_and_not_caller_cancellation()
     {
         await using var database = await StartDatabaseAsync();
         await using var app = new RatingsApp(_ => Hang, services =>
@@ -205,9 +205,9 @@ public sealed class RatingsProviderReportingTests
         Assert.Equal(0, await NhlGuru.Run(app.Services, CancellationToken.None));
 
         var failure = Assert.Single(app.Logs, l => l.Category == NhlGuru.Service.FullName && l.Exception is not null);
-        Assert.Equal(LogLevel.Warning, failure.Level);
+        Assert.Equal(LogLevel.Error, failure.Level);
         Assert.IsAssignableFrom<OperationCanceledException>(failure.Exception);
-        Assert.Empty(await app.SentEventsAsync());
+        AssertSentOnceAtError(await app.SentEventsAsync(), NhlGuru, typeof(TaskCanceledException));
     }
 
     [Fact]
@@ -255,9 +255,10 @@ public sealed class RatingsProviderReportingTests
         var sent = await app.SentEventsAsync();
         Assert.All(sent, e => Assert.Equal("error", e.Level));
         Assert.Equal(
-            new[] { typeof(EspnPowerIndexService).FullName, typeof(EspnStandingsService).FullName, typeof(PowerRankingsGuruService).FullName },
+            new[] { typeof(EspnPowerIndexService).FullName, typeof(EspnStandingsService).FullName, NhlGuru.Service.FullName, typeof(PowerRankingsGuruService).FullName }
+                .OrderBy(logger => logger, StringComparer.Ordinal),
             sent.Select(e => e.Logger).Distinct().OrderBy(logger => logger, StringComparer.Ordinal));
-        Assert.Contains(app.Logs, l => l.Category == NhlGuru.Service.FullName && l.Level == LogLevel.Warning);
+        Assert.Single(sent, e => e.Logger == NhlGuru.Service.FullName);
     }
 
     [Fact]
