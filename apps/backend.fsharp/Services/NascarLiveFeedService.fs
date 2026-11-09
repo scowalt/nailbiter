@@ -1,10 +1,12 @@
 namespace backend.Services.Nascar
 
 open System
+open System.Net.Http
 open System.Text.Json
 open System.Text.Json.Serialization
 open System.Threading
 open System.Threading.Tasks
+open backend.Services
 open Microsoft.Extensions.Logging
 
 [<CLIMutable>]
@@ -33,7 +35,10 @@ type NascarLiveFeedService(httpClient: System.Net.Http.HttpClient, logger: ILogg
                 return JsonSerializer.Deserialize<NascarLiveFeed>(json)
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
-            | ex ->
+            | ex when ex :? HttpRequestException || ex :? JsonException || ProviderFailure.Is ex ->
                 logger.LogWarning(ex, "Failed to fetch NASCAR.com live feed")
+                return Unchecked.defaultof<NascarLiveFeed>
+            | ex ->
+                logger.LogError(ex, "Failed to fetch NASCAR.com live feed")
                 return Unchecked.defaultof<NascarLiveFeed>
         }

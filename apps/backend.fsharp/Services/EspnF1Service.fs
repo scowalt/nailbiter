@@ -1,6 +1,7 @@
 namespace backend.Services.EspnF1
 
 open System
+open System.Net.Http
 open System.Text.Json
 open System.Threading
 open Backend.FSharp
@@ -35,8 +36,14 @@ type EspnF1Service
                 return JsonSerializer.Deserialize<EspnNascarScoreboardResponse>(json, HttpHelpers.jsonOptions)
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
+            | :? HttpRequestException as ex when not (ProviderFailure.Is ex) ->
+                logger.LogWarning(ex, "Failed to fetch ESPN F1 scoreboard from {Url}", url)
+                return Unchecked.defaultof<EspnNascarScoreboardResponse>
+            | :? JsonException as ex ->
+                logger.LogWarning(ex, "Failed to fetch ESPN F1 scoreboard from {Url}", url)
+                return Unchecked.defaultof<EspnNascarScoreboardResponse>
             | ex ->
-                logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch ESPN F1 scoreboard from {Url}", url)
+                logger.LogError(ex, "Failed to fetch ESPN F1 scoreboard from {Url}", url)
                 return Unchecked.defaultof<EspnNascarScoreboardResponse>
         }
 
@@ -78,7 +85,9 @@ type EspnF1Service
                     | _ -> ()
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
-            | ex -> logger.LogWarning(ex, "Could not resolve F1 competition ID for event {EventId}, using event ID", eventId)
+            | ex when ex :? HttpRequestException || ex :? JsonException || ProviderFailure.Is ex ->
+                logger.LogWarning(ex, "Could not resolve F1 competition ID for event {EventId}, using event ID", eventId)
+            | ex -> logger.LogError(ex, "Could not resolve F1 competition ID for event {EventId}, using event ID", eventId)
 
             let listUrl = $"https://sports.core.api.espn.com/v2/sports/racing/leagues/f1/events/{eventId}/competitions/{competitionId}/competitors?limit=50"
             try
@@ -105,8 +114,10 @@ type EspnF1Service
                                     competitors.Add(comp)
                             with
                             | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
-                            | ex ->
+                            | ex when ex :? HttpRequestException || ex :? JsonException || ProviderFailure.Is ex ->
                                 logger.LogWarning(ex, "Failed to resolve competitor ref: {Url}", resolvedUrl)
+                            | ex ->
+                                logger.LogError(ex, "Failed to resolve competitor ref: {Url}", resolvedUrl)
                     | false, _ ->
                         let comp = JsonSerializer.Deserialize<EspnCoreCompetitorItem>(item.GetRawText(), HttpHelpers.jsonOptions)
                         if not (isNull (box comp)) then
@@ -117,7 +128,10 @@ type EspnF1Service
                 return result
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
-            | ex ->
+            | ex when ex :? HttpRequestException || ex :? JsonException || ProviderFailure.Is ex ->
                 logger.LogWarning(ex, "Failed to fetch ESPN core F1 competitors for event {EventId} (falling back to scoreboard data)", eventId)
+                return Unchecked.defaultof<EspnCoreCompetitorsResponse>
+            | ex ->
+                logger.LogError(ex, "Failed to fetch ESPN core F1 competitors for event {EventId} (falling back to scoreboard data)", eventId)
                 return Unchecked.defaultof<EspnCoreCompetitorsResponse>
         }
