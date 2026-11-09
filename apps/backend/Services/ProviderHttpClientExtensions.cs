@@ -5,24 +5,24 @@ public static class ProviderHttpClientExtensions
     public static IHttpClientBuilder AddProviderResilienceHandler(this IHttpClientBuilder client)
     {
         client.AddStandardResilienceHandler();
-        return client.AddHttpMessageHandler(() => new ProviderResponseBufferingHandler());
+        return client.AddHttpMessageHandler(() => new ResponseBufferingHandler());
     }
-}
 
-public sealed class ProviderResponseBufferingHandler : DelegatingHandler
-{
-    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    private sealed class ResponseBufferingHandler : DelegatingHandler
     {
-        var response = await base.SendAsync(request, cancellationToken);
-        try
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            await response.Content.LoadIntoBufferAsync(cancellationToken);
-            return response;
-        }
-        catch
-        {
-            response.Dispose();
-            throw;
+            var response = await base.SendAsync(request, cancellationToken);
+            try
+            {
+                await response.Content.LoadIntoBufferAsync(cancellationToken);
+                return response;
+            }
+            catch
+            {
+                response.Dispose();
+                throw;
+            }
         }
     }
 }
