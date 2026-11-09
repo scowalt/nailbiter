@@ -133,7 +133,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
         using (var scope = app.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
         var captured = await Resolve();
-        Assert.Equal(54.25742943548387, captured.Total!.Value, 10);
+        Assert.Equal(53.6273891129, captured.Total!.Value, 10);
         Assert.NotNull(captured.Components.NflPlayoffLeverage);
         Assert.Null(captured.Components.HomePlayoffOdds);
         await Change(async db =>
@@ -262,7 +262,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
     {
         await Seed();
         var captured = await Resolve();
-        Assert.Equal(59, Math.Round(captured.Total!.Value));
+        Assert.Equal(58, Math.Round(captured.Total!.Value));
         clock.Advance(TimeSpan.FromDays(3));
         await app.DisposeAsync();
         app = CreateHost();
@@ -279,6 +279,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
     [InlineData(0)]
     [InlineData(1)]
     [InlineData(2)]
+    [InlineData(3)]
     [InlineData(4)]
     public async Task Regular_season_scores_from_another_formula_version_are_not_retained(int? version)
     {
@@ -320,7 +321,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
             (await db.PregameOdds.SingleAsync()).FetchedAt = clock.GetUtcNow().UtcDateTime;
         });
         var recovered = await Resolve();
-        Assert.Equal(57.45569693582695, recovered.Total!.Value, 10);
+        Assert.Equal(56.9831666939, recovered.Total!.Value, 10);
         Assert.Equal(3.04595910896665, recovered.Components.StakesScore, 10);
         clock.Advance(TimeSpan.FromHours(2));
         await app.DisposeAsync();
@@ -509,7 +510,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
         using (var scope = app.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
         var original = await Resolve();
-        Assert.Equal(54.25742943548387, original.Total!.Value, 10);
+        Assert.Equal(53.6273891129, original.Total!.Value, 10);
         await Change(db =>
         {
             db.Games.Add(new Game { Id = "review-result", Sport = game.Sport, SeasonYear = game.SeasonYear, SeasonType = 2,
@@ -561,7 +562,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
         using (var scope = app.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
         var replacement = await Resolve();
-        Assert.Equal(46.25742943548387, replacement.Total!.Value, 10);
+        Assert.Equal(45.87940524193548, replacement.Total!.Value, 10);
         clock.Advance(TimeSpan.FromMinutes(1));
         await Change(Withdraw);
         Assert.Null((await Resolve()).Total);
@@ -793,7 +794,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
         using (var scope = app.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
         var captured = await Resolve();
-        Assert.Equal(58.842123528570283, captured.Total!.Value, 10);
+        Assert.Equal(58.3695932866, captured.Total!.Value, 10);
         Assert.Equal(ProQualificationEvidenceKind.PlayoffStatusModel, captured.Components.HomeQualificationEvidenceKind);
         clock.Advance(TimeSpan.FromMinutes(1));
         await Change(db =>

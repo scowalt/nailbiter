@@ -112,3 +112,12 @@ let ``Diagnostic fields never enter the response even as escaped or hidden paylo
         Assert.DoesNotContain(marker, html)
     assertNoDiagnostics html
     Assert.Contains("PRIVATE_STAKES_DIAGNOSTIC", hype.StakesExplanation)
+
+[<Fact>]
+let ``Pro detail explains that hype counts closeness in proportion to quality`` () =
+    use doc = render 2 (components ())
+    Assert.Contains("Hype counts 59% of Closeness, matching the teams' Quality.", doc.QuerySelector("#detail-hype").TextContent)
+    let hype = components ()
+    hype.QualityAvailable <- false
+    use missing = render 2 hype
+    Assert.DoesNotContain("Hype counts", missing.QuerySelector("#detail-hype").TextContent)

@@ -123,7 +123,7 @@ public sealed class NbaSeedingWitnessPageTests
         var requests = handler.Requests.Count;
         if (available)
         {
-            Assert.Equal(56.53930975213684, original.Total!.Value, 10);
+            Assert.Equal(51.530976418803505, original.Total!.Value, 10);
             Assert.Equal(2.955106581196874, original.Components.StakesScore, 12);
             Assert.Equal(79.13194444444444, original.Components.QualityScore, 10);
             Assert.Equal(80, original.Components.ClosenessScore, 10);
@@ -169,7 +169,7 @@ public sealed class NbaSeedingWitnessPageTests
             Assert.NotNull(metric);
             if (available)
             {
-                Assert.Matches(@"(?<!\d)57(?!\d)", metric.TextContent);
+                Assert.Matches(@"(?<!\d)52(?!\d)", metric.TextContent);
                 Assert.DoesNotContain("unavailable", metric.TextContent, StringComparison.OrdinalIgnoreCase);
             }
             else Assert.Contains("unavailable", metric.TextContent, StringComparison.OrdinalIgnoreCase);

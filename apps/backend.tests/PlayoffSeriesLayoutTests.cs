@@ -61,7 +61,7 @@ public sealed class PlayoffSeriesLayoutTests : IAsyncLifetime
         }
         using var baseline = await fixture.HomeAsync();
         var original = baseline.QuerySelector($"a[href='/game/{Id}']")!;
-        Assert.Contains("Hype87", original.TextContent);
+        Assert.Contains("Hype81", original.TextContent);
         fixture.Provider.Board = board;
         fixture.Host.Clock.Advance(TimeSpan.FromMinutes(1));
         await fixture.CollectAsync();

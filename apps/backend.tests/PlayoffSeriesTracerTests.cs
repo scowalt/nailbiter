@@ -39,7 +39,7 @@ public sealed class PlayoffSeriesTracerTests : IAsyncLifetime
         var card = page.QuerySelector("a[href='/game/401907973']")!;
         Assert.Contains("Series tied 1–1", card.TextContent);
         Assert.Contains("NLWC · Game 3 · Best of 3", card.TextContent);
-        Assert.Contains("Hype87", card.QuerySelector("#excitement-401907973")!.TextContent);
+        Assert.Contains("Hype81", card.QuerySelector("#excitement-401907973")!.TextContent);
         Assert.Equal("", card.QuerySelector("#away-score-401907973")!.TextContent);
         Assert.Equal("", card.QuerySelector("#home-score-401907973")!.TextContent);
         Assert.Equal(requests, fixture.Provider.Requests);

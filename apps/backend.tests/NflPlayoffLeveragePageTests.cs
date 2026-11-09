@@ -42,7 +42,7 @@ public sealed partial class NflPlayoffPageTests
             : path.EndsWith("lionswhatif.html") || path.EndsWith("forty-ninerswhatif.html")
                 ? body.Replace(">26%<", ">44%<").Replace(">36%<", ">45%<") : body;
         var expectedStakes = smallSwing ? 1.6 : 20;
-        var expectedHype = smallSwing ? 51 : 59;
+        var expectedHype = smallSwing ? 50 : 58;
         var schedules = NflPlayoffLeverageTests.Schedules(score => decimalScores ? score + ".0" : score);
         if (corroboratedKickoff)
         {

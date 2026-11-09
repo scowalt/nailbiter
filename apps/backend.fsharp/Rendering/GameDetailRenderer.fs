@@ -396,6 +396,10 @@ module GameDetailRenderer =
                                 ]
                         if game.Sport = "cfb" && hypeComponents.ClosenessAvailable && hypeComponents.ClosenessExplanation <> "" then
                             Elem.p [ cls "fine-print" ] [ Text.enc hypeComponents.ClosenessExplanation ]
+                        if backend.Scoring.ProHypePolicy.Supports game.Sport && hypeComponents.ClosenessAvailable && hypeComponents.QualityAvailable then
+                            let counted = int (Math.Round hypeComponents.QualityScore)
+                            if counted < 100 then
+                                Elem.p [ cls "fine-print" ] [ Text.raw $"Hype counts {counted}%% of Closeness, matching the teams' Quality." ]
                     ]
                 if isScheduled && hasTeamRanks then
                     let powerRank (rank: TeamRankInfo option) = rank |> Option.bind (fun r -> r.PowerRank)

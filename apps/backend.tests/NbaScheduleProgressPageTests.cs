@@ -75,7 +75,7 @@ public sealed class NbaScheduleProgressPageTests
                 Assert.Equal(96.63793103448276, raw.QualityScore, 10);
                 var lifecycle = scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>();
                 await lifecycle.CaptureAsync();
-                Assert.Equal(70.64395822399332, (await lifecycle.ResolveAsync(game.Id)).Total!.Value, 10);
+                Assert.Equal(69.635337534338149, (await lifecycle.ResolveAsync(game.Id)).Total!.Value, 10);
             }
             Assert.Equal(4, wire.Requests);
             foreach (var path in new[] { "/", "/nba?date=2026-11-16", "/game/" + game.Id })
@@ -83,7 +83,7 @@ public sealed class NbaScheduleProgressPageTests
                 using var document = await new HtmlParser().ParseDocumentAsync(await host.Client.GetStringAsync(path));
                 var score = document.QuerySelector(path.StartsWith("/game/") ? "#detail-hype" : "#excitement-" + game.Id)!;
                 Assert.NotNull(score); Assert.DoesNotContain("unavailable", score.TextContent, StringComparison.OrdinalIgnoreCase);
-                Assert.Contains("71", score.TextContent);
+                Assert.Contains("70", score.TextContent);
                 ProHypeOutputAssertions.NoDiagnostics(document.DocumentElement.OuterHtml);
             }
             host.Clock.Advance(TimeSpan.FromHours(2));
@@ -94,7 +94,7 @@ public sealed class NbaScheduleProgressPageTests
                 var raw = await scope.ServiceProvider.GetRequiredService<HypeScoreService>().GetHypeComponentsAsync(stored, null);
                 Assert.False(raw.StakesAvailable);
                 var retained = await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().ResolveAsync(game.Id);
-                Assert.Equal(70.64395822399332, retained.Total!.Value, 10);
+                Assert.Equal(69.635337534338149, retained.Total!.Value, 10);
                 Assert.Equal(NbaScheduleProgressTests.Now, retained.EvaluatedAt);
             }
             Assert.Equal(4, wire.Requests);

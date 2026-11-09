@@ -215,7 +215,7 @@ public static class ProHypePolicy
             "mlb" => (.35, .30, .35),
             _ => throw new ArgumentException("Unsupported pro league", nameof(sport))
         };
-        return s * stakes + q * quality + c * closeness;
+        return s * stakes + q * quality + c * closeness * quality / 100;
     }
 
     internal static ProHypeResult Calculate(Game game, ProGameEvidence? evidence, IEnumerable<TeamRating> rankings,

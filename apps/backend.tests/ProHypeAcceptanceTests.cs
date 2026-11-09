@@ -222,7 +222,7 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
         Start();
         await Capture();
         var original = await Resolve(game);
-        Assert.Equal(54.25742943548387, original.Total!.Value, 10);
+        Assert.Equal(53.6273891129, original.Total!.Value, 10);
         clock.SetUtcNow(new DateTimeOffset(game.ScheduledStart.AddHours(-2)));
         await Change(async db =>
         {
@@ -272,13 +272,13 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
         Assert.DoesNotContain("Philadelphia", identity.TextContent);
         Assert.DoesNotContain("PHI", identity.TextContent);
         var resolved = await Resolve(game);
-        Assert.Equal(20.938125, resolved.Total!.Value, 10);
+        Assert.Equal(11.879196428571429, resolved.Total!.Value, 10);
         if (path.StartsWith("/game/", StringComparison.Ordinal))
         {
             Assert.Contains("KC", document.Title);
-            Assert.StartsWith("Hype Score21Stakes1Quality25Closeness60", document.QuerySelector("#detail-hype")!.TextContent);
+            Assert.StartsWith("Hype Score12Stakes1Quality25Closeness60", document.QuerySelector("#detail-hype")!.TextContent);
         }
-        else Assert.Equal("Hype21", document.QuerySelector($"#excitement-{game.Id}")!.TextContent);
+        else Assert.Equal("Hype12", document.QuerySelector($"#excitement-{game.Id}")!.TextContent);
         Assert.Equal(document.QuerySelector(path.StartsWith("/game/", StringComparison.Ordinal) ? "#detail-hype" : $"#excitement-{game.Id}")!.TextContent,
             (await Page(path, true)).QuerySelector(path.StartsWith("/game/", StringComparison.Ordinal) ? "#detail-hype" : $"#excitement-{game.Id}")!.TextContent);
         Assert.Equal("{\"Total\":" + JsonSerializer.Serialize(resolved.Total) + "}", JsonSerializer.Serialize(resolved));
@@ -321,9 +321,9 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
 
     [Theory]
     [InlineData("nfl", 54)]
-    [InlineData("nba", 71)]
-    [InlineData("nhl", 59)]
-    [InlineData("mlb", 66)]
+    [InlineData("nba", 70)]
+    [InlineData("nhl", 58)]
+    [InlineData("mlb", 64)]
     public async Task Capture_before_visits_survives_prolonged_transport_gaps_first_HTTP_after_restart_and_complete_changing_recovery(string sport, int rounded)
     {
         var game = await Seed(sport);
@@ -638,8 +638,8 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
             Assert.Contains("Stakes and hype use model estimates for NSH / OTT from MoneyPuck.", preview.TextContent);
             Assert.Equal("https://moneypuck.com/predictions.htm", preview.QuerySelector("a")!.GetAttribute("href"));
             if (path.StartsWith("/game/", StringComparison.Ordinal))
-                Assert.StartsWith("Hype Score59Stakes6Quality97Closeness100", preview.TextContent);
-            else Assert.Equal("Hype59", document.QuerySelector($"#excitement-{game.Id}")!.TextContent);
+                Assert.StartsWith("Hype Score58Stakes6Quality97Closeness100", preview.TextContent);
+            else Assert.Equal("Hype58", document.QuerySelector($"#excitement-{game.Id}")!.TextContent);
         }
         using var verification = recreated.Services.CreateScope();
         var retained = await verification.ServiceProvider.GetRequiredService<IProHypeLifecycle>().ResolveAsync(game.Id);
