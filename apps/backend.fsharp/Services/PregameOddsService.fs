@@ -1,6 +1,7 @@
 namespace backend.Services
 
 open System
+open System.Collections.Generic
 open System.Net.Http
 open System.Threading
 open System.Threading.Tasks
@@ -24,6 +25,7 @@ type PregameOddsService [<ActivatorUtilitiesConstructor>]
     static let supportedSports = [| "nba"; "nfl"; "nhl"; "mlb"; "world_cup" |]
 
     let mutable kalshiRefused = false
+    let incompleteCatalogs = HashSet<string>()
 
     static let tryParseMoneyline (odds: string) =
         OddsConverter.TryParseMoneyline(odds)
@@ -119,7 +121,7 @@ type PregameOddsService [<ActivatorUtilitiesConstructor>]
                             let! kalshiOdds = task {
                                 if backend.Scoring.ProHypePolicy.Supports(sportLower) && verifiedSeason.HasValue
                                    && espnEvent.Date > now && not (isNull (box kalshiService)) then
-                                    if kalshiRefused then
+                                    if kalshiRefused || incompleteCatalogs.Contains(sportLower) then
                                         kalshiFetchFailed <- true
                                         return None
                                     else
@@ -136,7 +138,10 @@ type PregameOddsService [<ActivatorUtilitiesConstructor>]
                                         return None
                                     | ex ->
                                         kalshiFetchFailed <- true
-                                        if ex :? KalshiAccessRefusedException then kalshiRefused <- true
+                                        match ex with
+                                        | :? KalshiAccessRefusedException -> kalshiRefused <- true
+                                        | :? KalshiPregameCatalogIncompleteException -> incompleteCatalogs.Add(sportLower) |> ignore
+                                        | _ -> ()
                                         logger.LogError(ex, "Failed to fetch Kalshi pregame odds for {Game}", espnEvent.ShortName)
                                         return None
                                 else return None

@@ -163,6 +163,8 @@ type EspnOddsService
                           Season = readField "season" (fun json -> JsonSerializer.Deserialize<EspnSeason>(json: string))
                           Leagues = readField "leagues" (fun json -> JsonSerializer.Deserialize<ResizeArray<EspnLeague>>(json: string))
                           RawJson = root.Clone() }
+                if isNull (box scoreboard) || isNull scoreboard.Events then
+                    raise (JsonException("ESPN scoreboard has no events array"))
                 return { scoreboard with RawJson = document.RootElement.Clone() }
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))

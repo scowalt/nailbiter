@@ -74,6 +74,9 @@ module private KalshiOddsServiceMappings =
 
     let cacheDuration = TimeSpan.FromSeconds(30.0)
 
+type KalshiPregameCatalogIncompleteException() =
+    inherit InvalidOperationException("Kalshi pregame catalog pagination is incomplete")
+
 type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor>]
     (httpClient: System.Net.Http.HttpClient, logger: ILogger<KalshiOddsService>, timeProvider: TimeProvider) =
 
@@ -704,7 +707,7 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                     cursor <- response.Cursor
                     complete <- String.IsNullOrEmpty(cursor)
                     if not complete && (not (cursors.Add(cursor)) || cursors.Count >= 20) then
-                        invalidOp "Kalshi pregame catalog pagination is incomplete"
+                        raise (KalshiPregameCatalogIncompleteException())
             marketsCache.[cacheKey] <- struct (markets, now.Add(KalshiOddsServiceMappings.cacheDuration))
             return markets
     }
