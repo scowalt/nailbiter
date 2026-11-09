@@ -98,7 +98,7 @@ public sealed class NhlPowerRankingsGuruService(HttpClient http, IServiceScopeFa
                 snapshot.Ranks.Count, snapshot.Season, snapshot.PublishedAt, eligible);
             return eligible ? snapshot.Ranks.Count : 0;
         }
-        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException || ex is OperationCanceledException && !ct.IsCancellationRequested)
         {
             logger.LogWarning(ex, "NHL Power Rankings Guru collection interrupted; original observations preserved");
             return 0;

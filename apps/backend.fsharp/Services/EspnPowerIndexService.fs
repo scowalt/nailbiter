@@ -6,6 +6,7 @@ open System.Linq
 open System.Text.Json
 open backend.Data
 open backend.Models
+open backend.Services
 open Microsoft.EntityFrameworkCore
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
@@ -99,7 +100,8 @@ type EspnPowerIndexService [<ActivatorUtilitiesConstructor>]
                                         && currentValues.TryGetProperty("season", &dataYear) && dataYear.ValueKind = JsonValueKind.Number
                                         && dataYear.TryGetInt32(&returnedSeason) && returnedSeason = season
                             JsonSerializer.Deserialize<EspnPowerIndexResponse>(response)
-                        with :? JsonException ->
+                        with :? JsonException as unreadable ->
+                            logger.LogWarning(unreadable, "Rejected unreadable ESPN {Sport} power index page {Page}", sport, page)
                             verified <- false
                             keepGoing <- false
                             Unchecked.defaultof<EspnPowerIndexResponse>
@@ -182,7 +184,10 @@ type EspnPowerIndexService [<ActivatorUtilitiesConstructor>]
 
                 return count
             with
-            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: ESPN {Sport} power index refresh", sport); return 0
+            | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
+            | :? Net.Http.HttpRequestException as refused when not (ProviderFailure.Is refused) ->
+                logger.LogWarning(refused, "Failed to refresh {Sport} ratings from ESPN", sport)
+                return 0
             | ex ->
                 logger.LogError(ex, "Failed to refresh {Sport} ratings from ESPN", sport)
                 return 0
