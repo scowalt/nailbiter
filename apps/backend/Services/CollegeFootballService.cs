@@ -92,7 +92,7 @@ public sealed class CollegeFootballService(
             foreach (var game in known.Where(g => !events.ContainsKey(g.Id)))
             {
                 try { events[game.Id] = await espn.EventAsync(game.Id, ct); }
-                catch (HttpRequestException ex) { logger.Log(ProviderFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "College event {Event} missing; preserving stored state", game.Id); }
+                catch (Exception ex) when (!ct.IsCancellationRequested) { logger.Log(ProviderFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "College event {Event} missing; preserving stored state", game.Id); }
             }
         }
         var changed = new List<Game>();
