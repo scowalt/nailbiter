@@ -303,6 +303,29 @@ public sealed class RatingsProviderReportingTests
         Assert.DoesNotContain(sent, e => e.Logger == typeof(PowerRankingsGuruService).FullName || e.Logger == typeof(NhlPowerRankingsGuruService).FullName);
     }
 
+    [Fact]
+    public async Task Host_stop_while_waiting_for_the_next_ratings_cycle_is_quiet()
+    {
+        await using var database = await StartDatabaseAsync();
+        await using var app = new RatingsApp(_ => new Reply(HttpStatusCode.NotFound, "{}"), services => UseDatabase(services, database.GetConnectionString()));
+        var background = app.Background;
+
+        await background.StartAsync(CancellationToken.None);
+        var deadline = Stopwatch.StartNew();
+        while (!app.Logs.Any(l => l.Message.StartsWith("Next ratings refresh scheduled", StringComparison.Ordinal)))
+        {
+            Assert.True(deadline.Elapsed < TimeSpan.FromMinutes(2), "the first ratings cycle never reached its next-cycle wait");
+            await Task.Delay(50);
+        }
+        Assert.Empty(await app.SentEventsAsync());
+        var before = app.Logs.Count();
+
+        await background.StopAsync(CancellationToken.None);
+
+        Assert.DoesNotContain(app.Logs.Skip(before), l => l.Level >= LogLevel.Warning);
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
     private static async Task AssertCallerCancellationPropagatesAsync(RatingsApp app, Fetch fetch)
     {
         using var caller = new CancellationTokenSource();
@@ -351,7 +374,7 @@ public sealed class RatingsProviderReportingTests
 
     private sealed record SentEvent(string? Logger, string? Level, string? Template, (string? Type, string? Value)[] Exceptions);
 
-    private sealed record LoggedEntry(string Category, LogLevel Level, Exception? Exception);
+    private sealed record LoggedEntry(string Category, LogLevel Level, Exception? Exception, string Message);
 
     private sealed class RatingsApp : IAsyncDisposable
     {
@@ -448,7 +471,7 @@ public sealed class RatingsProviderReportingTests
             public bool IsEnabled(LogLevel logLevel) => true;
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-                entries.Enqueue(new LoggedEntry(category, logLevel, exception));
+                entries.Enqueue(new LoggedEntry(category, logLevel, exception, formatter(state, exception)));
         }
     }
 
