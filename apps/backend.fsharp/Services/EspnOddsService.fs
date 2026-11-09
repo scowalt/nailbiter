@@ -2,6 +2,7 @@ namespace backend.Services.Espn
 
 open System
 open System.Collections.Generic
+open System.Net.Http
 open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
@@ -143,13 +144,17 @@ type EspnOddsService
                     try JsonSerializer.Deserialize<EspnScoreboardResponse>(response)
                     with :? JsonException when supportsSeries ->
                         let root = document.RootElement
+                        let mutable eventsField = Unchecked.defaultof<JsonElement>
+                        if root.ValueKind <> JsonValueKind.Object || not (root.TryGetProperty("events", &eventsField))
+                           || eventsField.ValueKind <> JsonValueKind.Array then
+                            reraise ()
                         let readField (name: string) decode =
                             let mutable field = Unchecked.defaultof<JsonElement>
                             if root.TryGetProperty(name, &field) then
                                 try decode (field.GetRawText()) with :? JsonException -> Unchecked.defaultof<_>
                             else Unchecked.defaultof<_>
                         let events =
-                            root.GetProperty("events").EnumerateArray()
+                            eventsField.EnumerateArray()
                             |> Seq.choose (fun item ->
                                 try Some (JsonSerializer.Deserialize<EspnEvent>(item.GetRawText()))
                                 with :? JsonException -> None)
@@ -158,9 +163,17 @@ type EspnOddsService
                           Season = readField "season" (fun json -> JsonSerializer.Deserialize<EspnSeason>(json: string))
                           Leagues = readField "leagues" (fun json -> JsonSerializer.Deserialize<ResizeArray<EspnLeague>>(json: string))
                           RawJson = root.Clone() }
+                if isNull (box scoreboard) || isNull scoreboard.Events then
+                    raise (JsonException("ESPN scoreboard has no events array"))
                 return { scoreboard with RawJson = document.RootElement.Clone() }
             with
-            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: ESPN scoreboard fetch for {Sport} on {Date}", sport, (defaultArg date "today")); return Unchecked.defaultof<EspnScoreboardResponse>
+            | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
+            | :? HttpRequestException as ex when not (ProviderFailure.Is ex) ->
+                logger.LogWarning(ex, "Failed to fetch ESPN scoreboard for {Sport} on {Date}", sport, (defaultArg date "today"))
+                return Unchecked.defaultof<EspnScoreboardResponse>
+            | :? JsonException as ex ->
+                logger.LogWarning(ex, "Failed to fetch ESPN scoreboard for {Sport} on {Date}", sport, (defaultArg date "today"))
+                return Unchecked.defaultof<EspnScoreboardResponse>
             | ex ->
                 logger.LogError(ex, "Failed to fetch ESPN scoreboard for {Sport} on {Date}", sport, (defaultArg date "today"))
                 return Unchecked.defaultof<EspnScoreboardResponse>

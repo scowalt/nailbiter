@@ -2,6 +2,7 @@ namespace backend.Services.Kalshi
 
 open System
 open System.Collections.Generic
+open System.Net.Http
 open System.Text.Json
 open System.Text.RegularExpressions
 open System.Threading
@@ -73,11 +74,15 @@ module private KalshiOddsServiceMappings =
 
     let cacheDuration = TimeSpan.FromSeconds(30.0)
 
+type KalshiPregameCatalogIncompleteException() =
+    inherit InvalidOperationException("Kalshi pregame catalog pagination is incomplete")
+
 type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtilitiesConstructor>]
     (httpClient: System.Net.Http.HttpClient, logger: ILogger<KalshiOddsService>, timeProvider: TimeProvider) =
 
     let marketsCache = Dictionary<string, struct (ResizeArray<KalshiMarket> * DateTime)>()
     let mutable accessRefused = false
+    let mutable historyFailureSent = false
 
     do
         httpClient.DefaultRequestHeaders.Clear()
@@ -249,10 +254,16 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                     else
                         return Unchecked.defaultof<KalshiMoneylineOdds>
                 with
-                | :? OperationCanceledException -> return Unchecked.defaultof<KalshiMoneylineOdds>
+                | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
+                | :? HttpRequestException as ex when not (KalshiFailure.Is ex) ->
+                    logger.LogWarning(ex, "Could not verify MLB schedule for {EventTicker}", hm.EventTicker)
+                    return Unchecked.defaultof<KalshiMoneylineOdds>
+                | :? JsonException as ex ->
+                    logger.LogWarning(ex, "Could not verify MLB schedule for {EventTicker}", hm.EventTicker)
+                    return Unchecked.defaultof<KalshiMoneylineOdds>
                 | ex ->
                     if ex :? KalshiAccessRefusedException then accessRefused <- true
-                    logger.Log((if KalshiFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Could not verify MLB schedule for {EventTicker}", hm.EventTicker)
+                    logger.LogError(ex, "Could not verify MLB schedule for {EventTicker}", hm.EventTicker)
                     return Unchecked.defaultof<KalshiMoneylineOdds>
             | _ -> return Unchecked.defaultof<KalshiMoneylineOdds>
         | _ -> return Unchecked.defaultof<KalshiMoneylineOdds>
@@ -407,10 +418,16 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                     logger.LogDebug("Fetched {Count} World Cup markets from Kalshi", allMarkets.Count)
                     return struct (allMarkets, true)
                 with
-                | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: Kalshi World Cup markets fetch"); return struct (ResizeArray<KalshiMarket>(), false)
+                | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
+                | :? HttpRequestException as ex when not (KalshiFailure.Is ex) ->
+                    logger.LogWarning(ex, "Failed to fetch World Cup markets from Kalshi")
+                    return struct (ResizeArray<KalshiMarket>(), false)
+                | :? JsonException as ex ->
+                    logger.LogWarning(ex, "Failed to fetch World Cup markets from Kalshi")
+                    return struct (ResizeArray<KalshiMarket>(), false)
                 | ex ->
                     if ex :? KalshiAccessRefusedException then accessRefused <- true
-                    logger.Log((if KalshiFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch World Cup markets from Kalshi")
+                    logger.LogError(ex, "Failed to fetch World Cup markets from Kalshi")
                     return struct (ResizeArray<KalshiMarket>(), false)
         }
 
@@ -505,10 +522,16 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
 
                         return allMarkets
                     with
-                    | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: Kalshi markets fetch for {Sport}", sport); return ResizeArray<KalshiMarket>()
+                    | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
+                    | :? HttpRequestException as ex when not (KalshiFailure.Is ex) ->
+                        logger.LogWarning(ex, "Failed to fetch markets from Kalshi for {Sport}", sport)
+                        return ResizeArray<KalshiMarket>()
+                    | :? JsonException as ex ->
+                        logger.LogWarning(ex, "Failed to fetch markets from Kalshi for {Sport}", sport)
+                        return ResizeArray<KalshiMarket>()
                     | ex ->
                         if ex :? KalshiAccessRefusedException then accessRefused <- true
-                        logger.Log((if KalshiFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch markets from Kalshi for {Sport}", sport)
+                        logger.LogError(ex, "Failed to fetch markets from Kalshi for {Sport}", sport)
                         return ResizeArray<KalshiMarket>()
         }
 
@@ -527,13 +550,19 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                 else
                     return Some wrapper.Market
             with
-            | :? System.Net.Http.HttpRequestException as ex when
+            | :? HttpRequestException as ex when
                 ex.StatusCode = Nullable(System.Net.HttpStatusCode.NotFound) ->
                 return None
-            | :? OperationCanceledException -> return None
+            | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
+            | :? HttpRequestException as ex when not (KalshiFailure.Is ex) ->
+                logger.LogDebug(ex, "Failed to fetch Kalshi market {Ticker}", ticker)
+                return None
+            | :? JsonException as ex ->
+                logger.LogDebug(ex, "Failed to fetch Kalshi market {Ticker}", ticker)
+                return None
             | ex ->
                 if ex :? KalshiAccessRefusedException then accessRefused <- true
-                logger.Log((if KalshiFailure.Is ex then LogLevel.Error else LogLevel.Debug), ex, "Failed to fetch Kalshi market {Ticker}", ticker)
+                logger.LogError(ex, "Failed to fetch Kalshi market {Ticker}", ticker)
                 return None
         }
 
@@ -678,7 +707,7 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                     cursor <- response.Cursor
                     complete <- String.IsNullOrEmpty(cursor)
                     if not complete && (not (cursors.Add(cursor)) || cursors.Count >= 20) then
-                        invalidOp "Kalshi pregame catalog pagination is incomplete"
+                        raise (KalshiPregameCatalogIncompleteException())
             marketsCache.[cacheKey] <- struct (markets, now.Add(KalshiOddsServiceMappings.cacheDuration))
             return markets
     }
@@ -945,6 +974,7 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
             | false, _ ->
                 logger.LogDebug("Unsupported sport for Kalshi historical data: {Sport}", sport)
                 return ResizeArray<KalshiHistoricalOdds>()
+            | _ when accessRefused -> return ResizeArray<KalshiHistoricalOdds>()
             | true, seriesTicker ->
                 let kalshiHome = this.MapEspnToKalshi(sport, homeTeamAbbr)
                 let kalshiAway = this.MapEspnToKalshi(sport, awayTeamAbbr)
@@ -1018,7 +1048,7 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
 
                         return result
                 with
-                | :? System.Net.Http.HttpRequestException as ex when
+                | :? HttpRequestException as ex when
                     ex.StatusCode = System.Nullable(System.Net.HttpStatusCode.NotFound)
                     ->
                     logger.LogDebug(
@@ -1030,14 +1060,29 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                     )
 
                     return ResizeArray<KalshiHistoricalOdds>()
-                | ex ->
-                    logger.LogWarning(
+                | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
+                | :? HttpRequestException as ex when not (KalshiFailure.Is ex) ->
+                    logger.LogWarning(ex, "Failed to fetch Kalshi historical data for {Away} @ {Home}", awayTeamAbbr, homeTeamAbbr)
+                    return ResizeArray<KalshiHistoricalOdds>()
+                | :? JsonException as ex ->
+                    logger.LogWarning(ex, "Failed to fetch Kalshi historical data for {Away} @ {Home}", awayTeamAbbr, homeTeamAbbr)
+                    return ResizeArray<KalshiHistoricalOdds>()
+                | ex when KalshiFailure.Is ex ->
+                    let refused = ex :? KalshiAccessRefusedException
+                    if refused then accessRefused <- true
+                    let send = refused || not historyFailureSent
+                    historyFailureSent <- true
+                    logger.Log(
+                        (if send then LogLevel.Error else LogLevel.Warning),
                         ex,
                         "Failed to fetch Kalshi historical data for {Away} @ {Home}",
                         awayTeamAbbr,
                         homeTeamAbbr
                     )
 
+                    return ResizeArray<KalshiHistoricalOdds>()
+                | ex ->
+                    logger.LogError(ex, "Failed to fetch Kalshi historical data for {Away} @ {Home}", awayTeamAbbr, homeTeamAbbr)
                     return ResizeArray<KalshiHistoricalOdds>()
         }
 
@@ -1074,15 +1119,9 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                     match reversedResult with
                     | Some _ -> return reversedTicker
                     | None ->
-                        try
-                            let! markets = this.FetchMarketsAsync(sport, ct)
+                        let! markets = this.FetchMarketsAsync(sport, ct)
 
-                            match this.MatchGameMarkets(markets, kalshiHome, kalshiAway, easternDate) with
-                            | KalshiOddsServiceMappings.Matched(home, _) -> return home.Ticker
-                            | _ -> return null
-                        with
-                        | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: Kalshi market ticker search"); return null
-                        | ex ->
-                            logger.LogDebug(ex, "Failed to search for Kalshi market ticker")
-                            return null
+                        match this.MatchGameMarkets(markets, kalshiHome, kalshiAway, easternDate) with
+                        | KalshiOddsServiceMappings.Matched(home, _) -> return home.Ticker
+                        | _ -> return null
         }

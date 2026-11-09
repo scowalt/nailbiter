@@ -140,7 +140,7 @@ public sealed class KalshiPregameOddsTests
         using var handler = new Handler(_ => new(HttpStatusCode.OK) { Content = new StringContent(body.ToJsonString()) });
         using var http = new HttpClient(handler);
         var service = new KalshiOddsService(http, NullLogger<KalshiOddsService>.Instance);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.GetPregameOddsAsync("nfl", "PIT", "IND", Start, Now, null));
+        await Assert.ThrowsAsync<KalshiPregameCatalogIncompleteException>(() => service.GetPregameOddsAsync("nfl", "PIT", "IND", Start, Now, null));
         using var failedHandler = new Handler(_ => new(HttpStatusCode.ServiceUnavailable));
         using var failedHttp = new HttpClient(failedHandler);
         var failed = new KalshiOddsService(failedHttp, NullLogger<KalshiOddsService>.Instance);
