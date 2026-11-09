@@ -137,6 +137,9 @@ The competitive consequences of a game's result for playoff qualification or cha
 **Playoff swing**:
 The difference between a team's playoff probability if it wins a particular game and if it loses that game. It describes one game's consequence, not the team's overall playoff probability.
 
+**Playoff position swing**:
+The NFL's playoff swing weighted by the playoff position at stake: making the playoffs, winning the division (seeds 1–4) and earning the No. 1 seed. Nailbiter uses it for NFL regular-season Stakes.
+
 **Estimated playoff swing**:
 Nailbiter's own estimate of a playoff swing from a team's playoff probability and games remaining, used where no published win/loss forecast exists. It is not a forecast of the team's playoff probability after a win or a loss.
 
