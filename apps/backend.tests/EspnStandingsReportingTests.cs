@@ -76,6 +76,27 @@ public sealed class EspnStandingsReportingTests
     }
 
     [Fact]
+    public async Task Own_fault_below_the_refresh_is_sent_once_at_error()
+    {
+        await using var app = new StandingsApp(_ => throw new InvalidOperationException("Synthetic fault below the fetch"));
+
+        Assert.Equal(0, await app.Standings.RefreshNflStandingsAsync(CancellationToken.None));
+
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(InvalidOperationException));
+    }
+
+    [Fact]
+    public async Task Client_deadline_on_the_refresh_is_sent_once_at_error()
+    {
+        await using var app = new StandingsApp(Hang, services => services.ConfigureAll<HttpClientFactoryOptions>(options =>
+            options.HttpClientActions.Add(client => client.Timeout = TimeSpan.FromMilliseconds(200))));
+
+        Assert.Equal(0, await app.Standings.RefreshNflStandingsAsync(CancellationToken.None));
+
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(TaskCanceledException));
+    }
+
+    [Fact]
     public async Task Database_failure_is_sent_once_at_error_with_its_sqlstate()
     {
         await using var database = IsolatedPostgreSql.CreateContainer();
