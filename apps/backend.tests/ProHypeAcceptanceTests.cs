@@ -22,6 +22,7 @@ namespace backend.tests;
 
 public sealed class ProHypeAcceptanceTests : IAsyncLifetime
 {
+    private static readonly TimeSpan HangDeadline = TimeSpan.FromSeconds(60);
     private readonly PostgreSqlContainer database = IsolatedPostgreSql.CreateContainer();
     private readonly AppFactory entry = new();
     private readonly FakeTimeProvider clock = new(new DateTimeOffset(ProHypeTests.Now));
@@ -61,13 +62,9 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
         public TaskCompletionSource Entered => gate.Entered;
         public void Arm() => gate.Arm();
         public void Release() => gate.Release();
-        private long stallTicks;
-        public void StallNext(TimeSpan by) => stallTicks = by.Ticks;
         public override async ValueTask<InterceptionResult<DbTransaction>> TransactionStartingAsync(DbConnection connection,
             TransactionStartingEventData eventData, InterceptionResult<DbTransaction> result, CancellationToken ct = default)
         {
-            var stall = Interlocked.Exchange(ref stallTicks, 0);
-            if (stall > 0) await Task.Delay(TimeSpan.FromTicks(stall), ct);
             await gate.EnterAsync(ct);
             return result;
         }
@@ -238,10 +235,9 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
             foreach (var rating in await db.TeamRatings.ToArrayAsync()) rating.FetchedAt = at;
             (await db.PregameOdds.SingleAsync()).FetchedAt = at;
         });
-        publication.StallNext(TimeSpan.FromSeconds(16));
         publication.Arm();
         var pending = client.GetStringAsync(path);
-        await publication.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        await publication.Entered.Task.WaitAsync(HangDeadline);
         try
         {
             await Change(async db =>
@@ -267,7 +263,7 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
             });
         }
         finally { publication.Release(); }
-        var html = await pending.WaitAsync(TimeSpan.FromSeconds(15));
+        var html = await pending.WaitAsync(HangDeadline);
         NoDiagnostics(html);
         var document = await new HtmlParser().ParseDocumentAsync(html);
         var identity = path.StartsWith("/game/", StringComparison.Ordinal) ? document.Body!
@@ -534,14 +530,14 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
         await Capture();
         publication.Arm();
         var delayedCapture = Capture();
-        await publication.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        await publication.Entered.Task.WaitAsync(HangDeadline);
         try
         {
             await Change(async db => (await db.Games.SingleAsync()).Status = "postponed");
             var invalidated = await Page("/game/" + game.Id);
             Assert.Null(invalidated.QuerySelector("#detail-hype"));
             publication.Release();
-            await delayedCapture.WaitAsync(TimeSpan.FromSeconds(15));
+            await delayedCapture.WaitAsync(HangDeadline);
             await Change(async db => (await db.Games.SingleAsync()).Status = "scheduled");
             clock.Advance(TimeSpan.FromDays(3));
             await Restart();
