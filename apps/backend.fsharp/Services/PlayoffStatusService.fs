@@ -527,13 +527,8 @@ type PlayoffStatusService
 
                                     teams.Add(team)
             with
-            | :? OperationCanceledException -> logger.LogDebug("PlayoffStatus standings HTML parsing cancelled for {Sport}", sport)
-            | ex ->
-                logger.LogError(
-                    ex,
-                    "Failed to parse PlayoffStatus standings HTML for {Sport}",
-                    sport
-                )
+            | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
+            | ex -> logger.LogWarning(ex, "Failed to parse PlayoffStatus standings HTML for {Sport}", sport)
 
             return teams
         }
@@ -590,13 +585,8 @@ type PlayoffStatusService
                             | _ -> ()
                     | _ -> ()
             with
-            | :? OperationCanceledException -> logger.LogDebug("PlayoffStatus postseason HTML parsing cancelled for {Sport}", sport)
-            | ex ->
-                logger.LogError(
-                    ex,
-                    "Failed to parse PlayoffStatus postseason HTML for {Sport}",
-                    sport
-                )
+            | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
+            | ex -> logger.LogWarning(ex, "Failed to parse PlayoffStatus postseason HTML for {Sport}", sport)
         }
         :> Task
 
@@ -691,16 +681,9 @@ type PlayoffStatusService
 
                             return count
                 with
-                | :? OperationCanceledException ->
-                    logger.LogDebug("PlayoffStatus {Sport} ratings refresh cancelled", sport)
-                    return 0
+                | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
                 | ex ->
-                    logger.LogError(
-                        ex,
-                        "Failed to refresh {Sport} ratings from PlayoffStatus",
-                        sport
-                    )
-
+                    logger.Log((if DatabaseFailure.Is ex || ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to refresh {Sport} ratings from PlayoffStatus", sport)
                     return 0
         }
 
