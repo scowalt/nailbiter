@@ -14,7 +14,7 @@ namespace backend.tests;
 public sealed class IsolatedPostgreSqlTests
 {
     [Fact]
-    public async Task PostgreSQL_starts_when_another_listener_takes_the_requested_host_port_before_start()
+    public async Task PostgreSQL_starts_above_the_OS_ephemeral_range_when_another_listener_takes_the_requested_host_port()
     {
         var competitors = new List<Socket>();
         try
@@ -28,6 +28,8 @@ public sealed class IsolatedPostgreSqlTests
                 })
                 .Build();
             await container.StartAsync();
+            var ephemeralUpperBound = int.Parse(File.ReadAllText("/proc/sys/net/ipv4/ip_local_port_range").Split('\t', ' ')[^1]);
+            Assert.InRange(container.GetMappedPublicPort(5432), ephemeralUpperBound + 1, ushort.MaxValue);
             await using var connection = new NpgsqlConnection(container.GetConnectionString());
             await connection.OpenAsync();
             await using var command = new NpgsqlCommand("select 1", connection);
