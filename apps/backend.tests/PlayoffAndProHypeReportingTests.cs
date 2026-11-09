@@ -33,6 +33,8 @@ public sealed class PlayoffAndProHypeReportingTests
 {
     private const int StandardAttempts = 4;
     private const string PlayoffStatusFailure = "Failed to refresh {Sport} ratings from PlayoffStatus";
+    private const string NhlModelFailure = "Failed NHL PlayoffStatus model refresh for season {Season}";
+    private const int NhlSeason = 2027;
     private const string ProCompetitionFailure = "Pro competition refresh failed";
     private const string ProHypeFailure = "Pro hype capture failed";
     private const string LockTimeout = ";Options=-c lock_timeout=500";
@@ -161,6 +163,42 @@ public sealed class PlayoffAndProHypeReportingTests
     }
 
     [Fact]
+    public async Task Nhl_model_refresh_own_fault_is_sent_once_at_error()
+    {
+        var published = DateTime.UtcNow.AddHours(-24);
+        await using var app = NhlModelApp(uri => new Reply(HttpStatusCode.OK, NflPlayoffPageTests.PlayoffStatusFixture(uri.AbsoluteUri, published, invalidBos: false)),
+            services => services.RemoveAll<ExcitementDbContext>());
+
+        Assert.Equal(0, await RefreshNhlModelAsync(app));
+
+        Assert.Equal(3, app.Provider.Requests);
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(PlayoffStatusService), NhlModelFailure, typeof(InvalidOperationException));
+    }
+
+    [Fact]
+    public async Task Nhl_model_refresh_refused_page_is_a_warning_without_an_event()
+    {
+        await using var app = NhlModelApp(_ => new Reply(HttpStatusCode.NotFound, "{}"));
+
+        Assert.Equal(0, await RefreshNhlModelAsync(app));
+
+        var failure = Assert.Single(app.Logs, l => l.Category == typeof(PlayoffStatusService).FullName && l.Level >= LogLevel.Warning);
+        Assert.Equal((LogLevel.Warning, NhlModelFailure), (failure.Level, failure.Template));
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Fact]
+    public async Task Nhl_model_refresh_server_errors_after_retries_are_sent_once_at_error()
+    {
+        await using var app = NhlModelApp(_ => Unavailable);
+
+        Assert.Equal(0, await RefreshNhlModelAsync(app));
+
+        Assert.Equal(StandardAttempts, app.Provider.Requests);
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(PlayoffStatusService), NhlModelFailure, typeof(HttpRequestException));
+    }
+
+    [Fact]
     public async Task Pro_competition_refresh_shutdown_stops_the_loop_without_an_event()
     {
         await using var database = await Database.StartAsync(ScheduledNbaGame());
@@ -243,6 +281,24 @@ public sealed class PlayoffAndProHypeReportingTests
     {
         using var scope = app.Services.CreateScope();
         return await PlayoffStatusRefreshes[sport](scope.ServiceProvider.GetRequiredService<PlayoffStatusService>(), ct);
+    }
+
+    private static ReportingApp NhlModelApp(Func<Uri, Answer> answer, Action<IServiceCollection>? configure = null) =>
+        new(answer, configure: services =>
+        {
+            services.PostConfigure<PlayoffRatingsOptions>(options =>
+            {
+                options.NhlModelMode = "fallback";
+                options.NhlModelRefreshEnabled = true;
+                options.ApprovedSeasons = [NhlSeason];
+            });
+            configure?.Invoke(services);
+        });
+
+    private static async Task<int> RefreshNhlModelAsync(ReportingApp app)
+    {
+        using var scope = app.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<PlayoffStatusService>().RefreshNhlRatingsForSeasonAsync(NhlSeason, CancellationToken.None);
     }
 
     private static Game ScheduledNbaGame() => new()
