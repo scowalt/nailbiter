@@ -460,8 +460,11 @@ type PlayoffStatusService
                             return count
                     with
                     | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
+                    | :? System.Net.Http.HttpRequestException as e when not (ProviderFailure.Is e) ->
+                        logger.LogWarning(e, "Failed NHL PlayoffStatus model refresh for season {Season}", season)
+                        return 0
                     | ex ->
-                        logger.Log((if DatabaseFailure.Is ex || ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed NHL PlayoffStatus model refresh for season {Season}", season)
+                        logger.LogError(ex, "Failed NHL PlayoffStatus model refresh for season {Season}", season)
                         return 0
                 finally
                     gate.Exit()
