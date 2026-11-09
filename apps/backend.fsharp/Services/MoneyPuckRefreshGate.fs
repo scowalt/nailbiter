@@ -53,7 +53,7 @@ type MoneyPuckRefreshGate(serviceProvider: IServiceProvider, timeProvider: TimeP
                 return raise (OperationCanceledException(ct))
             | ex ->
                 gate.Release() |> ignore
-                logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "MoneyPuck daily admission unavailable; no provider requests permitted")
+                logger.LogError(ex, "MoneyPuck daily admission unavailable; no provider requests permitted")
                 return false
     }
     member internal _.LatchDenial(?retryAfter: DateTime) =
@@ -72,6 +72,6 @@ type MoneyPuckRefreshGate(serviceProvider: IServiceProvider, timeProvider: TimeP
             let! _ = db.Database.ExecuteSqlInterpolatedAsync(sql, timeout.Token)
             ()
         with ex ->
-            logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "MoneyPuck cycle finalization unavailable; persisted admission remains blocked pending review")
+            logger.LogError(ex, "MoneyPuck cycle finalization unavailable; persisted admission remains blocked pending review")
     }
     member internal _.Exit() = gate.Release() |> ignore
