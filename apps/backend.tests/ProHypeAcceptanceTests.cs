@@ -61,9 +61,13 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
         public TaskCompletionSource Entered => gate.Entered;
         public void Arm() => gate.Arm();
         public void Release() => gate.Release();
+        private long stallTicks;
+        public void StallNext(TimeSpan by) => stallTicks = by.Ticks;
         public override async ValueTask<InterceptionResult<DbTransaction>> TransactionStartingAsync(DbConnection connection,
             TransactionStartingEventData eventData, InterceptionResult<DbTransaction> result, CancellationToken ct = default)
         {
+            var stall = Interlocked.Exchange(ref stallTicks, 0);
+            if (stall > 0) await Task.Delay(TimeSpan.FromTicks(stall), ct);
             await gate.EnterAsync(ct);
             return result;
         }
@@ -234,6 +238,7 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
             foreach (var rating in await db.TeamRatings.ToArrayAsync()) rating.FetchedAt = at;
             (await db.PregameOdds.SingleAsync()).FetchedAt = at;
         });
+        publication.StallNext(TimeSpan.FromSeconds(16));
         publication.Arm();
         var pending = client.GetStringAsync(path);
         await publication.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
