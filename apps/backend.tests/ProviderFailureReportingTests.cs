@@ -133,12 +133,21 @@ public sealed class ProviderFailureReportingTests
     [Fact]
     public async Task Kalshi_live_markets_request_refused_by_an_open_circuit_is_sent()
     {
+        var circuitBreak = TimeSpan.FromMilliseconds(500);
         await using var app = new ReportingApp(uri => uri.AbsolutePath == "/trade-api/v2/markets" ? Unreachable : NotFound(),
-            services => services.ConfigureAll<HttpStandardResilienceOptions>(options =>
-                options.CircuitBreaker.MinimumThroughput = StandardAttempts));
+            services =>
+            {
+                PinClock(services, new DateTimeOffset(LiveStart));
+                services.ConfigureAll<HttpStandardResilienceOptions>(options =>
+                {
+                    options.CircuitBreaker.MinimumThroughput = StandardAttempts;
+                    options.CircuitBreaker.BreakDuration = circuitBreak;
+                });
+            });
         var kalshi = app.Get<KalshiOddsService>();
 
         Assert.Null(await kalshi.GetLiveOddsAsync("nba", "BOS", "NYK", LiveStart, CancellationToken.None));
+        await Task.Delay(circuitBreak * 2);
         Assert.Null(await kalshi.GetLiveOddsAsync("nba", "BOS", "NYK", LiveStart, CancellationToken.None));
 
         var sent = await app.SentEventsAsync();
