@@ -4,6 +4,7 @@ using System.Net;
 using System.Text.Json;
 using backend.Services;
 using backend.Services.Espn;
+using backend.Services.Highlights;
 using backend.Services.Kalshi;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -27,6 +28,13 @@ public sealed class StalledProviderBodyReportingTests
     private const int StandardAttempts = 4;
     private const string Template = "Failed to refresh {Sport} standings from ESPN";
     private static readonly TimeSpan Guard = TimeSpan.FromSeconds(20);
+    private static readonly DateTime LiveStart = new(2026, 11, 7, 0, 30, 0, DateTimeKind.Utc);
+
+    private static readonly string[] DeadlineBoundClients =
+    [
+        YouTubeHighlightsClient.HttpClientName, MlbHighlightsIdentityClient.HttpClientName,
+        nameof(NhlPowerRankingsGuruService), nameof(MoneyPuckService), nameof(NflPlayoffLeverageCollector)
+    ];
 
     [Fact]
     public async Task Stalled_standings_body_times_out_after_retries_and_is_sent_once_at_error()
@@ -35,7 +43,7 @@ public sealed class StalledProviderBodyReportingTests
 
         Assert.Equal(0, await app.Standings.RefreshNflStandingsAsync(CancellationToken.None).WaitAsync(Guard));
 
-        Assert.Equal(StandardAttempts, app.Provider.Requests);
+        Assert.Equal(StandardAttempts, app.Provider.Stalled);
         var reported = Assert.Single(await app.SentEventsAsync());
         Assert.Equal(typeof(EspnStandingsService).FullName, reported.Logger);
         Assert.Equal("error", reported.Level);
@@ -50,25 +58,42 @@ public sealed class StalledProviderBodyReportingTests
         using var caller = new CancellationTokenSource();
 
         var refresh = app.Standings.RefreshNflStandingsAsync(caller.Token);
-        await app.Provider.FirstRequest.WaitAsync(TimeSpan.FromSeconds(10));
+        await app.Provider.FirstStall.WaitAsync(TimeSpan.FromSeconds(10));
         caller.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresh.WaitAsync(Guard));
-        Assert.Equal(1, app.Provider.Requests);
+        Assert.Equal(1, app.Provider.Stalled);
         Assert.Empty(await app.SentEventsAsync());
     }
 
     [Fact]
-    public async Task Every_resilient_provider_client_reports_a_stalled_body_as_a_provider_failure()
+    public async Task Stalled_kalshi_live_markets_body_is_sent_once_at_error()
+    {
+        await using var app = new StalledBodyApp(uri => uri.AbsolutePath == "/trade-api/v2/markets");
+
+        var odds = await app.Services.GetRequiredService<KalshiOddsService>()
+            .GetLiveOddsAsync("nba", "BOS", "NYK", LiveStart, CancellationToken.None).WaitAsync(Guard);
+
+        Assert.Null(odds);
+        Assert.Equal(StandardAttempts, app.Provider.Stalled);
+        var reported = Assert.Single(await app.SentEventsAsync());
+        Assert.Equal(typeof(KalshiOddsService).FullName, reported.Logger);
+        Assert.Equal("error", reported.Level);
+        Assert.Equal("Failed to fetch markets from Kalshi for {Sport}", reported.Template);
+        Assert.Contains(reported.Exceptions, e => e.Type == typeof(TimeoutRejectedException).FullName);
+    }
+
+    [Fact]
+    public async Task Every_provider_client_without_its_own_deadline_reports_a_stalled_body_as_a_provider_failure()
     {
         await using var app = new StalledBodyApp();
-        var factory = app.Services.GetRequiredService<IHttpMessageHandlerFactory>();
-        var resilient = app.ClientNames.Where(name => HandlerChain(factory.CreateHandler(name)).Any(h => h is ResilienceHandler)).Order().ToArray();
 
-        Assert.Contains(nameof(EspnStandingsService), resilient);
-        Assert.Contains(nameof(KalshiOddsService), resilient);
+        Assert.Subset(app.ClientNames.ToHashSet(), DeadlineBoundClients.ToHashSet());
+        var providerClients = app.ClientNames.Except(DeadlineBoundClients).Order().ToArray();
+        Assert.Contains(nameof(EspnStandingsService), providerClients);
+        Assert.Contains(nameof(KalshiOddsService), providerClients);
         var clients = app.Services.GetRequiredService<IHttpClientFactory>();
-        var outcomes = await Task.WhenAll(resilient.Select(async name =>
+        var outcomes = await Task.WhenAll(providerClients.Select(async name =>
         {
             try
             {
@@ -85,14 +110,6 @@ public sealed class StalledProviderBodyReportingTests
         Assert.True(unreported.Length == 0, string.Join(", ", unreported));
     }
 
-    private static IEnumerable<HttpMessageHandler> HandlerChain(HttpMessageHandler handler)
-    {
-        for (HttpMessageHandler? current = handler; current is not null; current = (current as DelegatingHandler)?.InnerHandler)
-            yield return current;
-    }
-
-    private static Task<HttpResponseMessage> StalledBody() =>
-        Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new Pipe().Reader.AsStream()) });
 
     private sealed record SentEvent(string? Logger, string? Level, string? Template, (string? Type, string? Value)[] Exceptions);
 
@@ -102,9 +119,9 @@ public sealed class StalledProviderBodyReportingTests
         private readonly WebApplicationFactory<Program> app;
         private readonly SentTransport transport = new();
 
-        public StalledBodyApp()
+        public StalledBodyApp(Func<Uri, bool>? stalls = null)
         {
-            Provider = new SyntheticProvider(StalledBody);
+            Provider = new SyntheticProvider(stalls ?? (_ => true));
             app = entry.WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("Production");
@@ -113,12 +130,6 @@ public sealed class StalledProviderBodyReportingTests
                     foreach (var worker in services.Where(s => s.ServiceType == typeof(IHostedService)
                         && s.ImplementationType?.Namespace?.StartsWith("backend", StringComparison.Ordinal) == true).ToArray())
                         services.Remove(worker);
-                    ClientNames = services
-                        .Select(s => s.ImplementationInstance)
-                        .OfType<ConfigureNamedOptions<HttpClientFactoryOptions>>()
-                        .Select(o => o.Name)
-                        .OfType<string>()
-                        .ToHashSet();
                     services.ConfigureAll<HttpClientFactoryOptions>(options =>
                         options.HttpMessageHandlerBuilderActions.Add(handlers => handlers.PrimaryHandler = Provider));
                     services.ConfigureAll<HttpStandardResilienceOptions>(options =>
@@ -137,7 +148,21 @@ public sealed class StalledProviderBodyReportingTests
 
         public SyntheticProvider Provider { get; }
 
-        public IReadOnlySet<string> ClientNames { get; private set; } = new HashSet<string>();
+        public IReadOnlySet<string> ClientNames
+        {
+            get
+            {
+                var registryType = typeof(IHttpClientFactory).Assembly.GetType("Microsoft.Extensions.DependencyInjection.HttpClientMappingRegistry", throwOnError: true)!;
+                var registry = app.Services.GetRequiredService(registryType);
+                var typed = (System.Collections.IDictionary)registryType.GetProperty("NamedClientRegistrations")!.GetValue(registry)!;
+                return app.Services.GetServices<IConfigureOptions<HttpClientFactoryOptions>>()
+                    .OfType<ConfigureNamedOptions<HttpClientFactoryOptions>>()
+                    .Select(o => o.Name)
+                    .Concat(typed.Keys.Cast<string>())
+                    .OfType<string>()
+                    .ToHashSet();
+            }
+        }
 
         public IServiceProvider Services => app.Services;
 
@@ -157,20 +182,22 @@ public sealed class StalledProviderBodyReportingTests
         }
     }
 
-    private sealed class SyntheticProvider(Func<Task<HttpResponseMessage>> respond) : HttpMessageHandler
+    private sealed class SyntheticProvider(Func<Uri, bool> stalls) : HttpMessageHandler
     {
-        private readonly TaskCompletionSource firstRequest = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private int requests;
+        private readonly TaskCompletionSource firstStall = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int stalled;
 
-        public Task FirstRequest => firstRequest.Task;
+        public Task FirstStall => firstStall.Task;
 
-        public int Requests => requests;
+        public int Stalled => stalled;
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            Interlocked.Increment(ref requests);
-            firstRequest.TrySetResult();
-            return respond();
+            if (!stalls(request.RequestUri!))
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("{}") });
+            Interlocked.Increment(ref stalled);
+            firstStall.TrySetResult();
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new Pipe().Reader.AsStream()) });
         }
     }
 
