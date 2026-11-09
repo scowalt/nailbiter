@@ -20,24 +20,16 @@ type RatingsRefreshBackgroundService(serviceProvider: IServiceProvider, logger: 
             logger.LogInformation("Starting standings refresh for all sports...")
 
             try let! _ = standings.RefreshNflStandingsAsync(ct) in ()
-            with
-            | :? OperationCanceledException -> logger.LogDebug("NFL standings refresh cancelled")
-            | ex -> logger.LogError(ex, "Failed to refresh NFL standings")
+            with ex when not ct.IsCancellationRequested -> logger.LogError(ex, "Failed to refresh NFL standings")
 
             try let! _ = standings.RefreshNbaStandingsAsync(ct) in ()
-            with
-            | :? OperationCanceledException -> logger.LogDebug("NBA standings refresh cancelled")
-            | ex -> logger.LogError(ex, "Failed to refresh NBA standings")
+            with ex when not ct.IsCancellationRequested -> logger.LogError(ex, "Failed to refresh NBA standings")
 
             try let! _ = standings.RefreshNhlStandingsAsync(ct) in ()
-            with
-            | :? OperationCanceledException -> logger.LogDebug("NHL standings refresh cancelled")
-            | ex -> logger.LogError(ex, "Failed to refresh NHL standings")
+            with ex when not ct.IsCancellationRequested -> logger.LogError(ex, "Failed to refresh NHL standings")
 
             try let! _ = standings.RefreshMlbStandingsAsync(ct) in ()
-            with
-            | :? OperationCanceledException -> logger.LogDebug("MLB standings refresh cancelled")
-            | ex -> logger.LogError(ex, "Failed to refresh MLB standings")
+            with ex when not ct.IsCancellationRequested -> logger.LogError(ex, "Failed to refresh MLB standings")
 
             logger.LogInformation("Standings refresh completed for all sports")
         }
@@ -50,36 +42,24 @@ type RatingsRefreshBackgroundService(serviceProvider: IServiceProvider, logger: 
             let powerRankingsGuru = scope.ServiceProvider.GetRequiredService<PowerRankingsGuruService>()
 
             try let! _ = powerRankingsGuru.RefreshNflRatingsAsync(ct) in ()
-            with
-            | :? OperationCanceledException -> logger.LogDebug("PowerRankingsGuru NFL ratings refresh cancelled")
-            | ex -> logger.LogError(ex, "Failed to refresh PowerRankingsGuru NFL ratings")
+            with ex when not ct.IsCancellationRequested -> logger.LogError(ex, "Failed to refresh PowerRankingsGuru NFL ratings")
 
             try let! _ = powerRankingsGuru.RefreshNbaRatingsAsync(ct) in ()
-            with
-            | :? OperationCanceledException -> logger.LogDebug("PowerRankingsGuru NBA ratings refresh cancelled")
-            | ex -> logger.LogError(ex, "Failed to refresh PowerRankingsGuru NBA ratings")
+            with ex when not ct.IsCancellationRequested -> logger.LogError(ex, "Failed to refresh PowerRankingsGuru NBA ratings")
 
             try let! _ = powerRankingsGuru.RefreshNhlRatingsAsync(ct) in ()
-            with
-            | :? OperationCanceledException -> logger.LogDebug("PowerRankingsGuru NHL rankings refresh cancelled")
-            | ex -> logger.LogError(ex, "Failed to refresh PowerRankingsGuru NHL rankings")
+            with ex when not ct.IsCancellationRequested -> logger.LogError(ex, "Failed to refresh PowerRankingsGuru NHL rankings")
 
             try let! _ = powerRankingsGuru.RefreshMlbRatingsAsync(ct) in ()
-            with
-            | :? OperationCanceledException -> logger.LogDebug("PowerRankingsGuru MLB ratings refresh cancelled")
-            | ex -> logger.LogError(ex, "Failed to refresh PowerRankingsGuru MLB ratings")
+            with ex when not ct.IsCancellationRequested -> logger.LogError(ex, "Failed to refresh PowerRankingsGuru MLB ratings")
 
             let espnPowerIndex = scope.ServiceProvider.GetRequiredService<EspnPowerIndexService>()
 
             try let! _ = espnPowerIndex.RefreshNbaRatingsAsync(ct) in ()
-            with
-            | :? OperationCanceledException -> logger.LogDebug("ESPN BPI NBA ratings refresh cancelled")
-            | ex -> logger.LogError(ex, "Failed to refresh ESPN BPI NBA ratings")
+            with ex when not ct.IsCancellationRequested -> logger.LogError(ex, "Failed to refresh ESPN BPI NBA ratings")
 
             try let! _ = espnPowerIndex.RefreshNflRatingsAsync(ct) in ()
-            with
-            | :? OperationCanceledException -> logger.LogDebug("ESPN FPI NFL ratings refresh cancelled")
-            | ex -> logger.LogError(ex, "Failed to refresh ESPN FPI NFL ratings")
+            with ex when not ct.IsCancellationRequested -> logger.LogError(ex, "Failed to refresh ESPN FPI NFL ratings")
 
             do! this.RefreshAllStandingsAsync(scope, ct)
             logger.LogInformation("Ratings refresh completed for all sports")

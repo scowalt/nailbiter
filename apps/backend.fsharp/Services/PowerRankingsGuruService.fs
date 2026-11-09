@@ -270,9 +270,8 @@ type PowerRankingsGuruService [<ActivatorUtilitiesConstructor>]
                                     )
                             | _ -> ()
             with
-            | :? OperationCanceledException -> logger.LogDebug("PowerRankingsGuru HTML parsing cancelled for {Sport}", sport)
-            | ex ->
-                logger.LogError(ex, "Failed to parse PowerRankingsGuru HTML for {Sport}", sport)
+            | ex when not ct.IsCancellationRequested ->
+                logger.LogWarning(ex, "Failed to parse PowerRankingsGuru HTML for {Sport}", sport)
 
             return teams
         }
@@ -370,11 +369,10 @@ type PowerRankingsGuruService [<ActivatorUtilitiesConstructor>]
 
                         return count
                 with
-                | :? OperationCanceledException ->
-                    logger.LogDebug("PowerRankingsGuru {Sport} ratings refresh cancelled", sport)
-                    return 0
+                | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
                 | ex ->
-                    logger.LogError(
+                    logger.Log(
+                        (if DatabaseFailure.Is ex || ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning),
                         ex,
                         "Failed to refresh {Sport} ratings from PowerRankingsGuru",
                         sport
