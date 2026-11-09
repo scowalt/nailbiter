@@ -370,15 +370,30 @@ module GameDetailRenderer =
                                 if isNull (box odds) then "Unavailable"
                                 elif win then probability odds.WinLower odds.WinUpper
                                 else probability odds.LossLower odds.LossUpper
+                            let awayPositions = backend.Scoring.NflPlayoffLeveragePolicy.Positions forecast.AwayOdds
+                            let homePositions = backend.Scoring.NflPlayoffLeveragePolicy.Positions forecast.HomeOdds
+                            let seeded = not (isNull (box awayPositions) && isNull (box homePositions))
+                            let swing select (positions: backend.Scoring.NflPlayoffPositions) =
+                                if isNull (box positions) then "Unavailable"
+                                else
+                                    let interval (p: ProbabilityInterval) = probability (Nullable p.Lower) (Nullable p.Upper)
+                                    $"{interval (select positions.Win)} / {interval (select positions.Loss)}"
+                            let positionRow label select = comparisonRow label (swing select awayPositions) (swing select homePositions)
                             Elem.div [ Attr.id "nfl-playoff-leverage"; cls "leverage" ] [
                                 Elem.h3 [ cls "leverage-title" ] [ Text.raw "Playoff chances by result" ]
                                 teamHeader game
                                 comparisonRow "If win" (scenario true forecast.AwayOdds) (scenario true forecast.HomeOdds)
                                 comparisonRow "If loss" (scenario false forecast.AwayOdds) (scenario false forecast.HomeOdds)
+                                if seeded then
+                                    positionRow "Division title" (fun (p: backend.Scoring.NflPlayoffPosition) -> p.DivisionTitle)
+                                    positionRow "No. 1 seed" (fun (p: backend.Scoring.NflPlayoffPosition) -> p.TopSeed)
                                 Elem.p [ cls "leverage-source" ] [
                                     Text.raw "Model estimates from "
                                     Elem.a [ Attr.href backend.Scoring.NflPlayoffLeveragePolicy.ScheduleUrl ] [ Text.raw "PlayoffStatus" ]
-                                    Text.raw ". Stakes uses the larger playoff qualification swing."
+                                    Text.raw (
+                                        if seeded then
+                                            ". Stakes uses the larger swing in playoff position: making the playoffs, the division title and the No. 1 seed."
+                                        else ". Stakes uses the larger playoff qualification swing.")
                                 ]
                             ]
                         if backend.Scoring.ProHypePolicy.Supports game.Sport && hypeComponents.StakesAvailable then

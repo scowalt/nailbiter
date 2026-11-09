@@ -267,7 +267,16 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
             WinLower = 1 - wp.Value.Upper, WinUpper = 1 - wp.Value.Lower,
             LossLower = 1 - lp.Value.Upper, LossUpper = 1 - lp.Value.Lower
         };
-        return NflPlayoffLeveragePolicy.Valid(result) ? result : null;
+        if (!NflPlayoffLeveragePolicy.Valid(result)) return null;
+        if (Seeds(win) is not { } winSeeds || Seeds(loss) is not { } lossSeeds) return result;
+        var seeded = result with { Seeds = new(winSeeds, lossSeeds) };
+        return NflPlayoffLeveragePolicy.Positions(seeded) is null ? result : seeded;
+    }
+
+    private static ProbabilityInterval[]? Seeds(string[] row)
+    {
+        var cells = row[4..11].Select(Probability).ToArray();
+        return cells.All(c => c is not null) ? cells.Select(c => new ProbabilityInterval(c!.Value.Lower, c.Value.Upper)).ToArray() : null;
     }
 
     public async Task<IReadOnlyDictionary<string, NflPlayoffLeverageEvidence?>> CollectAsync(IReadOnlyCollection<Game> games,

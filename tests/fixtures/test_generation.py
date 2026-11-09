@@ -79,15 +79,23 @@ class SyntheticFixtureTests(unittest.TestCase):
         self.assertEqual((prefix / 'nflschedule.html').read_text().count('<h2 id='), 18)
         for filename in ['nflschedule.html', 'packerswhatif.html', 'lionswhatif.html']:
             self.assertIn('Independently authored synthetic contract fixture', (prefix / filename).read_text())
-        away = 80 * ((1 - Fraction(18, 100)) - (1 - Fraction(43, 100)))
-        home = 80 * ((1 - Fraction(26, 100)) - (1 - Fraction(46, 100)))
-        self.assertEqual(away, 20)
-        self.assertEqual(home, 16)
+        percent = lambda n: Fraction(n, 100)
+        away_qualification = 80 * ((1 - percent(18)) - (1 - percent(43)))
+        home_qualification = 80 * ((1 - percent(26)) - (1 - percent(46)))
+        self.assertEqual(away_qualification, 20)
+        self.assertEqual(home_qualification, 16)
+        below_one_percent_upper = 1
+        away_seeding = 80 * (Fraction(1, 2) * (percent(9 + 13 + 14 + 16) - percent(below_one_percent_upper + 5 + 8 + 10))
+                             + Fraction(1, 2) * (percent(9) - percent(below_one_percent_upper)))
+        home_seeding = 80 * (Fraction(1, 2) * (percent(12 + 15 + 14 + 13) - percent(4 + 7 + 9 + 10)) + Fraction(1, 2) * (percent(12) - percent(4)))
+        away, home = away_qualification + away_seeding, home_qualification + home_seeding
+        self.assertEqual(away, Fraction(172, 5))
+        self.assertEqual(home, Fraction(144, 5))
         rank_one, rank_two = Fraction(100 * 63, 64), Fraction(100 * 61, 64)
         quality = 2 * rank_one * rank_two / (rank_one + rank_two)
-        total = Fraction(45, 100) * max(home, away) + Fraction(35, 100) * quality + Fraction(20, 100) * 80
-        self.assertEqual(total, Fraction(29213125, 496000))
-        self.assertEqual(round(total), 59)
+        total = Fraction(45, 100) * max(home, away) + Fraction(35, 100) * quality + Fraction(20, 100) * 80 * quality / 100
+        self.assertEqual(total, Fraction(6435441, 99200))
+        self.assertEqual(round(total), 65)
 
     def test_nhl_seeding_controls_are_complete_and_have_an_independent_page_oracle(self):
         from collections import Counter

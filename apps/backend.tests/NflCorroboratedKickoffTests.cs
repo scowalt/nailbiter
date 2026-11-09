@@ -88,8 +88,8 @@ public sealed class NflCorroboratedKickoffTests
         Assert.NotNull(evidence.HomeOdds);
         Assert.NotNull(evidence.AwayOdds);
         var scored = Score(game, evidence);
-        Assert.Equal(20, scored.Stakes.Value!.Value, 8);
-        Assert.Equal(58.3933971774, scored.Total!.Value, 10);
+        Assert.Equal(34.4, scored.Stakes.Value!.Value, 8);
+        Assert.Equal(64.8733971774, scored.Total!.Value, 10);
     }
 
     [Fact]

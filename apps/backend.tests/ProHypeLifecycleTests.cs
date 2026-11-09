@@ -333,6 +333,58 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
     }
 
     [Theory]
+    [InlineData("nfl", false)]
+    [InlineData("nba", true)]
+    [InlineData("nhl", true)]
+    [InlineData("mlb", true)]
+    public async Task The_NFL_seeding_formula_discards_only_NFL_scores_saved_before_it(string sport, bool retained)
+    {
+        await Seed(sport);
+        var captured = await Resolve();
+        Assert.NotNull(captured.Total);
+        await Change(async db =>
+        {
+            var state = await db.ProHypeSnapshots.SingleAsync();
+            var saved = JsonNode.Parse(state.SnapshotJson!)!;
+            saved["FormulaVersion"] = 5;
+            state.SnapshotJson = saved.ToJsonString();
+        });
+        clock.Advance(TimeSpan.FromHours(3));
+        await app.DisposeAsync();
+        app = CreateHost();
+        var resolved = await Resolve();
+        Assert.Equal(retained ? captured.Total : null, resolved.Total);
+    }
+
+    [Fact]
+    public async Task Clinched_NFL_seeding_stakes_survive_expiry_and_host_recreation()
+    {
+        await Seed("nfl");
+        await Change(async db =>
+        {
+            var row = await db.Games.SingleAsync();
+            var evidence = ProGameEvidence.Parse(row.ProEvidenceJson)!;
+            var leverage = evidence.NflPlayoffLeverage!;
+            leverage.HomeOdds = leverage.HomeOdds! with { WinLower = 1, WinUpper = 1, LossLower = 1, LossUpper = 1,
+                Seeds = NflPlayoffLeverageTests.Seeds([.4, .3, .2, .1, 0, 0, 0], [.1, .2, .2, .1, .2, .1, .1]) };
+            row.ProEvidenceJson = JsonSerializer.Serialize(evidence);
+            var kalshi = await db.TeamRatings.SingleAsync(r => r.Source == "kalshi" && r.TeamAbbreviation == game.HomeTeamAbbreviation);
+            kalshi.PlayoffProbability = 1;
+            kalshi.PlayoffProbabilityIsFinal = true;
+            kalshi.PlayoffEvidenceJson = NflPlayoffPageTests.KalshiFinalEvidence("nfl", kalshi.TeamAbbreviation, kalshi.Season, 1, kalshi.FetchedAt);
+        });
+        var captured = await Resolve();
+        Assert.Equal(28, captured.Components.StakesScore, 8);
+        Assert.Contains("Confirmed qualified; playoff-position Stakes", captured.Components.StakesExplanation);
+        clock.Advance(TimeSpan.FromDays(3));
+        await app.DisposeAsync();
+        app = CreateHost();
+        var retained = await Resolve();
+        Assert.Equal(captured.Total, retained.Total);
+        Assert.Equal(captured.EvaluatedAt, retained.EvaluatedAt);
+    }
+
+    [Theory]
     [InlineData("odds")]
     [InlineData("ranking")]
     [InlineData("competition")]
