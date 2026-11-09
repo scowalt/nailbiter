@@ -18,10 +18,7 @@ public sealed class ProHypeCaptureBackgroundService(IServiceScopeFactory scopes,
                     services.GetRequiredService<HypeScoreService>(), clock.GetUtcNow().UtcDateTime, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
-            catch (Exception ex)
-            {
-                logger.Log(DatabaseFailure.Is(ex) || ProviderFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "Pro hype capture failed");
-            }
+            catch (Exception ex) { logger.LogError(ex, "Pro hype capture failed"); }
             try { await Task.Delay(TimeSpan.FromSeconds(30), clock, stoppingToken); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
         }

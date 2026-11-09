@@ -612,10 +612,7 @@ public sealed class ProCompetitionRefreshBackgroundService(IServiceScopeFactory 
                 using var scope = scopes.CreateScope();
                 await scope.ServiceProvider.GetRequiredService<ProCompetitionEvidenceService>().RefreshAsync(stoppingToken);
             }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
-            {
-                logger.Log(DatabaseFailure.Is(ex) || ProviderFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "Pro competition refresh failed");
-            }
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested) { logger.LogError(ex, "Pro competition refresh failed"); }
             await Task.Delay(TimeSpan.FromMinutes(15), stoppingToken);
         }
     }
