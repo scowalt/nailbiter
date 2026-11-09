@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Data.Common;
 using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
@@ -11,6 +12,7 @@ using backend.Services.Kalshi;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -35,13 +37,31 @@ public sealed class OddsProviderReportingTests
 {
     private const int StandardAttempts = 4;
     private const string LockTimeout = ";Options=-c lock_timeout=500";
+    private const string CoreOddsTemplate = "Failed to fetch ESPN Core API odds for event {EventId}";
+    private const string PregameKalshiTemplate = "Failed to fetch Kalshi pregame odds for {Game}";
     private static readonly Answer Hang = new Hanging();
+    private static readonly Answer Fault = new Faulting();
     private static readonly Answer Unavailable = new Reply(HttpStatusCode.ServiceUnavailable, "{}");
     private static readonly Answer NoEvents = new Reply(HttpStatusCode.OK, """{"events":[]}""");
     private static readonly DateTime LiveStart = new(2026, 11, 7, 0, 30, 0, DateTimeKind.Utc);
     private static readonly DateTime MlbOriginalStart = new(2026, 10, 9, 0, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime HistoricalStart = new(2026, 9, 13, 17, 0, 0, DateTimeKind.Utc);
     private static readonly DateTimeOffset Now = new(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset PregameNow = new(2026, 10, 4, 19, 56, 0, TimeSpan.Zero);
+
+    private static readonly Dictionary<string, (Answer Answer, Action<IServiceCollection> Configure, Type Exception)> Faults = new()
+    {
+        ["own fault"] = (Fault, _ => { }, typeof(InvalidOperationException)),
+        ["client deadline"] = (Hang, services => services.ConfigureAll<HttpClientFactoryOptions>(options =>
+            options.HttpClientActions.Add(client => client.Timeout = TimeSpan.FromMilliseconds(200))), typeof(TaskCanceledException)),
+    };
+
+    private static readonly Dictionary<string, Answer> UnusableAnswers = new()
+    {
+        ["not found"] = NotFound,
+        ["bad request"] = new Reply(HttpStatusCode.BadRequest, "{}"),
+        ["malformed body"] = new Reply(HttpStatusCode.OK, """{"markets":["""),
+    };
 
     private static readonly Fetch Historical = new(typeof(KalshiOddsService), "Failed to fetch Kalshi historical data for {Away} @ {Home}",
         async (services, ct) => await services.GetRequiredService<KalshiOddsService>().GetHistoricalOddsAsync("nfl", "PHI", "WSH", HistoricalStart, 60, ct));
@@ -56,21 +76,21 @@ public sealed class OddsProviderReportingTests
 
     private static readonly Dictionary<string, (Fetch Fetch, Func<Uri, Answer> Answer)> KalshiFetches = new()
     {
-        ["Markets"] = (LiveOdds("nba", "BOS", "NYK", LiveStart),
+        ["Markets"] = (LiveOdds("nba", "BOS", "NYK", LiveStart, "Failed to fetch markets from Kalshi for {Sport}"),
             uri => uri.AbsolutePath == "/trade-api/v2/markets" ? Hang : NotFound),
-        ["MarketByTicker"] = (LiveOdds("nba", "BOS", "NYK", LiveStart),
+        ["MarketByTicker"] = (LiveOdds("nba", "BOS", "NYK", LiveStart, "Failed to fetch Kalshi market {Ticker}"),
             uri => uri.AbsolutePath == "/trade-api/v2/markets" ? EmptyCatalog : Hang),
-        ["WorldCupMarkets"] = (new(typeof(KalshiOddsService), null,
+        ["WorldCupMarkets"] = (new(typeof(KalshiOddsService), "Failed to fetch World Cup markets from Kalshi",
                 async (services, ct) => await services.GetRequiredService<KalshiOddsService>().GetWorldCupThreeWayLiveOddsAsync("USA", "MEX", LiveStart, ct)),
             uri => uri.AbsolutePath == "/trade-api/v2/markets" ? Hang : NotFound),
-        ["SameDayMlbSchedule"] = (LiveOdds("mlb", "CHW", "CLE", MlbOriginalStart),
+        ["SameDayMlbSchedule"] = (LiveOdds("mlb", "CHW", "CLE", MlbOriginalStart, "Could not verify MLB schedule for {EventTicker}"),
             uri => uri.AbsolutePath switch
             {
                 "/trade-api/v2/markets" => new Reply(HttpStatusCode.OK, MlbScheduleChangeCatalog()),
                 "/trade-api/v2/milestones" => Hang,
                 _ => NotFound
             }),
-        ["MarketTickerSearch"] = (new(typeof(KalshiOddsService), null,
+        ["MarketTickerSearch"] = (new(typeof(KalshiOddsService), "Failed to fetch markets from Kalshi for {Sport}",
                 async (services, ct) => await services.GetRequiredService<KalshiOddsService>().FindMarketTickerAsync("nba", "BOS", "NYK", LiveStart, ct)),
             uri => uri.AbsolutePath == "/trade-api/v2/markets" ? Hang : NotFound),
         ["Historical"] = (Historical, _ => Hang),
@@ -80,6 +100,24 @@ public sealed class OddsProviderReportingTests
 
     public static TheoryData<string> KalshiFetchNames => [.. KalshiFetches.Keys];
 
+    public static TheoryData<string, string> FetchFaults()
+    {
+        var cases = new TheoryData<string, string>();
+        foreach (var name in Scoreboards.Keys.Concat(KalshiFetches.Keys))
+            foreach (var fault in Faults.Keys)
+                cases.Add(name, fault);
+        return cases;
+    }
+
+    public static TheoryData<string, string> UnusableKalshiAnswers()
+    {
+        var cases = new TheoryData<string, string>();
+        foreach (var name in KalshiFetches.Keys)
+            foreach (var answer in UnusableAnswers.Keys)
+                cases.Add(name, answer);
+        return cases;
+    }
+
     public static TheoryData<string, HttpStatusCode, string> UnreadableScoreboards()
     {
         var cases = new TheoryData<string, HttpStatusCode, string>();
@@ -87,6 +125,8 @@ public sealed class OddsProviderReportingTests
         {
             cases.Add(name, HttpStatusCode.OK, """{"events":[""");
             cases.Add(name, HttpStatusCode.OK, "");
+            cases.Add(name, HttpStatusCode.OK, """{"events":{}}""");
+            cases.Add(name, HttpStatusCode.OK, """{"leagues":5}""");
             cases.Add(name, HttpStatusCode.NotFound, "{}");
         }
         return cases;
@@ -174,6 +214,77 @@ public sealed class OddsProviderReportingTests
     }
 
     [Theory]
+    [MemberData(nameof(FetchFaults))]
+    public async Task Own_fault_or_client_deadline_at_a_fetch_is_sent_at_error_once_per_failure(string name, string fault)
+    {
+        var (fetch, answer) = Scoreboards.TryGetValue(name, out var scoreboard) ? (scoreboard, _ => Hang) : KalshiFetches[name];
+        var (faultAnswer, configure, exception) = Faults[fault];
+        await using var app = new OddsApp(uri => answer(uri) is Hanging ? faultAnswer : answer(uri), services =>
+        {
+            PinClockForMlb(services);
+            configure(services);
+        });
+
+        await fetch.Run(app.Services, CancellationToken.None);
+
+        var failures = app.FailuresFrom(fetch.Service);
+        Assert.NotEmpty(failures);
+        Assert.All(failures, failure => Assert.Equal((LogLevel.Error, exception), (failure.Level, failure.Exception!.GetType())));
+        var sent = await app.SentEventsAsync();
+        Assert.Equal(failures.Count, sent.Count);
+        Assert.All(sent, reported =>
+        {
+            Assert.Equal((fetch.Service.FullName, "error", fetch.Template), (reported.Logger, reported.Level, reported.Template));
+            Assert.Contains(reported.Exceptions, e => e.Type == exception.FullName);
+        });
+    }
+
+    [Theory]
+    [MemberData(nameof(UnusableKalshiAnswers))]
+    public async Task Unusable_kalshi_answer_sends_no_event(string name, string unusable)
+    {
+        var (fetch, answer) = KalshiFetches[name];
+        await using var app = new OddsApp(uri => answer(uri) is Hanging ? UnusableAnswers[unusable] : answer(uri), PinClockForMlb);
+
+        await fetch.Run(app.Services, CancellationToken.None);
+
+        Assert.DoesNotContain(app.FailuresFrom(fetch.Service), failure => failure.Level > LogLevel.Warning);
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Theory]
+    [InlineData("own fault")]
+    [InlineData("client deadline")]
+    [InlineData("bad request")]
+    [InlineData("malformed body")]
+    public async Task Kalshi_pregame_fetch_sends_own_faults_and_deadlines_at_error_and_nothing_for_unusable_answers(string kind)
+    {
+        var isFault = Faults.TryGetValue(kind, out var fault);
+        var kalshi = isFault ? fault.Answer : UnusableAnswers[kind];
+        var board = BackfillBoard();
+        await using var database = await OddsDatabase.StartAsync();
+        await using var app = new OddsApp(uri => uri.AbsolutePath.StartsWith("/trade-api/", StringComparison.Ordinal) ? kalshi
+            : new Reply(HttpStatusCode.OK, uri.Query.Contains("dates=20261011", StringComparison.Ordinal) ? board : """{"events":[]}"""), services =>
+        {
+            database.Use()(services);
+            PinClock(services, new FakeTimeProvider(PregameNow));
+            if (isFault) fault.Configure(services);
+        });
+
+        using var scope = app.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<PregameOddsService>().RefreshPregameOddsForSportAsync("nfl", CancellationToken.None);
+
+        Assert.Contains(app.Provider.Requests, uri => uri.AbsolutePath.StartsWith("/trade-api/", StringComparison.Ordinal));
+        var sent = await app.SentEventsAsync();
+        if (isFault) AssertSentOnceAtError(sent, typeof(PregameOddsService), PregameKalshiTemplate, fault.Exception);
+        else
+        {
+            Assert.DoesNotContain(app.FailuresFrom(typeof(PregameOddsService)), failure => failure.Level > LogLevel.Warning);
+            Assert.Empty(sent);
+        }
+    }
+
+    [Theory]
     [InlineData("""{"candlesticks":[""")]
     [InlineData("")]
     public async Task Unreadable_kalshi_history_is_a_warning_without_an_event(string body)
@@ -206,6 +317,21 @@ public sealed class OddsProviderReportingTests
 
         Assert.Equal(StandardAttempts, app.Provider.Requests.Count);
         AssertSentOnceAtError(await app.SentEventsAsync(), Historical.Service, Historical.Template, typeof(HttpRequestException));
+    }
+
+    [Fact]
+    public async Task Kalshi_history_outage_latch_leaves_own_faults_at_error()
+    {
+        var requests = 0;
+        await using var app = new OddsApp(_ => Interlocked.Increment(ref requests) <= 2 * StandardAttempts ? Unavailable : Fault);
+
+        var kalshi = app.Services.GetRequiredService<KalshiOddsService>();
+        foreach (var _ in Enumerable.Range(0, 3))
+            Assert.Empty(await kalshi.GetHistoricalOddsAsync("nfl", "PHI", "WSH", HistoricalStart, 60, CancellationToken.None));
+
+        Assert.Equal([LogLevel.Error, LogLevel.Warning, LogLevel.Error], app.FailuresFrom(typeof(KalshiOddsService)).Select(f => f.Level));
+        Assert.Equal([typeof(HttpRequestException).FullName, typeof(InvalidOperationException).FullName],
+            (await app.SentEventsAsync()).Select(reported => reported.Exceptions[^1].Type));
     }
 
     [Fact]
@@ -277,16 +403,49 @@ public sealed class OddsProviderReportingTests
         else Assert.Empty(sent);
     }
 
+    [Theory]
+    [InlineData("own fault")]
+    [InlineData("client deadline")]
+    public async Task Backfill_core_odds_own_fault_or_client_deadline_is_sent_once_at_error(string kind)
+    {
+        var (answer, configure, exception) = Faults[kind];
+        var board = BackfillBoard();
+        await using var database = await OddsDatabase.StartAsync();
+        await using var app = new OddsApp(uri => uri.Host == "sports.core.api.espn.com" ? answer : new Reply(HttpStatusCode.OK, board), services =>
+        {
+            database.Use()(services);
+            configure(services);
+        });
+
+        var result = await app.Services.GetRequiredService<NflBackfillService>().BackfillSeasonAsync(2026, OneWeek(), CancellationToken.None);
+
+        Assert.Equal((1, 0), (result.GamesCreated, result.Errors.Count));
+        Assert.Equal(LogLevel.Error, Assert.Single(app.FailuresFrom(typeof(NflBackfillService))).Level);
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(NflBackfillService), CoreOddsTemplate, exception);
+    }
+
+    [Fact]
+    public async Task Backfill_core_odds_outage_latch_leaves_own_faults_at_error()
+    {
+        var board = BackfillBoard("401872986", "401872987");
+        await using var database = await OddsDatabase.StartAsync();
+        await using var app = new OddsApp(uri => uri.Host != "sports.core.api.espn.com" ? new Reply(HttpStatusCode.OK, board)
+            : uri.AbsolutePath.Contains("/events/401872987/", StringComparison.Ordinal) ? Fault : Unavailable, database.Use());
+
+        var result = await app.Services.GetRequiredService<NflBackfillService>().BackfillSeasonAsync(2026, OneWeek(), CancellationToken.None);
+
+        Assert.Equal((3, 0), (result.GamesCreated, result.Errors.Count));
+        Assert.Equal([LogLevel.Error, LogLevel.Warning, LogLevel.Error], app.FailuresFrom(typeof(NflBackfillService)).Select(f => f.Level));
+        Assert.Equal([typeof(HttpRequestException).FullName, typeof(InvalidOperationException).FullName],
+            (await app.SentEventsAsync()).Select(reported => reported.Exceptions[^1].Type));
+    }
+
     [Fact]
     public async Task Backfill_core_odds_outage_is_sent_once_per_pass()
     {
-        var board = JsonNode.Parse(BackfillBoard())!;
-        var events = board["events"]!.AsArray();
-        var second = events[0]!.DeepClone();
-        second["id"] = "401872986";
-        events.Add(second);
+        var board = BackfillBoard("401872986");
         await using var database = await OddsDatabase.StartAsync();
-        await using var app = new OddsApp(uri => uri.Host == "sports.core.api.espn.com" ? Unavailable : new Reply(HttpStatusCode.OK, board.ToJsonString()),
+        await using var app = new OddsApp(uri => uri.Host == "sports.core.api.espn.com" ? Unavailable : new Reply(HttpStatusCode.OK, board),
             database.Use());
 
         var result = await app.Services.GetRequiredService<NflBackfillService>().BackfillSeasonAsync(2026, OneWeek(), CancellationToken.None);
@@ -315,6 +474,40 @@ public sealed class OddsProviderReportingTests
         Assert.StartsWith(PostgresErrorCodes.LockNotAvailable + ":", Assert.Single(reported.Exceptions, e => e.Type == typeof(PostgresException).FullName).Value);
     }
 
+    [Theory]
+    [InlineData("FROM pregame_odds", "Failed to fetch pregame odds for game {GameId}", 1, 0)]
+    [InlineData("FROM odds_snapshots", "Failed to fetch Kalshi historical odds for game {GameId}", 1, 0)]
+    [InlineData("FROM games", "Error processing game {GameId}", 0, 1)]
+    [InlineData("INSERT INTO games", "Error processing {SeasonType} week {Week}", 1, 1)]
+    public async Task Backfill_own_fault_is_sent_once_at_error_and_the_backfill_carries_on(string sql, string template, int created, int errors)
+    {
+        var board = BackfillBoard();
+        await using var database = await OddsDatabase.StartAsync();
+        await using var app = new OddsApp(uri => uri.AbsolutePath.EndsWith("/scoreboard", StringComparison.Ordinal) ? new Reply(HttpStatusCode.OK, board) : NotFound,
+            database.Use(interceptor: new FaultingCommand(sql)));
+
+        var result = await app.Services.GetRequiredService<NflBackfillService>().BackfillSeasonAsync(2026, OneWeek(kalshi: true), CancellationToken.None);
+
+        Assert.Equal((created, errors), (result.GamesCreated, result.Errors.Count));
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(NflBackfillService), template, typeof(InvalidOperationException));
+    }
+
+    [Fact]
+    public async Task Backfill_own_fault_after_the_weeks_is_sent_once_at_error()
+    {
+        await using var app = new OddsApp(_ => NoEvents, services =>
+        {
+            services.RemoveAll<RetrospectiveEloService>();
+            services.AddScoped<RetrospectiveEloService>(_ => throw new InvalidOperationException("synthetic Elo service failure"));
+        });
+
+        var result = await app.Services.GetRequiredService<NflBackfillService>().BackfillSeasonAsync(2026,
+            new() { SeasonType = 2, StartWeek = 19, CalculateElo = true, KalshiCandlestickInterval = 60 }, CancellationToken.None);
+
+        Assert.StartsWith("Fatal error: ", Assert.Single(result.Errors));
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(NflBackfillService), "Backfill failed with error", typeof(InvalidOperationException));
+    }
+
     [Fact]
     public async Task Scrape_loop_shutdown_mid_fetch_ends_quietly()
     {
@@ -332,7 +525,7 @@ public sealed class OddsProviderReportingTests
     }
 
     [Fact]
-    public async Task Scrape_loop_failure_outside_a_fetch_is_a_warning_and_the_loop_runs_again()
+    public async Task Scrape_loop_own_fault_outside_a_step_is_sent_once_per_cycle_and_the_loop_runs_again()
     {
         var clock = new FakeTimeProvider(Now);
         await using var app = new OddsApp(_ => NoEvents, services =>
@@ -347,10 +540,32 @@ public sealed class OddsProviderReportingTests
         await AdvanceUntilAsync(clock, () => failures().Count(f => f.Message == "Error during live odds scraping cycle") >= 2, TimeSpan.FromSeconds(30));
         await loop.StopAsync(CancellationToken.None);
 
-        Assert.All(failures(), failure => Assert.Equal((LogLevel.Warning, typeof(InvalidOperationException)), (failure.Level, failure.Exception!.GetType())));
+        Assert.All(failures(), failure => Assert.Equal((LogLevel.Error, typeof(InvalidOperationException)), (failure.Level, failure.Exception!.GetType())));
         Assert.Contains(failures(), failure => failure.Message == "Error during pregame odds refresh cycle");
         Assert.True(loop.ExecuteTask!.IsCanceled);
-        Assert.Empty(await app.SentEventsAsync());
+        AssertEachLoopFailureSentOnceAtError(failures(), await app.SentEventsAsync());
+    }
+
+    [Fact]
+    public async Task Scrape_loop_own_fault_inside_a_step_is_sent_once_per_failure_and_the_loop_runs_again()
+    {
+        var clock = new FakeTimeProvider(Now);
+        await using var app = new OddsApp(_ => NoEvents, services =>
+        {
+            services.RemoveAll<ExcitementDbContext>();
+            services.AddScoped<ExcitementDbContext>(_ => throw new InvalidOperationException("synthetic database context failure"));
+        });
+        var loop = LoopOn(app, clock);
+        var failures = () => app.FailuresFrom(typeof(OddsScrapeBackgroundService));
+
+        await loop.StartAsync(CancellationToken.None);
+        await AdvanceUntilAsync(clock, () => failures().Count(f => f.Message == "Failed to scrape live odds for {Sport}") >= 10, TimeSpan.FromSeconds(30));
+        await loop.StopAsync(CancellationToken.None);
+
+        Assert.All(failures(), failure => Assert.Equal((LogLevel.Error, typeof(InvalidOperationException)), (failure.Level, failure.Exception!.GetType())));
+        Assert.Contains(failures(), failure => failure.Message == "Failed to refresh pregame odds");
+        Assert.True(loop.ExecuteTask!.IsCanceled);
+        AssertEachLoopFailureSentOnceAtError(failures(), await app.SentEventsAsync());
     }
 
     [Fact]
@@ -379,19 +594,31 @@ public sealed class OddsProviderReportingTests
         Assert.True(loop.ExecuteTask!.IsCanceled);
     }
 
-    private static Fetch LiveOdds(string sport, string home, string away, DateTime start) => new(typeof(KalshiOddsService), null,
+    private static Fetch LiveOdds(string sport, string home, string away, DateTime start, string template) => new(typeof(KalshiOddsService), template,
         async (services, ct) => await services.GetRequiredService<KalshiOddsService>().GetLiveOddsAsync(sport, home, away, start, ct));
 
-    private static BackfillOptions OneWeek() => new()
+    private static BackfillOptions OneWeek(bool kalshi = false) => new()
     {
         SeasonType = 2,
         StartWeek = 1,
         EndWeek = 1,
+        BackfillKalshiOdds = kalshi,
         KalshiCandlestickInterval = 60
     };
 
-    private static string BackfillBoard() =>
-        ProHypeTests.Fixture("nfl-pregame-401872985").GetProperty("board").GetProperty("body").GetRawText();
+    private static string BackfillBoard(params string[] moreGameIds)
+    {
+        var board = JsonNode.Parse(ProHypeTests.Fixture("nfl-pregame-401872985").GetProperty("board").GetProperty("body").GetRawText())!;
+        var events = board["events"]!.AsArray();
+        var first = events[0]!;
+        foreach (var id in moreGameIds)
+        {
+            var game = first.DeepClone();
+            game["id"] = id;
+            events.Add(game);
+        }
+        return board.ToJsonString();
+    }
 
     private static string MlbScheduleChangeCatalog()
     {
@@ -441,6 +668,17 @@ public sealed class OddsProviderReportingTests
         Assert.Empty(await app.SentEventsAsync());
     }
 
+    private static void AssertEachLoopFailureSentOnceAtError(IReadOnlyCollection<LoggedEntry> failures, IReadOnlyCollection<SentEvent> sent)
+    {
+        Assert.Equal(failures.Count, sent.Count);
+        Assert.All(sent, reported =>
+        {
+            Assert.Equal((typeof(OddsScrapeBackgroundService).FullName, "error"), (reported.Logger, reported.Level));
+            Assert.Contains(reported.Exceptions, e => e.Type == typeof(InvalidOperationException).FullName);
+        });
+        Assert.Equal(failures.Select(f => f.Message).Order(), sent.Select(reported => reported.Template).Order());
+    }
+
     private static void AssertSentOnceAtError(IReadOnlyCollection<SentEvent> sent, Type service, string? template, Type exception)
     {
         var reported = Assert.Single(sent);
@@ -462,6 +700,8 @@ public sealed class OddsProviderReportingTests
 
     private sealed record Hanging : Answer;
 
+    private sealed record Faulting : Answer;
+
     private sealed record SentEvent(string? Logger, string? Level, string? Template, (string? Type, string? Value)[] Exceptions);
 
     private sealed record LoggedEntry(string Category, LogLevel Level, Exception? Exception, string? Message);
@@ -479,11 +719,15 @@ public sealed class OddsProviderReportingTests
             return database;
         }
 
-        public Action<IServiceCollection> Use(string options = "") => services =>
+        public Action<IServiceCollection> Use(string options = "", IInterceptor? interceptor = null) => services =>
         {
             services.RemoveAll<IDbContextOptionsConfiguration<ExcitementDbContext>>();
             services.RemoveAll<DbContextOptions<ExcitementDbContext>>();
-            services.AddDbContext<ExcitementDbContext>(builder => builder.UseNpgsql(container.GetConnectionString() + options));
+            services.AddDbContext<ExcitementDbContext>(builder =>
+            {
+                builder.UseNpgsql(container.GetConnectionString() + options);
+                if (interceptor is not null) builder.AddInterceptors(interceptor);
+            });
         };
 
         public async Task<IAsyncDisposable> HoldLockAsync(string sql)
@@ -497,6 +741,22 @@ public sealed class OddsProviderReportingTests
         }
 
         public ValueTask DisposeAsync() => container.DisposeAsync();
+    }
+
+    private sealed class FaultingCommand(string sql) : DbCommandInterceptor
+    {
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default) => Check(command, result);
+
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default) => Check(command, result);
+
+        public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<object> result, CancellationToken cancellationToken = default) => Check(command, result);
+
+        private ValueTask<T> Check<T>(DbCommand command, T result) => command.CommandText.Contains(sql, StringComparison.Ordinal)
+            ? throw new InvalidOperationException($"synthetic fault on {sql}")
+            : ValueTask.FromResult(result);
     }
 
     private sealed class HeldLock(NpgsqlConnection connection, NpgsqlTransaction transaction) : IAsyncDisposable
@@ -574,8 +834,10 @@ public sealed class OddsProviderReportingTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Requests.Enqueue(request.RequestUri!);
-            if (answer(request.RequestUri!) is Reply reply)
-                return new HttpResponseMessage(reply.Status) { Content = new StringContent(reply.Body) };
+            var reply = answer(request.RequestUri!);
+            if (reply is Faulting) throw new InvalidOperationException("synthetic fault below the provider fetch");
+            if (reply is Reply status)
+                return new HttpResponseMessage(status.Status) { Content = new StringContent(status.Body) };
             hanging.TrySetResult();
             await Task.Delay(Timeout.Infinite, cancellationToken);
             throw new UnreachableException();
