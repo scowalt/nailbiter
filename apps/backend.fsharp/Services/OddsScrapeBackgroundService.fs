@@ -8,7 +8,8 @@ open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open backend.Services.Espn
 
-type OddsScrapeBackgroundService(serviceProvider: IServiceProvider, logger: ILogger<OddsScrapeBackgroundService>) =
+type OddsScrapeBackgroundService
+    (serviceProvider: IServiceProvider, timeProvider: TimeProvider, logger: ILogger<OddsScrapeBackgroundService>) =
     inherit BackgroundService()
 
     let liveOddsInterval = TimeSpan.FromSeconds(30.0)
@@ -56,7 +57,7 @@ type OddsScrapeBackgroundService(serviceProvider: IServiceProvider, logger: ILog
                 | :? OperationCanceledException -> logger.LogDebug("Live odds scraping cycle cancelled")
                 | ex ->
                     logger.LogError(ex, "Error during live odds scraping cycle")
-                do! Task.Delay(liveOddsInterval, ct)
+                do! Task.Delay(liveOddsInterval, timeProvider, ct)
         }
 
     member private this.PregameOddsLoopAsync(ct: CancellationToken) =
@@ -69,13 +70,13 @@ type OddsScrapeBackgroundService(serviceProvider: IServiceProvider, logger: ILog
                 | :? OperationCanceledException -> logger.LogDebug("Pregame odds refresh cycle cancelled")
                 | ex ->
                     logger.LogError(ex, "Error during pregame odds refresh cycle")
-                do! Task.Delay(pregameOddsInterval, ct)
+                do! Task.Delay(pregameOddsInterval, timeProvider, ct)
         }
 
     override this.ExecuteAsync(stoppingToken: CancellationToken) =
         task {
             logger.LogInformation("Odds scraper background service starting")
-            do! Task.Delay(TimeSpan.FromSeconds(5.0), stoppingToken)
+            do! Task.Delay(TimeSpan.FromSeconds(5.0), timeProvider, stoppingToken)
             let! _ = Task.WhenAll(this.LiveOddsLoopAsync(stoppingToken) :> Task, this.PregameOddsLoopAsync(stoppingToken) :> Task)
             ()
         }
