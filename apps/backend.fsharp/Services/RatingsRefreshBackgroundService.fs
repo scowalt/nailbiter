@@ -81,7 +81,7 @@ type RatingsRefreshBackgroundService(serviceProvider: IServiceProvider, logger: 
                     do! Task.Delay(delay, stoppingToken)
                     do! this.RefreshAllRatingsAsync(stoppingToken)
                 with
-                | :? OperationCanceledException -> logger.LogDebug("Ratings refresh cycle cancelled")
+                | :? OperationCanceledException when stoppingToken.IsCancellationRequested -> logger.LogDebug("Ratings refresh cycle cancelled")
                 | ex ->
                     logger.LogError(ex, "Error during ratings refresh cycle")
                     do! Task.Delay(TimeSpan.FromHours(1.0), stoppingToken)
