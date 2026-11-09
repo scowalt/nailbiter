@@ -122,13 +122,13 @@ builder.Services.AddEspnHttpClient<EspnOddsService>();
 
 builder.Services.AddHttpClient<KalshiOddsService>()
     .AddHttpMessageHandler(() => new KalshiAccessRefusalHandler())
-    .AddStandardResilienceHandler();
+    .AddProviderResilienceHandler();
 
 builder.Services.AddMemoryCache();
 builder.Services.AddEspnHttpClient<CollegeEspnClient>();
 builder.Services.AddHttpClient<CollegeKalshiClient>()
     .AddHttpMessageHandler(() => new KalshiAccessRefusalHandler())
-    .AddStandardResilienceHandler();
+    .AddProviderResilienceHandler();
 builder.Services.AddScoped<CollegeFootballService>();
 
 builder.Services.AddScoped<PregameOddsService>();
@@ -140,9 +140,9 @@ builder.Services.AddHttpClient(nameof(PlayoffStatusService))
         services.GetRequiredService<TimeProvider>(),
         services.GetRequiredService<Microsoft.Extensions.Options.IOptions<PlayoffRatingsOptions>>(),
         services.GetRequiredService<PlayoffStatusNhlRefreshGate>()))
-    .AddStandardResilienceHandler();
+    .AddProviderResilienceHandler();
 builder.Services.AddHttpClient<PowerRankingsGuruService>()
-    .AddStandardResilienceHandler();
+    .AddProviderResilienceHandler();
 builder.Services.AddHttpClient<NhlPowerRankingsGuruService>(client =>
     {
         client.Timeout = TimeSpan.FromSeconds(15);
@@ -158,7 +158,7 @@ builder.Services.AddHttpClient<MoneyPuckService>(client => client.Timeout = Time
 builder.Services.AddTransient<MoneyPuckQualificationService>();
 builder.Services.AddHttpClient<KalshiPlayoffRatingsService>()
     .AddHttpMessageHandler(() => new KalshiAccessRefusalHandler())
-    .AddStandardResilienceHandler();
+    .AddProviderResilienceHandler();
 builder.Services.AddScoped<HypeScoreService>();
 builder.Services.AddHttpClient<NflPlayoffLeverageCollector>(client =>
     {
@@ -180,19 +180,19 @@ builder.Services.AddEspnHttpClient<NflBackfillService>();
 builder.Services.AddScoped<RetrospectiveEloService>();
 
 builder.Services.AddHttpClient<OpenF1Service>()
-    .AddStandardResilienceHandler();
+    .AddProviderResilienceHandler();
 builder.Services.AddEspnHttpClient<EspnF1Service>();
 builder.Services.AddScoped<F1DataService>();
 builder.Services.AddScoped<F1LiveDataService>();
 
 builder.Services.AddHttpClient<KalshiF1OddsService>()
-    .AddStandardResilienceHandler();
+    .AddProviderResilienceHandler();
 
 builder.Services.AddEspnHttpClient<EspnNascarService>();
 builder.Services.AddHttpClient<KalshiNascarOddsService>()
-    .AddStandardResilienceHandler();
+    .AddProviderResilienceHandler();
 builder.Services.AddHttpClient<NascarLiveFeedService>()
-    .AddStandardResilienceHandler();
+    .AddProviderResilienceHandler();
 builder.Services.AddScoped<NascarDataService>();
 builder.Services.AddScoped<NascarLiveDataService>();
 
