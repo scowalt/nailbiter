@@ -17,7 +17,7 @@ module FormatHelpers =
         elif isFinal && prob = 0.0 then "Missed playoffs"
         else
             match upperBound with
-            | Some bound -> $"<{Math.Ceiling(Math.Round(bound * 100.0, 6))}%%"
+            | Some bound -> $"<{max 1.0 (Math.Ceiling(Math.Round(bound * 100.0, 6)))}%%"
             | None when prob < 0.01 -> "<1%"
             | None when prob > 0.99 -> ">99%"
             | None -> $"{prob:P0}"

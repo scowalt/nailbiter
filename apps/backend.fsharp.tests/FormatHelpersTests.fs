@@ -61,6 +61,7 @@ let ``Confirmed outcomes use qualification labels instead of percentages`` proba
     Assert.Equal(expected, FormatHelpers.formatPlayoffOutlook true None probability)
 
 [<Theory>]
+[<InlineData(0.0, "<1%")>]
 [<InlineData(0.001, "<1%")>]
 [<InlineData(0.01, "<1%")>]
 [<InlineData(0.04, "<4%")>]
