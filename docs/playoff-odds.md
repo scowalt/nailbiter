@@ -87,7 +87,7 @@ Ordinary one-sided quotes, markets with no orders on either side, and last trade
 For these one-sided quotes, the importer stores the midpoint between the populated quote and the zero-or-one endpoint for scoring.
 A 99-cent bid becomes an internal estimate of 99.5%. A four-cent ask becomes an internal estimate of 2%.
 The UI displays `>99%` for the bid case. For the empty-bid case it displays the ask, rounded up to a whole percent, as an upper bound: a one-cent ask shows `<1%` and a four-cent ask shows `<4%`.
-Except in the NHL, whose evidence column already stores every quote, the collector keeps the accepted empty-bid quote envelope in the evidence column so pages can show the ask. Selection verifies that envelope against the stored row before showing the bound.
+Except in the NHL, whose evidence column already stores every quote, the collector keeps the accepted empty-bid quote envelope in the evidence column so pages can show the ask. It also keeps a quote rejected as `insufficient_depth`, so an unavailable row still records why. Selection verifies that envelope against the stored row before showing the bound.
 These estimates still expire after one hour. A price near zero or one does not prove elimination or qualification.
 
 ## College no-market assumption

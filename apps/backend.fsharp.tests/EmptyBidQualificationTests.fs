@@ -175,6 +175,21 @@ let ``Wider missing and unsafe quotes stay unavailable`` (field: string) (value:
     Assert.True(rank.Value.PlayoffUpperBound.IsNone)
 }
 
+[<Fact>]
+let ``A no-buyer ask above the cap keeps its insufficient depth reason`` () = task {
+    use h = new Harness()
+    let root = payload ()
+    (noBuyers root "KC")["yes_ask_dollars"] <- JsonValue.Create("0.0600")
+    let! _ = h.Refresh(root)
+    use scope = h.Provider.CreateScope()
+    let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
+    let! row = db.TeamRatings.SingleAsync(fun r -> r.TeamAbbreviation = "KC")
+    Assert.False(row.PlayoffProbability.HasValue)
+    let evidence = PlayoffQuoteEvidence.Parse(row.PlayoffEvidenceJson)
+    Assert.Equal("insufficient_depth", evidence.ReasonCode)
+    Assert.Equal(Nullable 0.06M, evidence.Ask)
+}
+
 [<Theory>]
 [<InlineData(3599.0, true)>]
 [<InlineData(3600.0, false)>]

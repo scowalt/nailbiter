@@ -317,7 +317,8 @@ type KalshiPlayoffRatingsService
                             let evidence = PlayoffMarkets.evidence sport eventTicker season team now (Map.tryFind team live)
                             evidence.RefreshId <- refreshId
                             let json =
-                                if evidence.State = "estimate" && evidence.BidExplicitlyEmpty then JsonSerializer.Serialize(evidence)
+                                if (evidence.State = "estimate" && evidence.BidExplicitlyEmpty)
+                                   || (evidence.State = "unavailable" && evidence.ReasonCode = "insufficient_depth") then JsonSerializer.Serialize(evidence)
                                 else null
                             for row in db.TeamRatings.Local |> Seq.filter (fun r -> r.Sport = sport && r.Season = season && r.TeamAbbreviation = team && r.Source = "kalshi") do
                                 row.PlayoffEvidenceJson <- json
