@@ -45,8 +45,7 @@ public sealed class DatabaseSafeguardTests
         Assert.Equal("30s", await setting.ExecuteScalarAsync());
 
         await using var slowQuery = new NpgsqlCommand("SELECT pg_sleep(35)", connection) { CommandTimeout = 0 };
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(45));
-        var failure = await Assert.ThrowsAsync<PostgresException>(() => slowQuery.ExecuteScalarAsync(deadline.Token));
+        var failure = await Assert.ThrowsAsync<PostgresException>(() => slowQuery.ExecuteScalarAsync());
         Assert.Equal(PostgresErrorCodes.QueryCanceled, failure.SqlState);
         Assert.Contains("statement timeout", failure.MessageText);
         await using var recoveredQuery = new NpgsqlCommand("SELECT 1", connection);
