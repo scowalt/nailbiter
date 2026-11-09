@@ -80,7 +80,7 @@ public sealed class ProHypeLifecycleMoneyPuckTests : IAsyncLifetime
         using (var scope = harness.App.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
         var captured = await Resolve();
-        Assert.Equal(58.563111325282193, captured.Total!.Value, 10);
+        Assert.Equal(58.090581083346706, captured.Total!.Value, 10);
         harness.Clock.Now = harness.Clock.Now.AddHours(48);
         Assert.Equal(captured.Total, (await Resolve()).Total);
         Assert.Equal(0, await harness.Service.RefreshNhlRatingsForSeasonAsync(2027, default));

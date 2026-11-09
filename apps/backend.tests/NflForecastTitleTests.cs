@@ -60,7 +60,7 @@ public sealed class NflForecastTitleTests
         Assert.EndsWith("/forty-ninerswhatif.html", evidence.HomeOdds.Reference);
         Assert.NotNull(evidence.AwayOdds);
         Assert.Equal(20, NflCorroboratedKickoffTests.Score(game, evidence).Stakes.Value!.Value, 8);
-        Assert.Equal(58.89742943548387, NflCorroboratedKickoffTests.Score(game, evidence).Total!.Value, 10);
+        Assert.Equal(58.3933971774, NflCorroboratedKickoffTests.Score(game, evidence).Total!.Value, 10);
         Assert.Equal(minutes == 0 ? 1 : 2, evidence.Version);
     }
 

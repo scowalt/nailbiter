@@ -10,12 +10,12 @@ For a verified upcoming regular-season NFL game:
 qualification contribution = 80 × (P(playoffs | win) − P(playoffs | loss))
 team Stakes = qualification contribution
 game Stakes = max(home Stakes, away Stakes)
-hype = .45 × Stakes + .35 × Quality + .20 × Closeness
+hype = .45 × Stakes + .35 × Quality + .20 × Closeness × Quality / 100
 ```
 
 Do not multiply game-specific leverage by season urgency. NBA/NHL/MLB use an [estimated playoff swing](adr/0004-estimated-playoff-swing-stakes.md) in the same `80 × swing` model; the NFL never falls back to that estimate. Verified season progress remains required. On 2026-11-05 the owner removed seeding consequences from regular-season Stakes across NFL, NBA, NHL and MLB: there is no seeding bonus, ceiling or required certificate. Conditional probability intervals remain intervals; a numeric result is permitted only when the combined qualification bounds agree at full precision. Unavailable inputs are never neutral defaults or reweighted components.
 
-A conditional forecast can supply NFL qualification Stakes without a current Kalshi estimate; an unconditional Kalshi estimate cannot fill a missing conditional forecast. Trusted eliminated and qualified outcomes both contribute zero qualification Stakes without unrelated forecasts or seeding evidence. Model endpoints never become confirmed outcomes. NFL preseason/postseason bands, Quality, Closeness and existing weights remain unchanged.
+A conditional forecast can supply NFL qualification Stakes without a current Kalshi estimate; an unconditional Kalshi estimate cannot fill a missing conditional forecast. Trusted eliminated and qualified outcomes both contribute zero qualification Stakes without unrelated forecasts or seeding evidence. Model endpoints never become confirmed outcomes. NFL preseason/postseason bands, Quality, Closeness and existing weights remain unchanged; the composite's quality-scaled Closeness comes from [ADR 0006](adr/0006-quality-scaled-pro-closeness.md).
 
 Complement the single **No Playoffs** column rather than adding rounded seed columns. Threshold percentages remain intervals: `<1%` is not zero and `>99%` is not one. Reject reversed numeric scenarios; bound overlapping intervals without inventing a midpoint.
 

@@ -364,7 +364,7 @@ public sealed class ProHypePageTests
             var game = await Seed(host, sport);
             var captured = await Capture(host, game);
             Assert.NotNull(captured.Total);
-            Assert.Equal(sport switch { "nfl" => 54, "nba" => 71, "nhl" => 59, _ => 66 }, Math.Round(captured.Total.Value));
+            Assert.Equal(sport switch { "nfl" => 54, "nba" => 70, "nhl" => 58, _ => 64 }, Math.Round(captured.Total.Value));
             await Change(host, db =>
             {
                 db.Games.Add(new Game { Id = "uncovered-result", Sport = sport, SeasonYear = game.SeasonYear, SeasonType = 2,

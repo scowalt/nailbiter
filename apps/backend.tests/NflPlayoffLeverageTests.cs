@@ -138,7 +138,7 @@ public sealed class NflPlayoffLeverageTests
         Assert.Equal(3, handler.Requests.Count);
         var result = Score(game, context);
         Assert.Equal(20, result.Stakes.Value!.Value, 8);
-        Assert.Equal(59, Math.Round(result.Total!.Value));
+        Assert.Equal(58, Math.Round(result.Total!.Value));
         Assert.Contains("PlayoffStatus model", result.Stakes.Explanation);
         Assert.Null(context.HomeProgress.SeedingUnresolved); Assert.Null(context.AwayProgress.SeedingUnresolved);
         Assert.Equal(result.Stakes.Value, Score(game, context, Q(.01), Q(.99)).Stakes.Value);
@@ -165,7 +165,7 @@ public sealed class NflPlayoffLeverageTests
         var result = Score(game, context);
         Assert.NotNull(result.Stakes.Value);
         Assert.Equal(20, result.Stakes.Value.Value, 8);
-        Assert.Equal(58.89742943548387, result.Total!.Value, 10);
+        Assert.Equal(58.3933971774, result.Total!.Value, 10);
     }
 
     [Theory]
@@ -209,7 +209,7 @@ public sealed class NflPlayoffLeverageTests
         var context = Context(game); context.NflPlayoffLeverage = evidence;
         var result = Score(game, context);
         Assert.Equal(20, result.Stakes.Value!.Value, 8);
-        Assert.Equal(59, Math.Round(result.Total!.Value));
+        Assert.Equal(58, Math.Round(result.Total!.Value));
     }
 
     [Theory]
@@ -405,7 +405,7 @@ public sealed class NflPlayoffLeverageTests
         Assert.NotNull(supported.HomeOdds); Assert.NotNull(supported.AwayOdds);
         var context = Context(game); context.NflPlayoffLeverage = supported;
         Assert.Equal(20, Score(game, context).Stakes.Value!.Value, 8);
-        Assert.Equal(59, Math.Round(Score(game, context).Total!.Value));
+        Assert.Equal(58, Math.Round(Score(game, context).Total!.Value));
         var blocked = results[affected.Id]!;
         Assert.False(blocked.ScheduleVerified);
         Assert.Null(blocked.HomeOdds); Assert.Null(blocked.AwayOdds);

@@ -1145,7 +1145,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
                 Assert.Equal(3.686743952474407, components.StakesScore, 12);
                 Assert.Equal(96.849798, components.QualityScore, 5);
                 Assert.Equal(100, components.ClosenessScore);
-                Assert.Equal(58, Math.Round(score!.Value));
+                Assert.Equal(57, Math.Round(score!.Value));
             }
             Assert.Contains("qualification-only", components.StakesExplanation, StringComparison.OrdinalIgnoreCase);
         }
@@ -1375,7 +1375,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
         stored = await hype.GetHypeComponentsAsync(game, null);
         Assert.True(stored.IsComplete);
         Assert.Equal(44, Math.Round(stored.QualityScore));
-        Assert.Equal(33, Math.Round((await hype.CalculateHypeScoreAsync(game, null))!.Value));
+        Assert.Equal(27, Math.Round((await hype.CalculateHypeScoreAsync(game, null))!.Value));
         detail = await BodyText(await client.GetAsync("/game/" + game.Id));
         Assert.DoesNotContain("Hype unavailable", detail);
         Assert.Contains("Quality44", detail);
@@ -1467,7 +1467,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
         Assert.Equal(85, stored.StakesScore);
         Assert.Equal(81, Math.Round(stored.QualityScore));
         Assert.Equal(93, Math.Round(stored.ClosenessScore));
-        Assert.Equal(87, Math.Round((await hype.CalculateHypeScoreAsync(game, null))!.Value));
+        Assert.Equal(81, Math.Round((await hype.CalculateHypeScoreAsync(game, null))!.Value));
         var odds = await db.PregameOdds.AsNoTracking().SingleAsync(o => o.GameId == game.Id);
         var direct = hype.CalculateFromEvidence(game, ranks, odds, new[] { "401907965", "401907972" }, clock.Now.UtcDateTime);
         Assert.Equal(stored.StakesScore, direct.StakesScore);

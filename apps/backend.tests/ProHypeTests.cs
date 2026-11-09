@@ -75,10 +75,10 @@ public sealed class ProHypeTests
     internal static JsonElement Fixture(string file) => JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ProHype", file + ".json"))).RootElement;
 
     [Theory]
-    [InlineData(0, 1, 2, .5, false, 59)]
-    [InlineData(0, 14, 15, .55, false, 40)]
-    [InlineData(83, 16, 17, .55, false, 54)]
-    [InlineData(0, 1, 2, .5, true, 99)]
+    [InlineData(0, 1, 2, .5, false, 58)]
+    [InlineData(0, 14, 15, .55, false, 34)]
+    [InlineData(83, 16, 17, .55, false, 47)]
+    [InlineData(0, 1, 2, .5, true, 98)]
     public void Exact_approved_calibrations(int played, int homeRank, int awayRank, double probability, bool championship, int expected)
     {
         var g = Game(); var e = Evidence(g); e.HomeProgress.Completed = e.AwayProgress.Completed = played;
@@ -86,6 +86,16 @@ public sealed class ProHypeTests
         var result = Score(g, e, Ranks(g, homeRank, awayRank), Odds(g, probability));
         Assert.Equal(expected, Math.Round(result.Total!.Value));
         Assert.Equal(championship ? 100 : played == 83 ? 45.59340347444945 : 6.3081393271862405, result.Stakes.Value!.Value, 10);
+    }
+
+    [Fact]
+    public void A_coin_flip_between_weak_teams_counts_closeness_only_as_far_as_the_teams_are_good()
+    {
+        var g = Game("nba"); var e = Evidence(g); e.HomeProgress.Completed = e.AwayProgress.Completed = 10;
+        var result = Score(g, e, Ranks(g, 23, 24), Odds(g, .475), Q(.07), Q(.17));
+        Assert.Equal(95, result.Closeness.Value!.Value, 10);
+        Assert.Equal(23.214285714285715, result.Quality.Value!.Value, 10);
+        Assert.Equal(17, Math.Round(result.Total!.Value));
     }
 
     [Theory]
