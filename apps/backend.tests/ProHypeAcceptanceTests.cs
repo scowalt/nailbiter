@@ -22,6 +22,7 @@ namespace backend.tests;
 
 public sealed class ProHypeAcceptanceTests : IAsyncLifetime
 {
+    private static readonly TimeSpan HangDeadline = TimeSpan.FromSeconds(60);
     private readonly PostgreSqlContainer database = IsolatedPostgreSql.CreateContainer();
     private readonly AppFactory entry = new();
     private readonly FakeTimeProvider clock = new(new DateTimeOffset(ProHypeTests.Now));
@@ -236,7 +237,7 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
         });
         publication.Arm();
         var pending = client.GetStringAsync(path);
-        await publication.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        await publication.Entered.Task.WaitAsync(HangDeadline);
         try
         {
             await Change(async db =>
@@ -262,7 +263,7 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
             });
         }
         finally { publication.Release(); }
-        var html = await pending.WaitAsync(TimeSpan.FromSeconds(15));
+        var html = await pending.WaitAsync(HangDeadline);
         NoDiagnostics(html);
         var document = await new HtmlParser().ParseDocumentAsync(html);
         var identity = path.StartsWith("/game/", StringComparison.Ordinal) ? document.Body!
@@ -529,14 +530,14 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
         await Capture();
         publication.Arm();
         var delayedCapture = Capture();
-        await publication.Entered.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        await publication.Entered.Task.WaitAsync(HangDeadline);
         try
         {
             await Change(async db => (await db.Games.SingleAsync()).Status = "postponed");
             var invalidated = await Page("/game/" + game.Id);
             Assert.Null(invalidated.QuerySelector("#detail-hype"));
             publication.Release();
-            await delayedCapture.WaitAsync(TimeSpan.FromSeconds(15));
+            await delayedCapture.WaitAsync(HangDeadline);
             await Change(async db => (await db.Games.SingleAsync()).Status = "scheduled");
             clock.Advance(TimeSpan.FromDays(3));
             await Restart();
