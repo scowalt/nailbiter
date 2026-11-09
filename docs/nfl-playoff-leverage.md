@@ -42,7 +42,7 @@ The seven-day ceiling is a bounded publication policy, not an hourly update or f
 
 The proposal joins the existing scraper-gated startup/15-minute pro competition refresh and seven-day upcoming horizon. Shared per-batch requests cap unique schedule/team URLs at 33. Page reads and scorers do not request providers; the legacy NHL/manual ratings path is not reused. Requests use an honest Nailbiter identity, 15-second deadline and 1 MiB body ceiling, with no automatic retries/redirects. A 401/403/429 stops the remaining batch. No denial bypass, proxy, private endpoint, paid service or outreach is authorized.
 
-Transport/server failures retain prior evidence without renewing clocks. Successfully fetched unusable observations replace affected evidence with unavailable state. Cancellation cannot commit a partial competition refresh. These are implemented guards, not proof of sustained access or source rights.
+Transport/server failures retain prior evidence without renewing clocks. So does a source schedule that still lists, unscored at the same kickoff, a game ESPN already reports final: PlayoffStatus publishes results hours after ESPN, and treating that delay as a rejection revoked every later game's saved hype on each game day. The retained evidence no longer covers the new result, so current scoring stays strict and only the saved snapshot carries through as a completed-result coverage gap. A different score or kickoff is still a contradiction. Other successfully fetched unusable observations replace affected evidence with unavailable state. Cancellation cannot commit a partial competition refresh. These are implemented guards, not proof of sustained access or source rights.
 
 ## Storage, rollout and offline verification
 
