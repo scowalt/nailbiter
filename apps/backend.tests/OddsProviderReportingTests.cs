@@ -127,8 +127,11 @@ public sealed class OddsProviderReportingTests
             cases.Add(name, HttpStatusCode.OK, "");
             cases.Add(name, HttpStatusCode.OK, """{"events":{}}""");
             cases.Add(name, HttpStatusCode.OK, """{"leagues":5}""");
+            cases.Add(name, HttpStatusCode.OK, "[]");
             cases.Add(name, HttpStatusCode.NotFound, "{}");
         }
+        cases.Add("EspnOdds", HttpStatusCode.OK, "null");
+        cases.Add("EspnOdds", HttpStatusCode.OK, "{}");
         return cases;
     }
 
@@ -285,6 +288,78 @@ public sealed class OddsProviderReportingTests
     }
 
     [Theory]
+    [InlineData("catalog that never ends", 1, 2)]
+    [InlineData("own fault", 3, 3)]
+    public async Task Kalshi_pregame_catalog_that_never_ends_is_sent_once_per_pass_and_own_faults_once_per_game(string kind, int events, int requests)
+    {
+        var kalshi = kind == "own fault" ? Fault : new Reply(HttpStatusCode.OK, """{"markets":[],"cursor":"again"}""");
+        var board = BackfillBoard("401872986", "401872987");
+        await using var database = await OddsDatabase.StartAsync();
+        await using var app = new OddsApp(uri => uri.AbsolutePath.StartsWith("/trade-api/", StringComparison.Ordinal) ? kalshi
+                : new Reply(HttpStatusCode.OK, uri.Query.Contains("dates=20261011", StringComparison.Ordinal) ? board : """{"events":[]}"""), services =>
+        {
+            database.Use()(services);
+            PinClock(services, new FakeTimeProvider(PregameNow));
+        });
+
+        using var scope = app.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<PregameOddsService>().RefreshPregameOddsForSportAsync("nfl", CancellationToken.None);
+
+        Assert.Equal(requests, app.Provider.Requests.Count(uri => uri.AbsolutePath.StartsWith("/trade-api/", StringComparison.Ordinal)));
+        var sent = await app.SentEventsAsync();
+        Assert.Equal(events, sent.Count);
+        Assert.All(sent, reported => Assert.Equal((typeof(PregameOddsService).FullName, "error", PregameKalshiTemplate),
+            (reported.Logger, reported.Level, reported.Template)));
+    }
+
+    [Fact]
+    public async Task Kalshi_pregame_catalog_that_never_ends_leaves_other_sports_to_kalshi()
+    {
+        var board = BackfillBoard();
+        await using var database = await OddsDatabase.StartAsync();
+        await using var app = new OddsApp(uri => uri.AbsolutePath.StartsWith("/trade-api/", StringComparison.Ordinal)
+                ? uri.Query.Contains("series_ticker=KXNFLGAME", StringComparison.Ordinal)
+                    ? new Reply(HttpStatusCode.OK, """{"markets":[],"cursor":"again"}""") : EmptyCatalog
+                : new Reply(HttpStatusCode.OK, uri.Query.Contains("dates=20261011", StringComparison.Ordinal) ? board : """{"events":[]}"""), services =>
+        {
+            database.Use()(services);
+            PinClock(services, new FakeTimeProvider(PregameNow));
+        });
+
+        using var scope = app.Services.CreateScope();
+        var pregame = scope.ServiceProvider.GetRequiredService<PregameOddsService>();
+        await pregame.RefreshPregameOddsForSportAsync("nfl", CancellationToken.None);
+        await pregame.RefreshPregameOddsForSportAsync("nba", CancellationToken.None);
+
+        Assert.Contains(app.Provider.Requests, uri => uri.Query.Contains("series_ticker=KXNBAGAME", StringComparison.Ordinal));
+        Assert.Single(await app.SentEventsAsync());
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("{}")]
+    public async Task Espn_body_that_is_not_a_scoreboard_is_a_warning_and_the_pregame_pass_carries_on(string body)
+    {
+        var board = BackfillBoard();
+        await using var database = await OddsDatabase.StartAsync();
+        await using var app = new OddsApp(uri => uri.AbsolutePath.StartsWith("/trade-api/", StringComparison.Ordinal) ? EmptyCatalog
+            : new Reply(HttpStatusCode.OK, uri.Query.Contains("dates=20261011", StringComparison.Ordinal) ? board : body), services =>
+        {
+            database.Use()(services);
+            PinClock(services, new FakeTimeProvider(PregameNow));
+        });
+
+        using var scope = app.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<PregameOddsService>().RefreshPregameOddsForSportAsync("nfl", CancellationToken.None);
+
+        Assert.Contains(app.Provider.Requests, uri => uri.AbsolutePath.StartsWith("/trade-api/", StringComparison.Ordinal));
+        var failures = app.FailuresFrom(typeof(EspnOddsService));
+        Assert.Equal(7, failures.Count);
+        Assert.All(failures, failure => Assert.Equal(LogLevel.Warning, failure.Level));
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Theory]
     [InlineData("""{"candlesticks":[""")]
     [InlineData("")]
     public async Task Unreadable_kalshi_history_is_a_warning_without_an_event(string body)
@@ -363,6 +438,22 @@ public sealed class OddsProviderReportingTests
         var reported = Assert.Single(await app.SentEventsAsync());
         Assert.Equal((typeof(KalshiOddsService).FullName, "error", Historical.Template, "backend.Services.KalshiAccessRefusedException"),
             (reported.Logger, reported.Level, reported.Template, reported.Exceptions[^1].Type));
+    }
+
+    [Fact]
+    public async Task Kalshi_history_refusal_after_an_outage_is_still_sent_and_ends_the_backfill_pass()
+    {
+        var requests = 0;
+        await using var app = new OddsApp(_ => Interlocked.Increment(ref requests) <= StandardAttempts ? Unavailable : new Reply(HttpStatusCode.Forbidden, "{}"));
+
+        var kalshi = app.Services.GetRequiredService<KalshiOddsService>();
+        foreach (var _ in Enumerable.Range(0, 3))
+            Assert.Empty(await kalshi.GetHistoricalOddsAsync("nfl", "PHI", "WSH", HistoricalStart, 60, CancellationToken.None));
+
+        Assert.Equal(StandardAttempts + 1, app.Provider.Requests.Count);
+        Assert.Equal([LogLevel.Error, LogLevel.Error], app.FailuresFrom(typeof(KalshiOddsService)).Select(f => f.Level));
+        Assert.Equal([typeof(HttpRequestException).FullName, "backend.Services.KalshiAccessRefusedException"],
+            (await app.SentEventsAsync()).Select(reported => reported.Exceptions[^1].Type));
     }
 
     [Fact]
