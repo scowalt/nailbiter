@@ -1,6 +1,7 @@
 namespace backend.Services
 
 open System
+open System.Net.Http
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.EntityFrameworkCore
@@ -129,10 +130,14 @@ type PregameOddsService [<ActivatorUtilitiesConstructor>]
                                     with
                                     | :? OperationCanceledException when ct.IsCancellationRequested ->
                                         return raise (OperationCanceledException(ct))
+                                    | :? HttpRequestException as ex when not (KalshiFailure.Is ex) ->
+                                        kalshiFetchFailed <- true
+                                        logger.LogWarning(ex, "Failed to fetch Kalshi pregame odds for {Game}", espnEvent.ShortName)
+                                        return None
                                     | ex ->
                                         kalshiFetchFailed <- true
                                         if ex :? KalshiAccessRefusedException then kalshiRefused <- true
-                                        logger.Log((if KalshiFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch Kalshi pregame odds for {Game}", espnEvent.ShortName)
+                                        logger.LogError(ex, "Failed to fetch Kalshi pregame odds for {Game}", espnEvent.ShortName)
                                         return None
                                 else return None
                             }

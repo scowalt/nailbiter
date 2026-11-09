@@ -101,10 +101,18 @@ type NflBackfillService
                         return ValueNone
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
+            | :? HttpRequestException as ex when not (ProviderFailure.Is ex) ->
+                logger.LogWarning(ex, "Failed to fetch ESPN Core API odds for event {EventId}", eventId)
+                return ValueNone
+            | :? JsonException as ex ->
+                logger.LogWarning(ex, "Failed to fetch ESPN Core API odds for event {EventId}", eventId)
+                return ValueNone
+            | ex when ProviderFailure.Is ex ->
+                logger.Log((if coreOddsFailureSent then LogLevel.Warning else LogLevel.Error), ex, "Failed to fetch ESPN Core API odds for event {EventId}", eventId)
+                coreOddsFailureSent <- true
+                return ValueNone
             | ex ->
-                let send = ProviderFailure.Is ex && not coreOddsFailureSent
-                if send then coreOddsFailureSent <- true
-                logger.Log((if send then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch ESPN Core API odds for event {EventId}", eventId)
+                logger.LogError(ex, "Failed to fetch ESPN Core API odds for event {EventId}", eventId)
                 return ValueNone
         }
 
@@ -194,7 +202,7 @@ type NflBackfillService
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
-                logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch pregame odds for game {GameId}", gameId)
+                logger.LogError(ex, "Failed to fetch pregame odds for game {GameId}", gameId)
                 return false
         }
 
@@ -263,7 +271,7 @@ type NflBackfillService
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
-                logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch Kalshi historical odds for game {GameId}", gameId)
+                logger.LogError(ex, "Failed to fetch Kalshi historical odds for game {GameId}", gameId)
                 return 0
         }
 
@@ -500,7 +508,7 @@ type NflBackfillService
                     with
                     | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
                     | ex ->
-                        logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Error processing game {GameId}", espnEvent.Id)
+                        logger.LogError(ex, "Error processing game {GameId}", espnEvent.Id)
                         result.Errors.Add($"Game {espnEvent.Id}: {ex.Message}")
 
                 if not options.DryRun then
@@ -543,7 +551,7 @@ type NflBackfillService
                 with
                 | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
                 | ex ->
-                    logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Error processing {SeasonType} week {Week}", seasonTypeName, week)
+                    logger.LogError(ex, "Error processing {SeasonType} week {Week}", seasonTypeName, week)
                     result.Errors.Add($"{seasonTypeName} Week {week}: {ex.Message}")
 
                 week <- week + 1
@@ -567,16 +575,14 @@ type NflBackfillService
                 return JsonSerializer.Deserialize<EspnScoreboardResponse>(response)
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
+            | :? HttpRequestException as ex when not (ProviderFailure.Is ex) ->
+                logger.LogWarning(ex, "Failed to fetch ESPN scoreboard for {Year} ST{Type} Week {Week}", seasonYear, seasonType, weekNumber)
+                return Unchecked.defaultof<EspnScoreboardResponse>
+            | :? JsonException as ex ->
+                logger.LogWarning(ex, "Failed to fetch ESPN scoreboard for {Year} ST{Type} Week {Week}", seasonYear, seasonType, weekNumber)
+                return Unchecked.defaultof<EspnScoreboardResponse>
             | ex ->
-                logger.Log(
-                    (if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning),
-                    ex,
-                    "Failed to fetch ESPN scoreboard for {Year} ST{Type} Week {Week}",
-                    seasonYear,
-                    seasonType,
-                    weekNumber
-                )
-
+                logger.LogError(ex, "Failed to fetch ESPN scoreboard for {Year} ST{Type} Week {Week}", seasonYear, seasonType, weekNumber)
                 return Unchecked.defaultof<EspnScoreboardResponse>
         }
 
@@ -626,7 +632,7 @@ type NflBackfillService
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
             | ex ->
-                logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Backfill failed with error")
+                logger.LogError(ex, "Backfill failed with error")
                 result.Errors.Add($"Fatal error: {ex.Message}")
 
             stopwatch.Stop()
