@@ -301,17 +301,18 @@ let ``one malformed ESPN scoreboard body is refetched without an error log`` (bo
 [<InlineData("")>]
 [<InlineData("<html><body>Service Unavailable</body></html>")>]
 [<InlineData("{\"leagues\":[],\"events\":[{\"id\":\"9")>]
-let ``repeated malformed ESPN scoreboard bodies are fetched twice and remain error logged`` (body: string) =
+let ``repeated malformed ESPN scoreboard bodies are fetched twice and logged as warnings`` (body: string) =
     task {
         let! result, requests, levels = scoreboardWith [ body ]
 
         Assert.Null(box result)
         Assert.Equal(2, requests)
-        Assert.Contains(LogLevel.Error, levels)
+        Assert.DoesNotContain(LogLevel.Error, levels)
+        Assert.Contains(LogLevel.Warning, levels)
     }
 
 [<Fact>]
-let ``forbidden ESPN responses are not retried and remain error logged`` () =
+let ``forbidden ESPN responses are not retried and logged as warnings`` () =
     task {
         let disposableClient, handler = createClient HttpStatusCode.Forbidden "{}"
         use client = disposableClient
@@ -330,5 +331,6 @@ let ``forbidden ESPN responses are not retried and remain error logged`` () =
 
         Assert.Null(box result)
         Assert.Single(handler.Requests) |> ignore
-        Assert.Contains(LogLevel.Error, logger.Levels)
+        Assert.DoesNotContain(LogLevel.Error, logger.Levels)
+        Assert.Contains(LogLevel.Warning, logger.Levels)
     }
