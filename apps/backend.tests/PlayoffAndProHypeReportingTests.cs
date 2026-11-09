@@ -120,6 +120,33 @@ public sealed class PlayoffAndProHypeReportingTests
         AssertSentOnceAtError(await app.SentEventsAsync(), typeof(PlayoffStatusService), PlayoffStatusFailure, typeof(TimeoutRejectedException));
     }
 
+    [Theory]
+    [InlineData("nfl")]
+    [InlineData("nba")]
+    public async Task Playoffstatus_client_timeout_is_sent_once_at_error(string sport)
+    {
+        await using var app = new ReportingApp(_ => Hang, configure: services =>
+            services.Configure<HttpClientFactoryOptions>(nameof(PlayoffStatusService), options =>
+                options.HttpClientActions.Add(client => client.Timeout = TimeSpan.FromMilliseconds(50))));
+
+        Assert.Equal(0, await RefreshPlayoffStatusAsync(app, sport, CancellationToken.None));
+
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(PlayoffStatusService), PlayoffStatusFailure, typeof(TaskCanceledException));
+    }
+
+    [Theory]
+    [InlineData("nfl")]
+    [InlineData("nba")]
+    public async Task Playoffstatus_own_fault_after_parsing_is_sent_once_at_error(string sport)
+    {
+        await using var app = new ReportingApp(uri => new Reply(HttpStatusCode.OK, uri.AbsolutePath.EndsWith("standings.html", StringComparison.Ordinal) ? BillsStandings : ""),
+            configure: services => services.RemoveAll<ExcitementDbContext>());
+
+        Assert.Equal(0, await RefreshPlayoffStatusAsync(app, sport, CancellationToken.None));
+
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(PlayoffStatusService), PlayoffStatusFailure, typeof(InvalidOperationException));
+    }
+
     [Fact]
     public async Task Playoffstatus_ratings_write_failure_is_sent_once_at_error()
     {
