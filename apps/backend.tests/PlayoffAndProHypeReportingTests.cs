@@ -147,16 +147,16 @@ public sealed class PlayoffAndProHypeReportingTests
     }
 
     [Fact]
-    public async Task Unexpected_pro_competition_refresh_failure_is_a_warning_without_an_event()
+    public async Task Unexpected_pro_competition_refresh_failure_is_sent_once_at_error_and_the_loop_keeps_running()
     {
         await using var database = await Database.StartAsync(ScheduledNbaGame());
         await using var app = new ReportingApp(_ => Unexpected, typeof(ProCompetitionRefreshBackgroundService), database.ConnectionString);
 
-        var failure = await app.WaitForLogAsync(typeof(ProCompetitionRefreshBackgroundService), ProCompetitionFailure);
+        await app.WaitForLogAsync(typeof(ProCompetitionRefreshBackgroundService), ProCompetitionFailure);
 
-        Assert.Equal(LogLevel.Warning, failure.Level);
-        Assert.IsType<NotSupportedException>(failure.Exception);
-        Assert.Empty(await app.SentEventsAsync());
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(ProCompetitionRefreshBackgroundService), ProCompetitionFailure, typeof(NotSupportedException));
+        var worker = app.Services.GetServices<IHostedService>().OfType<ProCompetitionRefreshBackgroundService>().Single();
+        Assert.False(worker.ExecuteTask!.IsCompleted);
     }
 
     [Fact]
@@ -187,18 +187,16 @@ public sealed class PlayoffAndProHypeReportingTests
     }
 
     [Fact]
-    public async Task Unexpected_pro_hype_capture_failure_is_a_warning_and_the_loop_keeps_capturing()
+    public async Task Unexpected_pro_hype_capture_failure_is_sent_once_at_error_and_the_loop_keeps_capturing()
     {
         var lifecycle = new SyntheticLifecycle(_ => throw new InvalidOperationException("synthetic capture failure"));
         var clock = new FakeTimeProvider();
         await using var app = ProHypeApp(lifecycle, clock);
 
+        await lifecycle.Captured(1).WaitAsync(HangDeadline);
+        await app.WaitForLogAsync(typeof(ProHypeCaptureBackgroundService), ProHypeFailure);
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(ProHypeCaptureBackgroundService), ProHypeFailure, typeof(InvalidOperationException));
         await AdvanceUntilAsync(clock, lifecycle.Captured(2));
-
-        var failures = app.Logs.Where(l => l.Category == typeof(ProHypeCaptureBackgroundService).FullName).ToArray();
-        Assert.True(failures.Length >= 2);
-        Assert.All(failures, failure => Assert.Equal((LogLevel.Warning, ProHypeFailure), (failure.Level, failure.Template)));
-        Assert.Empty(await app.SentEventsAsync());
     }
 
     [Fact]
