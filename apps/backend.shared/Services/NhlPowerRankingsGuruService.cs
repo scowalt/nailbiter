@@ -51,11 +51,7 @@ public sealed class NhlPowerRankingsGuruService(HttpClient http, IServiceScopeFa
                 ?? (response.Headers.RetryAfter?.Delta is TimeSpan delay ? clock.GetUtcNow().UtcDateTime.Add(delay) : observed);
             if (retryAt > observed.AddDays(1))
                 await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE nhl_guru_refresh_state SET next_attempt_at_ticks = GREATEST(next_attempt_at_ticks, {retryAt.Ticks}) WHERE id = 1", ct);
-            if (!response.IsSuccessStatusCode)
-            {
-                logger.LogWarning("NHL Power Rankings Guru returned {Status}; collection stopped", response.StatusCode);
-                return 0;
-            }
+            response.EnsureSuccessStatusCode();
             var html = await response.Content.ReadAsStringAsync(ct);
             if (Regex.IsMatch(html, @"cf-chl-|challenge-platform|<title>\s*Just a moment|id=[""']challenge-form", RegexOptions.IgnoreCase))
             {
@@ -98,9 +94,18 @@ public sealed class NhlPowerRankingsGuruService(HttpClient http, IServiceScopeFa
                 snapshot.Ranks.Count, snapshot.Season, snapshot.PublishedAt, eligible);
             return eligible ? snapshot.Ranks.Count : 0;
         }
-        catch (Exception ex) when (ex is HttpRequestException || ex is OperationCanceledException && !ct.IsCancellationRequested)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (HttpRequestException ex) when (!ProviderFailure.Is(ex))
         {
             logger.LogWarning(ex, "NHL Power Rankings Guru collection interrupted; original observations preserved");
+            return 0;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        {
+            logger.LogError(ex, "NHL Power Rankings Guru collection interrupted; original observations preserved");
             return 0;
         }
     }
@@ -113,7 +118,7 @@ public sealed class NhlPowerRankingsGuruService(HttpClient http, IServiceScopeFa
         if (sheets.Length != 1) return null;
         var headings = sheets[0].QuerySelectorAll("header h1");
         if (headings.Length != 1) return null;
-        var title = Regex.Match(headings[0].TextContent.Trim(), @"^(\d{4})-(\d{2}) NHL Power Rankings$");
+        var title = Regex.Match(headings[0].TextContent.Trim(), @"^([0-9]{4})-([0-9]{2}) NHL Power Rankings$");
         if (!title.Success) return null;
         var start = int.Parse(title.Groups[1].Value, CultureInfo.InvariantCulture);
         var season = start + 1;
