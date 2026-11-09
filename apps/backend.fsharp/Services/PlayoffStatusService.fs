@@ -528,7 +528,7 @@ type PlayoffStatusService
                                     teams.Add(team)
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
-            | ex -> logger.LogWarning(ex, "Failed to parse PlayoffStatus standings HTML for {Sport}", sport)
+            | ex -> logger.LogError(ex, "Failed to parse PlayoffStatus standings HTML for {Sport}", sport)
 
             return teams
         }
@@ -586,7 +586,7 @@ type PlayoffStatusService
                     | _ -> ()
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
-            | ex -> logger.LogWarning(ex, "Failed to parse PlayoffStatus postseason HTML for {Sport}", sport)
+            | ex -> logger.LogError(ex, "Failed to parse PlayoffStatus postseason HTML for {Sport}", sport)
         }
         :> Task
 
@@ -682,8 +682,11 @@ type PlayoffStatusService
                             return count
                 with
                 | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
+                | :? System.Net.Http.HttpRequestException as e when not (ProviderFailure.Is e) ->
+                    logger.LogWarning(e, "Failed to refresh {Sport} ratings from PlayoffStatus", sport)
+                    return 0
                 | ex ->
-                    logger.Log((if DatabaseFailure.Is ex || ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to refresh {Sport} ratings from PlayoffStatus", sport)
+                    logger.LogError(ex, "Failed to refresh {Sport} ratings from PlayoffStatus", sport)
                     return 0
         }
 
