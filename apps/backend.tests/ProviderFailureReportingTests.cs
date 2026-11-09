@@ -454,6 +454,56 @@ public sealed class ProviderFailureReportingTests
     }
 
     [Fact]
+    public async Task Kalshi_playoff_probabilities_own_fault_is_sent_once_at_error()
+    {
+        await using var app = new ReportingApp(_ => throw new InvalidOperationException("Synthetic fault below the fetch"));
+
+        using var scope = app.Services.CreateScope();
+        var refreshed = await scope.ServiceProvider.GetRequiredService<KalshiPlayoffRatingsService>()
+            .RefreshAsync("nhl", 2027, CancellationToken.None);
+
+        Assert.Equal(0, refreshed);
+        AssertSentOnceAtError<KalshiPlayoffRatingsService>(await app.SentEventsAsync(),
+            "Failed to refresh Kalshi {Sport} playoff probabilities for season {Season}", typeof(InvalidOperationException));
+    }
+
+    [Theory]
+    [InlineData("own fault")]
+    [InlineData("""{"markets":null,"cursor":null}""")]
+    public async Task Kalshi_playoff_archive_own_fault_or_broken_bound_is_sent_once_at_error(string archive)
+    {
+        await using var app = await PlayoffArchiveAppAsync(() => archive == "own fault"
+            ? throw new InvalidOperationException("Synthetic fault below the fetch") : Ok(archive));
+
+        using var scope = app.Services.CreateScope();
+        var refreshed = await scope.ServiceProvider.GetRequiredService<KalshiPlayoffRatingsService>()
+            .RefreshAsync("nhl", 2027, CancellationToken.None);
+
+        Assert.Equal(31, refreshed);
+        AssertSentOnceAtError<KalshiPlayoffRatingsService>(await app.SentEventsAsync(),
+            "Failed to recover archived {Sport} playoff finals for season {Season}; missing nonfinal probabilities are cleared without advancing their timestamps",
+            typeof(InvalidOperationException));
+    }
+
+    [Fact]
+    public async Task Unreadable_kalshi_playoff_answers_are_warnings_without_an_event()
+    {
+        await using var app = await PlayoffArchiveAppAsync(() => Ok("<html>maintenance</html>"));
+
+        using var scope = app.Services.CreateScope();
+        var refreshed = await scope.ServiceProvider.GetRequiredService<KalshiPlayoffRatingsService>()
+            .RefreshAsync("nhl", 2027, CancellationToken.None);
+        var unreadableEvent = await scope.ServiceProvider.GetRequiredService<KalshiPlayoffRatingsService>()
+            .RefreshAsync("nba", 2027, CancellationToken.None);
+
+        Assert.Equal((31, 0), (refreshed, unreadableEvent));
+        var failures = app.Logs.Where(l => l.Category == typeof(KalshiPlayoffRatingsService).FullName && l.Exception is not null).ToArray();
+        Assert.Equal(2, failures.Length);
+        Assert.All(failures, failure => Assert.Equal((LogLevel.Warning, true), (failure.Level, failure.Exception is JsonException)));
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Fact]
     public async Task Nhl_playoff_model_refresh_failure_is_sent_once()
     {
         await using var app = new ReportingApp(configure: services => services.Configure<PlayoffRatingsOptions>(options =>
@@ -659,6 +709,13 @@ public sealed class ProviderFailureReportingTests
             Assert.Equal(template, reported.Template);
             Assert.Equal(exception.FullName, reported.ExceptionTypes[^1]);
         });
+    }
+
+    private static void AssertSentOnceAtError<TCaller>(IReadOnlyCollection<SentEvent> sent, string template, Type exception)
+    {
+        var reported = Assert.Single(sent);
+        Assert.Equal((typeof(TCaller).FullName, "error", template), (reported.Logger, reported.Level, reported.Template));
+        Assert.Contains(exception.FullName, reported.ExceptionTypes);
     }
 
     private static void PinClock(IServiceCollection services, DateTimeOffset now)

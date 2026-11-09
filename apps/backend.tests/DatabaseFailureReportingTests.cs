@@ -133,6 +133,21 @@ public sealed class DatabaseFailureReportingTests
     }
 
     [Fact]
+    public async Task Kalshi_playoff_refresh_own_fault_is_reported_once_at_error()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        await using var app = new ReportingApp(database.ConnectionString, typeof(KalshiPlayoffRefreshBackgroundService), services =>
+        {
+            PinClock(services);
+            services.AddScoped<KalshiPlayoffRatingsService>(_ => throw new InvalidOperationException("Synthetic fault resolving the refresh"));
+        });
+
+        var reported = Assert.Single(await app.SentEventsAfterFailureAsync());
+        Assert.Equal((typeof(KalshiPlayoffRefreshBackgroundService).FullName, "error"), (reported.Logger, reported.Level));
+        Assert.Contains(reported.Exceptions, e => e.Type == typeof(InvalidOperationException).FullName);
+    }
+
+    [Fact]
     public async Task PlayoffStatus_model_commit_failure_is_reported_once_with_its_sqlstate()
     {
         await using var database = await SyntheticDatabase.StartAsync();
