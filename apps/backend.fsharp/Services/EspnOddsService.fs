@@ -160,9 +160,9 @@ type EspnOddsService
                           RawJson = root.Clone() }
                 return { scoreboard with RawJson = document.RootElement.Clone() }
             with
-            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: ESPN scoreboard fetch for {Sport} on {Date}", sport, (defaultArg date "today")); return Unchecked.defaultof<EspnScoreboardResponse>
+            | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
-                logger.LogError(ex, "Failed to fetch ESPN scoreboard for {Sport} on {Date}", sport, (defaultArg date "today"))
+                logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch ESPN scoreboard for {Sport} on {Date}", sport, (defaultArg date "today"))
                 return Unchecked.defaultof<EspnScoreboardResponse>
         }
 

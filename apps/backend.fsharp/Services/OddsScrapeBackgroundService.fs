@@ -6,6 +6,7 @@ open System.Threading.Tasks
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
+open backend.Data
 open backend.Services.Espn
 
 type OddsScrapeBackgroundService
@@ -27,9 +28,8 @@ type OddsScrapeBackgroundService
                     if snapshots.Count > 0 then
                         logger.LogInformation("Scraped {Count} live odds for {Sport}", snapshots.Count, sport)
                 with
-                | :? OperationCanceledException -> logger.LogDebug("Live odds scraping cancelled for {Sport}", sport)
-                | ex ->
-                    logger.LogError(ex, "Failed to scrape live odds for {Sport}", sport)
+                | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
+                | ex -> logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to scrape live odds for {Sport}", sport)
         }
 
     member private this.RefreshPregameOddsAsync(ct: CancellationToken) =
@@ -42,9 +42,8 @@ type OddsScrapeBackgroundService
                 if updated > 0 then
                     logger.LogInformation("Refreshed pregame odds for {Count} scheduled games", updated)
             with
-            | :? OperationCanceledException -> logger.LogDebug("Pregame odds refresh cancelled")
-            | ex ->
-                logger.LogError(ex, "Failed to refresh pregame odds")
+            | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
+            | ex -> logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to refresh pregame odds")
         }
 
     member private this.LiveOddsLoopAsync(ct: CancellationToken) =
@@ -54,9 +53,8 @@ type OddsScrapeBackgroundService
                 try
                     do! this.ScrapeLiveOddsAsync(ct)
                 with
-                | :? OperationCanceledException -> logger.LogDebug("Live odds scraping cycle cancelled")
-                | ex ->
-                    logger.LogError(ex, "Error during live odds scraping cycle")
+                | :? OperationCanceledException when ct.IsCancellationRequested -> ()
+                | ex -> logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Error during live odds scraping cycle")
                 do! Task.Delay(liveOddsInterval, timeProvider, ct)
         }
 
@@ -67,9 +65,8 @@ type OddsScrapeBackgroundService
                 try
                     do! this.RefreshPregameOddsAsync(ct)
                 with
-                | :? OperationCanceledException -> logger.LogDebug("Pregame odds refresh cycle cancelled")
-                | ex ->
-                    logger.LogError(ex, "Error during pregame odds refresh cycle")
+                | :? OperationCanceledException when ct.IsCancellationRequested -> ()
+                | ex -> logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Error during pregame odds refresh cycle")
                 do! Task.Delay(pregameOddsInterval, timeProvider, ct)
         }
 
