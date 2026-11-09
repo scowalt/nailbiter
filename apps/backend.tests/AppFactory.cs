@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Sentry.AspNetCore;
 
 namespace backend.tests;
 
@@ -23,6 +24,7 @@ internal sealed class AppFactory : WebApplicationFactory<Program>
                     || s.ImplementationType == typeof(backend.Services.CollegeFootballBackgroundService)
                     || s.ImplementationType == typeof(backend.Services.Highlights.HighlightsBackgroundService))).ToArray())
                 services.Remove(worker);
+            services.PostConfigure<SentryAspNetCoreOptions>(options => options.DisableUnobservedTaskExceptionCapture());
         });
         builder.ConfigureAppConfiguration((_, configuration) =>
             configuration.AddInMemoryCollection(new Dictionary<string, string?>
