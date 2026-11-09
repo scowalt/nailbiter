@@ -219,6 +219,114 @@ public sealed class DatabaseFailureReportingTests
     }
 
     [Fact]
+    public async Task MoneyPuck_own_fault_in_the_collection_is_reported_once_and_the_cycle_is_finalized()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        using var moneyPuck = new MoneyPuckQualificationHandler
+        {
+            Override = (_, _) => throw new InvalidOperationException("Synthetic fault below the fetch")
+        };
+        await using var app = MoneyPuckApp(database, moneyPuck);
+
+        AssertSentOnceAtError<MoneyPuckService, InvalidOperationException>(await app.SentEventsAfterFailureAsync());
+        Assert.False(await database.ScalarAsync<bool>("SELECT active FROM moneypuck_refresh_state WHERE id = 1", until: active => !active));
+    }
+
+    [Fact]
+    public async Task MoneyPuck_client_deadline_is_reported_once_at_error()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        using var moneyPuck = new MoneyPuckQualificationHandler
+        {
+            Override = async (_, ct) =>
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+                return null;
+            }
+        };
+        await using var app = new ReportingApp(database.ConnectionString, typeof(MoneyPuckRefreshBackgroundService), services =>
+        {
+            PinClock(services);
+            services.AddHttpClient<MoneyPuckService>(client => client.Timeout = TimeSpan.FromMilliseconds(200))
+                .ConfigurePrimaryHttpMessageHandler(() => moneyPuck);
+        });
+
+        AssertSentOnceAtError<MoneyPuckService, TaskCanceledException>(await app.SentEventsAfterFailureAsync());
+    }
+
+    [Fact]
+    public async Task MoneyPuck_missing_answer_is_a_warning_without_an_event()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        using var moneyPuck = new MoneyPuckQualificationHandler
+        {
+            Override = (_, _) => Task.FromResult<HttpResponseMessage?>(new HttpResponseMessage(HttpStatusCode.NotFound))
+        };
+        await using var app = MoneyPuckApp(database, moneyPuck);
+
+        Assert.Empty(await app.SentEventsAfterFailureAsync());
+        Assert.Single(moneyPuck.Requests);
+    }
+
+    [Fact]
+    public async Task MoneyPuck_background_own_fault_is_reported_once_at_error()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        await using var app = new ReportingApp(database.ConnectionString, typeof(MoneyPuckRefreshBackgroundService), services =>
+        {
+            PinClock(services);
+            services.RemoveAll<MoneyPuckService>();
+            services.AddTransient<MoneyPuckService>(_ => throw new InvalidOperationException("Synthetic fault resolving the collection"));
+        });
+
+        AssertSentOnceAtError<MoneyPuckRefreshBackgroundService, InvalidOperationException>(await app.SentEventsAfterFailureAsync());
+    }
+
+    [Fact]
+    public async Task MoneyPuck_missing_admission_row_is_reported_once_without_provider_requests()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        await database.ScalarAsync<int>("""
+            CREATE FUNCTION skip_insert() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+            CREATE TRIGGER skip_insert BEFORE INSERT ON moneypuck_refresh_state FOR EACH ROW EXECUTE FUNCTION skip_insert();
+            SELECT 1
+            """);
+        using var moneyPuck = new MoneyPuckQualificationHandler();
+        await using var app = MoneyPuckApp(database, moneyPuck);
+
+        AssertSentOnceAtError<MoneyPuckRefreshGate, InvalidOperationException>(await app.SentEventsAfterFailureAsync());
+        Assert.Empty(moneyPuck.Requests);
+    }
+
+    [Fact]
+    public async Task MoneyPuck_finalize_deadline_is_reported_once_and_the_cycle_stays_blocked()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        using var moneyPuck = new MoneyPuckQualificationHandler();
+        IAsyncDisposable? rowLock = null;
+        moneyPuck.Override = async (_, _) =>
+        {
+            rowLock ??= await database.HoldLockAsync("SELECT 1 FROM moneypuck_refresh_state WHERE id = 1 FOR UPDATE");
+            return null;
+        };
+        try
+        {
+            await using var app = new ReportingApp(database.ConnectionString, typeof(MoneyPuckRefreshBackgroundService), services =>
+            {
+                PinClock(services);
+                services.AddHttpClient<MoneyPuckService>().ConfigurePrimaryHttpMessageHandler(() => moneyPuck);
+            });
+
+            AssertSentOnceAtError<MoneyPuckRefreshGate, OperationCanceledException>(await app.SentEventsAfterFailureAsync());
+            Assert.True(await database.ScalarAsync<bool>("SELECT active FROM moneypuck_refresh_state WHERE id = 1"));
+        }
+        finally
+        {
+            if (rowLock is not null) await rowLock.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task Highlights_operator_charge_failure_is_reported_as_an_error_and_the_attach_is_refused()
     {
         await using var database = await SyntheticDatabase.StartAsync();
@@ -273,6 +381,13 @@ public sealed class DatabaseFailureReportingTests
     {
         services.RemoveAll<TimeProvider>();
         services.AddSingleton<TimeProvider>(new FakeTimeProvider(Now));
+    }
+
+    private static void AssertSentOnceAtError<TLogger, TException>(IReadOnlyCollection<SentEvent> sent)
+    {
+        var reported = Assert.Single(sent);
+        Assert.Equal((typeof(TLogger).FullName, "error"), (reported.Logger, reported.Level));
+        Assert.Contains(reported.Exceptions, e => e.Type == typeof(TException).FullName);
     }
 
     private static void AssertReportedOnce(IReadOnlyCollection<SentEvent> sent, string sqlState)
