@@ -2,7 +2,9 @@ namespace backend.Services.EspnIndyCar
 
 open System
 open System.Text.Json
+open System.Threading
 open Backend.FSharp
+open backend.Services
 open backend.Services.Espn
 open backend.Services.EspnNascar
 open Microsoft.Extensions.Logging
@@ -16,7 +18,9 @@ type EspnIndyCarService
     static let easternTimeZone = TimeZoneInfo.FindSystemTimeZoneById("America/New_York")
 
 
-    member _.FetchScoreboardAsync(?date: string) =
+    member _.FetchScoreboardAsync(?date: string, ?ct: CancellationToken) =
+        let ct = defaultArg ct CancellationToken.None
+
         task {
             let mutable url = $"{baseUrl}/scoreboard"
             match date with
@@ -25,34 +29,38 @@ type EspnIndyCarService
 
             try
                 logger.LogDebug("Fetching ESPN IndyCar scoreboard: {Url}", url)
-                let! response = httpClient.GetAsync(url)
+                let! response = httpClient.GetAsync(url, ct)
                 response.EnsureSuccessStatusCode() |> ignore
-                let! json = response.Content.ReadAsStringAsync()
+                let! json = response.Content.ReadAsStringAsync(ct)
                 return JsonSerializer.Deserialize<EspnNascarScoreboardResponse>(json, HttpHelpers.jsonOptions)
             with
-            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: ESPN IndyCar scoreboard fetch"); return Unchecked.defaultof<EspnNascarScoreboardResponse>
+            | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
-                logger.LogError(ex, "Failed to fetch ESPN IndyCar scoreboard from {Url}", url)
+                logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch ESPN IndyCar scoreboard from {Url}", url)
                 return Unchecked.defaultof<EspnNascarScoreboardResponse>
         }
 
-    member this.FetchScoreboardByDateAsync(date: DateTime) =
+    member this.FetchScoreboardByDateAsync(date: DateTime, ?ct: CancellationToken) =
+        let ct = defaultArg ct CancellationToken.None
+
         task {
             let utcDate =
                 if date.Kind = DateTimeKind.Utc then date
                 else DateTime.SpecifyKind(date, DateTimeKind.Utc)
             let easternDate = TimeZoneInfo.ConvertTimeFromUtc(utcDate, easternTimeZone)
-            return! this.FetchScoreboardAsync(easternDate.ToString("yyyyMMdd"))
+            return! this.FetchScoreboardAsync(easternDate.ToString("yyyyMMdd"), ct)
         }
 
-    member _.FetchCompetitorsAsync(eventId: string) =
+    member _.FetchCompetitorsAsync(eventId: string, ?ct: CancellationToken) =
+        let ct = defaultArg ct CancellationToken.None
+
         task {
             let listUrl = $"https://sports.core.api.espn.com/v2/sports/racing/leagues/irl/events/{eventId}/competitions/{eventId}/competitors?limit=50"
             try
                 logger.LogDebug("Fetching ESPN core IndyCar competitor list: {Url}", listUrl)
-                let! listResponse = httpClient.GetAsync(listUrl)
+                let! listResponse = httpClient.GetAsync(listUrl, ct)
                 listResponse.EnsureSuccessStatusCode() |> ignore
-                let! listJson = listResponse.Content.ReadAsStringAsync()
+                let! listJson = listResponse.Content.ReadAsStringAsync(ct)
                 use listDoc = JsonDocument.Parse(listJson)
                 let items = listDoc.RootElement.GetProperty("items")
 
@@ -64,14 +72,14 @@ type EspnIndyCarService
                         if not (String.IsNullOrEmpty(refUrl)) then
                             let resolvedUrl = refUrl.Replace("sports.core.api.espn.pvt", "sports.core.api.espn.com")
                             try
-                                let! compResponse = httpClient.GetAsync(resolvedUrl)
+                                let! compResponse = httpClient.GetAsync(resolvedUrl, ct)
                                 compResponse.EnsureSuccessStatusCode() |> ignore
-                                let! compJson = compResponse.Content.ReadAsStringAsync()
+                                let! compJson = compResponse.Content.ReadAsStringAsync(ct)
                                 let comp = JsonSerializer.Deserialize<EspnCoreCompetitorItem>(compJson, HttpHelpers.jsonOptions)
                                 if not (isNull (box comp)) then
                                     competitors.Add(comp)
                             with
-                            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: resolving IndyCar competitor ref")
+                            | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
                             | ex ->
                                 logger.LogWarning(ex, "Failed to resolve competitor ref: {Url}", resolvedUrl)
                     | false, _ ->
@@ -83,7 +91,7 @@ type EspnIndyCarService
                 result <- { Count = competitors.Count; Items = competitors }
                 return result
             with
-            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: ESPN core IndyCar competitors fetch for event {EventId}", eventId); return Unchecked.defaultof<EspnCoreCompetitorsResponse>
+            | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
                 logger.LogWarning(ex, "Failed to fetch ESPN core IndyCar competitors for event {EventId} (falling back to scoreboard data)", eventId)
                 return Unchecked.defaultof<EspnCoreCompetitorsResponse>

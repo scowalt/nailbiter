@@ -60,7 +60,7 @@ type F1DataService
         let ct = defaultArg ct CancellationToken.None
 
         task {
-            let! scoreboard = espnF1.FetchScoreboardAsync()
+            let! scoreboard = espnF1.FetchScoreboardAsync(ct = ct)
 
             if isNull (box scoreboard) || scoreboard.Leagues.Count = 0 then
                 logger.LogWarning("No F1 scoreboard data returned")
@@ -135,7 +135,7 @@ type F1DataService
                                     | Some _ -> return eventData
                                     | None ->
                                         let! dateScoreboard =
-                                            espnF1.FetchScoreboardByDateAsync(scheduledStart)
+                                            espnF1.FetchScoreboardByDateAsync(scheduledStart, ct = ct)
 
                                         if not (isNull (box dateScoreboard)) then
                                             return
@@ -378,7 +378,7 @@ type F1DataService
                             ct.ThrowIfCancellationRequested()
 
                             let! dateScoreboard =
-                                espnF1.FetchScoreboardByDateAsync(staleRace.ScheduledStart)
+                                espnF1.FetchScoreboardByDateAsync(staleRace.ScheduledStart, ct = ct)
 
                             if not (isNull (box dateScoreboard)) then
                                 let eventMatch =
@@ -504,7 +504,7 @@ type F1DataService
                 logger.LogWarning("No F1 races found for {Year}", year)
                 return 0
             else
-                let! scoreboard = espnF1.FetchScoreboardByDateAsync(race.ScheduledStart)
+                let! scoreboard = espnF1.FetchScoreboardByDateAsync(race.ScheduledStart, ct = ct)
 
                 if isNull (box scoreboard) then
                     logger.LogWarning(
@@ -527,7 +527,7 @@ type F1DataService
                         return 0
                     | Some eventData ->
                         let! coreCompetitors =
-                            espnF1.FetchCompetitorsAsync(race.EspnEventId)
+                            espnF1.FetchCompetitorsAsync(race.EspnEventId, ct = ct)
 
                         let! existingDrivers =
                             db.F1Drivers.Where(fun d -> d.Season = year).ToListAsync(ct)

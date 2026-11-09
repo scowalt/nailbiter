@@ -32,7 +32,7 @@ type NascarLiveFeedService(httpClient: System.Net.Http.HttpClient, logger: ILogg
                 let! json = httpClient.GetStringAsync(feedUrl, ct)
                 return JsonSerializer.Deserialize<NascarLiveFeed>(json)
             with
-            | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: NASCAR.com live feed fetch"); return Unchecked.defaultof<NascarLiveFeed>
+            | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
                 logger.LogWarning(ex, "Failed to fetch NASCAR.com live feed")
                 return Unchecked.defaultof<NascarLiveFeed>

@@ -150,7 +150,7 @@ type NascarLiveDataService
                     .ToListAsync(ct)
 
             if inProgressRaces.Count > 0 then
-                let! scoreboard = espnNascar.FetchScoreboardByDateAsync(DateTime.UtcNow)
+                let! scoreboard = espnNascar.FetchScoreboardByDateAsync(DateTime.UtcNow, ct = ct)
 
                 let! liveFeedData = liveFeed.GetLiveFeedAsync(ct)
 

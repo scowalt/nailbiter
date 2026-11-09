@@ -123,7 +123,7 @@ type F1LiveDataService
                     .ToListAsync(ct)
 
             if inProgressRaces.Count > 0 then
-                let! scoreboard = espnF1.FetchScoreboardAsync()
+                let! scoreboard = espnF1.FetchScoreboardAsync(ct = ct)
 
                 let! kalshiProbs = kalshiF1.GetWinProbabilitiesAsync(ct)
 

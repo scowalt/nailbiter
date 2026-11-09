@@ -97,7 +97,7 @@ type IndyCarLiveDataService
                     .ToListAsync(ct)
 
             if inProgressRaces.Count > 0 then
-                let! scoreboard = espnIndyCar.FetchScoreboardByDateAsync(DateTime.UtcNow)
+                let! scoreboard = espnIndyCar.FetchScoreboardByDateAsync(DateTime.UtcNow, ct = ct)
 
                 for race in inProgressRaces do
                     ct.ThrowIfCancellationRequested()
