@@ -42,6 +42,7 @@ public sealed class PlayoffAndProHypeReportingTests
     private static readonly Answer Hang = new Hanging();
     private static readonly Answer Unavailable = new Reply(HttpStatusCode.ServiceUnavailable, "{}");
     private static readonly Answer Unexpected = new Throwing();
+    private static readonly Answer DisposedAtShutdown = new FaultingAtShutdown();
     private const string BillsStandings = """
         <table><tr data-idx="0"><td><a>Buffalo Bills</a></td><td>7</td><td>2</td><td>0</td><td>4%</td></tr></table>
         """;
@@ -212,6 +213,20 @@ public sealed class PlayoffAndProHypeReportingTests
     }
 
     [Fact]
+    public async Task Pro_competition_fault_raised_during_shutdown_stops_the_loop_without_an_event()
+    {
+        await using var database = await Database.StartAsync(ScheduledNbaGame());
+        await using var app = new ReportingApp(_ => DisposedAtShutdown, typeof(ProCompetitionRefreshBackgroundService), database.ConnectionString);
+        await app.Provider.HangStarted.WaitAsync(HangDeadline);
+
+        var sent = await app.StopAsync();
+
+        Assert.Empty(sent);
+        Assert.DoesNotContain(app.Logs, l => l.Exception is ObjectDisposedException);
+        Assert.DoesNotContain(app.Logs, l => l.Level >= LogLevel.Warning && l.Category.StartsWith("backend", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Unexpected_pro_competition_fetch_failure_is_sent_once_by_its_group_and_the_loop_keeps_running()
     {
         await using var database = await Database.StartAsync(ScheduledNbaGame());
@@ -341,6 +356,8 @@ public sealed class PlayoffAndProHypeReportingTests
     private sealed record Hanging : Answer;
 
     private sealed record Throwing : Answer;
+
+    private sealed record FaultingAtShutdown : Answer;
 
     private sealed record SentEvent(string? Logger, string? Level, string? Template, string?[] Exceptions);
 
@@ -503,7 +520,11 @@ public sealed class PlayoffAndProHypeReportingTests
                     throw new NotSupportedException("synthetic unexpected failure");
             }
             hanging.TrySetResult();
-            await Task.Delay(Timeout.Infinite, cancellationToken);
+            try { await Task.Delay(Timeout.Infinite, cancellationToken); }
+            catch (OperationCanceledException) when (answer(request.RequestUri!) is FaultingAtShutdown)
+            {
+                throw new ObjectDisposedException("synthetic service disposed during shutdown");
+            }
             throw new UnreachableException();
         }
     }
