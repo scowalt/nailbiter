@@ -297,7 +297,7 @@ type PowerRankingsGuruService [<ActivatorUtilitiesConstructor>]
                     let invalidationDb = invalidationScope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
                     let! previous = invalidationDb.TeamRatings.Where(fun r -> r.Sport = sport && r.Season = season && r.Source = "powerrankingsguru").ToListAsync(ct)
                     let expected = backend.Scoring.ProHypePolicy.TeamCount(sport, season)
-                    let complete = expected.HasValue && teams.Count > 0
+                    let complete = expected.HasValue && teams.Count = expected.Value
                                    && (teams |> Seq.map (fun t -> t.Abbreviation) |> Seq.distinct |> Seq.length) = teams.Count
                                    && (teams |> Seq.forall (fun t -> t.Rank >= 1 && t.Rank <= expected.Value))
                     for row in previous do
@@ -309,8 +309,10 @@ type PowerRankingsGuruService [<ActivatorUtilitiesConstructor>]
 
                     if not complete then
                         logger.LogWarning(
-                            "No teams parsed from PowerRankingsGuru for {Sport}",
-                            sport
+                            "Incomplete PowerRankingsGuru {Sport} rankings rejected: {Parsed} rows parsed for {Expected} teams",
+                            sport,
+                            teams.Count,
+                            expected
                         )
 
                         return 0
