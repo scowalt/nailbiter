@@ -25,6 +25,7 @@ public sealed class HighlightsLifecycleService(ExcitementDbContext db, TimeProvi
     {
         var expired = 0;
         var locked = false;
+        var reported = false;
         try
         {
             await db.Database.OpenConnectionAsync(cancellationToken);
@@ -69,8 +70,8 @@ public sealed class HighlightsLifecycleService(ExcitementDbContext db, TimeProvi
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
-            if (DatabaseFailure.Is(ex)) logger.LogError(ex, "Highlights lifecycle skipped: {Reason}", "OperationFailure");
-            else logger.LogWarning("Highlights lifecycle skipped: {Reason}", "OperationFailure");
+            reported = true;
+            logger.LogError(HighlightsFault.Reportable(ex), "Highlights lifecycle skipped: {Reason}", "OperationFailure");
             return new(0, 0, expired, "OperationFailure");
         }
         finally
@@ -80,7 +81,12 @@ public sealed class HighlightsLifecycleService(ExcitementDbContext db, TimeProvi
                 await using var command = db.Database.GetDbConnection().CreateCommand();
                 command.CommandText = "SELECT pg_advisory_unlock(651, 647)";
                 try { await command.ExecuteScalarAsync(CancellationToken.None); }
-                catch (Exception) { db.Database.GetDbConnection().Close(); }
+                catch (Exception ex)
+                {
+                    db.Database.GetDbConnection().Close();
+                    if (!reported && !cancellationToken.IsCancellationRequested)
+                        logger.LogError(HighlightsFault.Reportable(ex), "Highlights lifecycle skipped: {Reason}", "UnlockFailure");
+                }
             }
             await db.Database.CloseConnectionAsync();
         }

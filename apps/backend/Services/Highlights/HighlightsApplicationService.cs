@@ -12,6 +12,8 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
     MlbHighlightsIdentityClient identities, YouTubeHighlightsClient youtube, TimeProvider time, IOptions<YouTubeHighlightsOptions> options,
     IOptions<HighlightsWorkerOptions> workerOptions, ILogger<HighlightsApplicationService> logger)
 {
+    private readonly HashSet<(string Evidence, string GameId)> unreadable = [];
+
     public async Task<GameHighlightsInspection?> InspectAsync(string gameId, CancellationToken cancellationToken = default)
     {
         var state = await inspection.InspectAsync(gameId, cancellationToken);
@@ -24,8 +26,7 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception ex)
         {
-            if (DatabaseFailure.Is(ex)) logger.LogError(ex, "Highlights detail skipped: {Reason}", "OptionalStorageFailure");
-            else logger.LogWarning("Highlights detail skipped: {Reason}", "OptionalStorageFailure");
+            logger.LogError(HighlightsFault.Reportable(ex), "Highlights detail skipped: {Reason}", "OptionalStorageFailure");
             return new(HighlightsDetailStatus.Hidden);
         }
     }
@@ -287,7 +288,7 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
             && game.ScheduledStart >= operation.CatchupWindowStart && game.ScheduledStart <= operation.LaunchBoundaryAt;
     }
 
-    private static string? PersistedIdentityFailure(Game game)
+    private string? PersistedIdentityFailure(Game game)
     {
         if (game.HighlightsIdentityEvidenceJson is null) return null;
         try
@@ -296,7 +297,7 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
             return json.RootElement.ValueKind == JsonValueKind.Object && json.RootElement.TryGetProperty("FailureReason", out var reason)
                 && reason.ValueKind == JsonValueKind.String ? reason.GetString() : null;
         }
-        catch (JsonException) { return null; }
+        catch (JsonException ex) { Unreadable(ex, nameof(Game.HighlightsIdentityEvidenceJson), game.Id); return null; }
     }
 
     private sealed record SelectionIdentity(long GamePk, DateOnly OfficialDate, int Season, bool Manual);
@@ -304,7 +305,7 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
     private static string SelectionIdentityJson(MlbHighlightsIdentityClient.Identity identity, bool manual) =>
         JsonSerializer.Serialize(new SelectionIdentity(identity.GamePk, identity.OfficialDate, identity.Season, manual));
 
-    private static bool VerifiedSelectionIdentity(Game game, GameHighlights selection)
+    private bool VerifiedSelectionIdentity(Game game, GameHighlights selection)
     {
         if (selection.SelectionEvidenceJson is null) return false;
         try
@@ -313,10 +314,10 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
             return evidence is not null && evidence.GamePk == game.MlbGamePk && evidence.OfficialDate == game.MlbOfficialDate
                 && evidence.Season == game.SeasonYear && evidence.Manual == (selection.Ownership == HighlightsOwnership.Manual);
         }
-        catch (JsonException) { return false; }
+        catch (JsonException ex) { Unreadable(ex, nameof(GameHighlights.SelectionEvidenceJson), game.Id); return false; }
     }
 
-    private static bool VerifiedPersistedIdentity(Game game)
+    private bool VerifiedPersistedIdentity(Game game)
     {
         if (game.HighlightsIdentityEvidenceJson is null) return false;
         try
@@ -329,7 +330,13 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
                 && MlbHighlightsIdentityClient.Teams.Any(t => t.MlbId == identity.AwayTeamId && t.Abbreviation == game.AwayTeamAbbreviation
                     && (game.AwayTeamId is null || game.AwayTeamId == t.EspnId));
         }
-        catch (JsonException) { return false; }
+        catch (JsonException ex) { Unreadable(ex, nameof(Game.HighlightsIdentityEvidenceJson), game.Id); return false; }
+    }
+
+    private void Unreadable(JsonException exception, string evidence, string gameId)
+    {
+        if (unreadable.Add((evidence, gameId)))
+            logger.LogError(HighlightsFault.From(exception), "Highlights stored evidence unreadable: {Evidence} for {GameId}", evidence, gameId);
     }
 
     private static bool HasDecision(GameHighlights? selection) => selection?.Ownership is not null || selection?.SelectedAt is not null || selection?.SelectedVideoId is not null;
@@ -428,7 +435,7 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
             && Regex.IsMatch(text, @"\b" + Regex.Escape(t.Nickname) + @"\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))) return false;
         var dates = Regex.Matches(text, @"\b(?:\d{1,2}/\d{1,2}/(?:\d{4}|\d{2})|\d{4}-\d{2}-\d{2})\b");
         if (dates.Any(d => !DateOnly.TryParseExact(d.Value, ["M/d/yy", "M/d/yyyy", "yyyy-MM-dd"], CultureInfo.InvariantCulture, DateTimeStyles.None, out var stated) || stated != date)) return false;
-        if (Regex.Matches(text, @"\b20\d{2}\b").Any(y => int.Parse(y.Value, CultureInfo.InvariantCulture) != identity.Season)) return false;
+        if (Regex.Matches(text, @"\b20[0-9]{2}\b").Any(y => int.Parse(y.Value, CultureInfo.InvariantCulture) != identity.Season)) return false;
         if (Regex.Matches(text, @"\bGame\s+(\d+)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
             .Any(m => !int.TryParse(m.Groups[1].Value, out var number) || number != identity.GameNumber)) return false;
         var pks = Regex.Matches(text, @"\bgamePk\s*[:=]\s*(\d+)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)

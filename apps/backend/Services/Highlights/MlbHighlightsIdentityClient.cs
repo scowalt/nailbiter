@@ -4,8 +4,10 @@ using backend.Models;
 
 namespace backend.Services.Highlights;
 
-public sealed class MlbHighlightsIdentityClient(IHttpClientFactory clients, TimeProvider time)
+public sealed class MlbHighlightsIdentityClient(IHttpClientFactory clients, TimeProvider time, ILogger<MlbHighlightsIdentityClient> logger)
 {
+    private bool providerFailureReported;
+
     public const string HttpClientName = "MlbHighlightsIdentity";
     internal sealed record Team(string Abbreviation, string EspnId, int MlbId, string Nickname);
     internal static readonly Team[] Teams =
@@ -49,7 +51,7 @@ public sealed class MlbHighlightsIdentityClient(IHttpClientFactory clients, Time
             if (competitors.Length != 2 || !Matches(competitors, "home", home, game.HomeTeamId) || !Matches(competitors, "away", away, game.AwayTeamId))
                 return new(null, completion, true, "ConflictingTeams");
             var season = header.GetProperty("season").GetProperty("year").GetInt32();
-            var start = DateTimeOffset.Parse(competition.GetProperty("date").GetString()!, CultureInfo.InvariantCulture);
+            var start = DateTimeOffset.Parse(Required(competition, "date"), CultureInfo.InvariantCulture);
             if (game.SeasonYear != season || start.UtcDateTime != game.ScheduledStart)
                 return new(null, completion, true, "ConflictingSeasonOrStart");
             var from = start.UtcDateTime.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -58,14 +60,14 @@ public sealed class MlbHighlightsIdentityClient(IHttpClientFactory clients, Time
             var rows = schedule.GetProperty("dates").EnumerateArray().SelectMany(d => d.GetProperty("games").EnumerateArray()).ToArray();
             var pair = rows.Where(r => r.GetProperty("teams").GetProperty("home").GetProperty("team").GetProperty("id").GetInt32() == home.MlbId
                 && r.GetProperty("teams").GetProperty("away").GetProperty("team").GetProperty("id").GetInt32() == away.MlbId
-                && int.Parse(r.GetProperty("season").GetString()!, CultureInfo.InvariantCulture) == season).ToArray();
-            var exact = pair.Where(r => DateTimeOffset.Parse(r.GetProperty("gameDate").GetString()!, CultureInfo.InvariantCulture) == start).ToArray();
+                && Year(r) == season).ToArray();
+            var exact = pair.Where(r => DateTimeOffset.Parse(Required(r, "gameDate"), CultureInfo.InvariantCulture) == start).ToArray();
             if (exact.Length != 1) return new(null, completion, true, "AmbiguousSchedule");
             var row = exact[0];
             var mlbStatus = row.GetProperty("status");
             if (mlbStatus.GetProperty("abstractGameState").GetString() != "Final" || mlbStatus.GetProperty("detailedState").GetString() != "Final"
                 || mlbStatus.GetProperty("codedGameState").GetString() != "F") return new(null, completion, true, "MlbNotFinal");
-            var date = DateOnly.ParseExact(row.GetProperty("officialDate").GetString()!, "yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var date = DateOnly.ParseExact(Required(row, "officialDate"), "yyyy-MM-dd", CultureInfo.InvariantCulture);
             var pk = row.GetProperty("gamePk").GetInt64();
             var doubleHeader = row.GetProperty("doubleHeader").GetString();
             var number = row.GetProperty("gameNumber").GetInt32();
@@ -77,12 +79,29 @@ public sealed class MlbHighlightsIdentityClient(IHttpClientFactory clients, Time
                 Text(row, "resumedFromDate"), Text(row, "rescheduledToDate"), Text(row, "resumeDate"), start.UtcDateTime,
                 pair.Count(r => r.GetProperty("officialDate").GetString() == date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)), observed), completion, true, "Verified");
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { return new(null, null, false, "IdentityTemporaryFailure"); }
-        catch (Exception e) when (e is HttpRequestException or IOException) { return new(null, null, false, "IdentityTemporaryFailure"); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (HttpRequestException e) when (!ProviderFailure.Is(e))
+        {
+            logger.LogWarning("Highlights identity unavailable: {Reason} {Status}", "ProviderRejected", (int?)e.StatusCode);
+            return new(null, null, false, "IdentityTemporaryFailure");
+        }
+        catch (Exception e) when (e is HttpRequestException or IOException or OperationCanceledException)
+        {
+            if (providerFailureReported) logger.LogWarning("Highlights identity unavailable: {Reason}", "ProviderFailure");
+            else logger.LogError(HighlightsFault.From(e), "Highlights identity unavailable: {Reason}", "ProviderFailure");
+            providerFailureReported = true;
+            return new(null, null, false, "IdentityTemporaryFailure");
+        }
         catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException)
-        { return new(null, null, true, "MalformedIdentity"); }
+        {
+            logger.LogWarning("Highlights identity unavailable: {Reason}", "MalformedIdentity");
+            return new(null, null, true, "MalformedIdentity");
+        }
     }
 
+    private static string Required(JsonElement value, string name) => value.GetProperty(name).GetString() ?? throw new JsonException();
+    private static int Year(JsonElement row) =>
+        int.TryParse(Required(row, "season"), NumberStyles.None, CultureInfo.InvariantCulture, out var year) ? year : throw new JsonException();
     private static string? Text(JsonElement value, string name) => value.TryGetProperty(name, out var field) && field.ValueKind != JsonValueKind.Null ? field.GetString() : null;
     private static EspnCompletionStatus Status(JsonElement value) => new(Text(value, "name"), Text(value, "state"),
         value.TryGetProperty("completed", out var completed) && completed.ValueKind is JsonValueKind.True or JsonValueKind.False ? completed.GetBoolean() : null,
