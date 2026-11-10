@@ -181,7 +181,7 @@ type PlayoffStatusService
     member private this.SeasonAssertions(text: string) =
         let text = this.NormalizeText(text)
         let seasons = ResizeArray<int>()
-        for m in Regex.Matches(text, @"(?<!\d)(\d{4})\s*[-/]\s*(\d{2}|\d{4})(?!\d)") do
+        for m in Regex.Matches(text, @"(?<!\d)([0-9]{4})\s*[-/]\s*([0-9]{2}|[0-9]{4})(?!\d)") do
             let first = Int32.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)
             let secondText = m.Groups[2].Value
             let ending =
@@ -191,7 +191,7 @@ type PlayoffStatusService
                     if candidate < first then candidate + 100 else candidate
                 else Int32.Parse(secondText, CultureInfo.InvariantCulture)
             seasons.Add(ending)
-        for m in Regex.Matches(text, @"(?<!\d)(\d{4})\s+NHL\s+Postseason(?!\d)", RegexOptions.IgnoreCase) do
+        for m in Regex.Matches(text, @"(?<!\d)([0-9]{4})\s+NHL\s+Postseason(?!\d)", RegexOptions.IgnoreCase) do
             seasons.Add(Int32.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture))
         seasons |> Seq.toList
 
