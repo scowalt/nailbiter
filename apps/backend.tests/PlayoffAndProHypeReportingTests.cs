@@ -34,6 +34,7 @@ public sealed class PlayoffAndProHypeReportingTests
     private const int StandardAttempts = 4;
     private const string PlayoffStatusFailure = "Failed to refresh {Sport} ratings from PlayoffStatus";
     private const string NhlModelFailure = "Failed NHL PlayoffStatus model refresh for season {Season}";
+    private const string NhlModelRejected = "Rejected NHL PlayoffStatus model refresh for season {Season}: {Reason}";
     private const int NhlSeason = 2027;
     private const string ProCompetitionFailure = "Pro competition refresh failed";
     private const string ProHypeFailure = "Pro hype capture failed";
@@ -198,6 +199,30 @@ public sealed class PlayoffAndProHypeReportingTests
         AssertSentOnceAtError(await app.SentEventsAsync(), typeof(PlayoffStatusService), NhlModelFailure, typeof(HttpRequestException));
     }
 
+    [Theory]
+    [InlineData("easternstandings", "٢٠٢٦-٢٧ NHL Wild Card Standings")]
+    [InlineData("easternstandings", "٢٠٢٦-27 NHL Wild Card Standings")]
+    [InlineData("easternstandings", "2026-٢٧ NHL Wild Card Standings")]
+    [InlineData("westernstandings", "2026-٢٠٢٧ NHL Wild Card Standings")]
+    [InlineData("nhlpostseasonprob", "٢٠٢٧ NHL Postseason Probabilities")]
+    public async Task Nhl_model_refresh_season_title_in_non_ascii_digits_is_rejected_as_wrong_season(string page, string title)
+    {
+        var published = DateTime.UtcNow.AddHours(-24);
+        await using var database = await Database.StartAsync();
+        var previous = await database.SeedNhlModelRowsAsync(NhlSeason);
+        await using var app = NhlModelApp(uri => new Reply(HttpStatusCode.OK, NflPlayoffPageTests.PlayoffStatusFixture(uri.AbsoluteUri, published, invalidBos: false,
+            titleOverride: url => url.Contains(page, StringComparison.Ordinal) ? title : null)), connectionString: database.ConnectionString);
+
+        Assert.Equal(0, await RefreshNhlModelAsync(app));
+
+        Assert.Equal(3, app.Provider.Requests);
+        Assert.Empty(await app.SentEventsAsync());
+        var rejected = Assert.Single(app.Logs, l => l.Category == typeof(PlayoffStatusService).FullName && l.Level >= LogLevel.Warning);
+        Assert.Equal((LogLevel.Warning, NhlModelRejected), (rejected.Level, rejected.Template));
+        Assert.EndsWith($"{NhlSeason}: wrong_season", rejected.Message, StringComparison.Ordinal);
+        Assert.Equal(previous, await database.NhlModelRowsAsync(NhlSeason));
+    }
+
     [Fact]
     public async Task Pro_competition_refresh_shutdown_stops_the_loop_without_an_event()
     {
@@ -283,8 +308,8 @@ public sealed class PlayoffAndProHypeReportingTests
         return await PlayoffStatusRefreshes[sport](scope.ServiceProvider.GetRequiredService<PlayoffStatusService>(), ct);
     }
 
-    private static ReportingApp NhlModelApp(Func<Uri, Answer> answer, Action<IServiceCollection>? configure = null) =>
-        new(answer, configure: services =>
+    private static ReportingApp NhlModelApp(Func<Uri, Answer> answer, Action<IServiceCollection>? configure = null, string? connectionString = null) =>
+        new(answer, connectionString: connectionString, configure: services =>
         {
             services.PostConfigure<PlayoffRatingsOptions>(options =>
             {
@@ -344,7 +369,7 @@ public sealed class PlayoffAndProHypeReportingTests
 
     private sealed record SentEvent(string? Logger, string? Level, string? Template, string?[] Exceptions);
 
-    private sealed record LoggedEntry(string Category, LogLevel Level, string? Template, Exception? Exception);
+    private sealed record LoggedEntry(string Category, LogLevel Level, string? Template, string Message, Exception? Exception);
 
     private sealed class SyntheticLifecycle(Func<CancellationToken, Task> capture) : IProHypeLifecycle
     {
@@ -380,6 +405,33 @@ public sealed class PlayoffAndProHypeReportingTests
             await db.SaveChangesAsync();
             return database;
         }
+
+        public async Task<string[]> SeedNhlModelRowsAsync(int season)
+        {
+            await using (var db = Context())
+            {
+                foreach (var team in new[] { "BOS", "TOR" })
+                    db.TeamRatings.Add(new TeamRating
+                    {
+                        Sport = "nhl", TeamAbbreviation = team, Source = PlayoffRatingPolicy.playoffStatusSource, Season = season, SourceSeason = season,
+                        PlayoffProbability = team == "BOS" ? .61 : .44, PlayoffEvidenceJson = $"{{\"team\":\"{team}\"}}", FetchedAt = new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc)
+                    });
+                await db.SaveChangesAsync();
+            }
+            return await NhlModelRowsAsync(season);
+        }
+
+        public async Task<string[]> NhlModelRowsAsync(int season)
+        {
+            await using var db = Context();
+            var rows = await db.TeamRatings.AsNoTracking()
+                .Where(r => r.Sport == "nhl" && r.Source == PlayoffRatingPolicy.playoffStatusSource && r.Season == season)
+                .OrderBy(r => r.TeamAbbreviation)
+                .ToArrayAsync();
+            return rows.Select(r => $"{r.TeamAbbreviation} {r.PlayoffProbability} {r.PlayoffEvidenceJson} {r.FetchedAt:O}").ToArray();
+        }
+
+        private ExcitementDbContext Context() => new(new DbContextOptionsBuilder<ExcitementDbContext>().UseNpgsql(ConnectionString).Options);
 
         public async Task<IAsyncDisposable> HoldLockAsync(string sql)
         {
@@ -523,7 +575,7 @@ public sealed class PlayoffAndProHypeReportingTests
             public bool IsEnabled(LogLevel logLevel) => true;
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-                entries.Enqueue(new LoggedEntry(category, logLevel, Template(state), exception));
+                entries.Enqueue(new LoggedEntry(category, logLevel, Template(state), formatter(state, exception), exception));
 
             private static string? Template<TState>(TState state) =>
                 state is IReadOnlyList<KeyValuePair<string, object?>> values
