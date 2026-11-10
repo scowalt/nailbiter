@@ -425,6 +425,43 @@ try {
     false,
   );
 
+  const card = (hype) => `<a id="card" href="/game/g1">Hype ${hype}</a>`;
+  const unchanged = await fixture(
+    browser,
+    shell(card(24)),
+    async (n) => shell(card(n < 4 ? 25 : 26)),
+    () => [],
+  );
+  await unchanged.page.waitForFunction(() => window.__events.length);
+  await unchanged.page.evaluate(() => window.__events[0].emit("sync"));
+  await unchanged.page.waitForFunction(
+    () => document.getElementById("card").textContent === "Hype 25",
+  );
+  await unchanged.page.evaluate(() => {
+    window.__card = document.getElementById("card");
+    window.__replacements = 0;
+    new MutationObserver((records) => {
+      window.__replacements += records.length;
+    }).observe(document.getElementById("main-content"), { childList: true });
+  });
+  for (let i = 2; i <= 4; i++) {
+    await unchanged.page.evaluate(() => window.__events[0].emit("sync"));
+    await waitUntil(
+      () => unchanged.counts.snapshots === i,
+      `unchanged snapshot ${i}`,
+    );
+  }
+  await unchanged.page.waitForFunction(
+    () => document.getElementById("card").textContent === "Hype 26",
+  );
+  assert.deepEqual(
+    await unchanged.page.evaluate(() => ({
+      replacements: window.__replacements,
+      cardReplaced: document.getElementById("card") !== window.__card,
+    })),
+    { replacements: 1, cardReplaced: true },
+  );
+
   const timeCases = [
     {
       timezoneId: "America/Los_Angeles",
@@ -527,6 +564,7 @@ try {
     finalRace,
     listing,
     allFinalListing,
+    unchanged,
   ])
     assert.equal(result.counts.escaped, 0);
   for (const result of [...timeResults, ...embeddedCases])

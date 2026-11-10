@@ -3,6 +3,8 @@ let syncing = false;
 let pending = false;
 let stopped = false;
 let events = null;
+let appliedSnapshot = null;
+const liveComponents = "nb-sparkline, nb-win-probability-chart";
 
 function stableComponentKey(el) {
   return [
@@ -76,18 +78,53 @@ function synchronizeAttributes(existing, replacement) {
   return becameFinal;
 }
 
-async function refreshComponents(root, finalTransitions, embeddedComponents) {
+async function refreshComponents(root, finalTransitions, embeddedKeys) {
   await Promise.allSettled(
-    [...root.querySelectorAll("nb-sparkline, nb-win-probability-chart")]
+    [...root.querySelectorAll(liveComponents)]
       .filter(
         (el) =>
           (el.getAttribute("data-live-final") !== "true" ||
             finalTransitions.has(el)) &&
-          !embeddedComponents.has(el) &&
+          !embeddedKeys.has(stableComponentKey(el)) &&
           typeof el.refresh === "function",
       )
       .map((el) => el.refresh()),
   );
+}
+
+function applySnapshot(current, next) {
+  localizeTimes(next);
+  const focusedSelector = current.contains(document.activeElement)
+    ? selectorFor(document.activeElement)
+    : null;
+  const anchor = visibleAnchor(current);
+  const anchorSelector = selectorFor(anchor);
+  const anchorOffset = anchor?.getBoundingClientRect().top ?? 0;
+  const components = new Map(
+    [...current.querySelectorAll(liveComponents)].map((el) => [
+      stableComponentKey(el),
+      el,
+    ]),
+  );
+  const finalTransitions = new Set();
+  for (const replacement of next.querySelectorAll(liveComponents)) {
+    const existing = components.get(stableComponentKey(replacement));
+    if (existing) {
+      if (synchronizeAttributes(existing, replacement))
+        finalTransitions.add(existing);
+      replacement.replaceWith(existing);
+    }
+  }
+
+  current.replaceChildren(...next.childNodes);
+  if (focusedSelector) {
+    current.querySelector(focusedSelector)?.focus({ preventScroll: true });
+  }
+  if (anchorSelector) {
+    const moved = current.querySelector(anchorSelector);
+    if (moved) scrollBy(0, moved.getBoundingClientRect().top - anchorOffset);
+  }
+  return finalTransitions;
 }
 
 function stop() {
@@ -118,45 +155,19 @@ async function synchronize() {
     const current = document.getElementById("main-content");
     const next = nextDocument.getElementById("main-content");
     if (!current || !next) return;
-    localizeTimes(next);
-
-    const focusedSelector = current.contains(document.activeElement)
-      ? selectorFor(document.activeElement)
-      : null;
-    const anchor = visibleAnchor(current);
-    const anchorSelector = selectorFor(anchor);
-    const anchorOffset = anchor?.getBoundingClientRect().top ?? 0;
-    const components = new Map(
-      [
-        ...current.querySelectorAll("nb-sparkline, nb-win-probability-chart"),
-      ].map((el) => [stableComponentKey(el), el]),
+    const embeddedKeys = new Set(
+      [...next.querySelectorAll(liveComponents)]
+        .filter((el) => el.hasAttribute("data"))
+        .map(stableComponentKey),
     );
-    const finalTransitions = new Set();
-    const embeddedComponents = new Set();
-    for (const replacement of next.querySelectorAll(
-      "nb-sparkline, nb-win-probability-chart",
-    )) {
-      const existing = components.get(stableComponentKey(replacement));
-      if (replacement.hasAttribute("data"))
-        embeddedComponents.add(existing ?? replacement);
-      if (existing) {
-        if (synchronizeAttributes(existing, replacement))
-          finalTransitions.add(existing);
-        replacement.replaceWith(existing);
-      }
+    let finalTransitions = new Set();
+    if (next.innerHTML !== appliedSnapshot) {
+      appliedSnapshot = next.innerHTML;
+      finalTransitions = applySnapshot(current, next);
+      document.title = nextDocument.title;
     }
-
-    current.replaceChildren(...next.childNodes);
     if (warning) warning.hidden = true;
-    document.title = nextDocument.title;
-    if (focusedSelector) {
-      current.querySelector(focusedSelector)?.focus({ preventScroll: true });
-    }
-    if (anchorSelector) {
-      const moved = current.querySelector(anchorSelector);
-      if (moved) scrollBy(0, moved.getBoundingClientRect().top - anchorOffset);
-    }
-    await refreshComponents(current, finalTransitions, embeddedComponents);
+    await refreshComponents(current, finalTransitions, embeddedKeys);
     if (isTerminal(current)) stop();
   } catch {
     if (!stopped && warning) warning.hidden = false;
