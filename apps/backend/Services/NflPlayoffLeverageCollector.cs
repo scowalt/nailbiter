@@ -127,7 +127,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
                 var score = Text(cells[1]);
                 if (score != "")
                 {
-                    var match = Regex.Match(score, @"^(\d{1,3})[\-\u2011\u2013](\d{1,3})(?: \(OT\))?$");
+                    var match = Regex.Match(score, @"^([0-9]{1,3})[\-\u2011\u2013]([0-9]{1,3})(?: \(OT\))?$");
                     if (!match.Success || date.Value.Start is null) return null;
                     hs = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
                     @as = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
