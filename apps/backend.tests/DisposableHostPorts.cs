@@ -10,14 +10,29 @@ internal static class DisposableHostPorts
 
     public static string Range { get; } = FormattableString.Invariant($"{First}-{Last}");
 
-    public static ushort SelectFree()
+    public static ushort SelectFree() => SelectFree(First, Last);
+
+    internal static ushort SelectFree(int first, int last)
     {
-        using var reservation = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp)
+        var count = last - first + 1;
+        var start = Random.Shared.Next(count);
+        for (var offset = 0; offset < count; offset++)
         {
-            DualMode = true,
-            ExclusiveAddressUse = true
-        };
-        reservation.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
-        return checked((ushort)((IPEndPoint)reservation.LocalEndPoint!).Port);
+            var port = first + (start + offset) % count;
+            using var probe = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp)
+            {
+                DualMode = true,
+                ExclusiveAddressUse = true
+            };
+            try
+            {
+                probe.Bind(new IPEndPoint(IPAddress.IPv6Any, port));
+                return checked((ushort)port);
+            }
+            catch (SocketException error) when (error.SocketErrorCode == SocketError.AddressAlreadyInUse)
+            {
+            }
+        }
+        throw new InvalidOperationException($"Every host port in {first}-{last} is in use.");
     }
 }
