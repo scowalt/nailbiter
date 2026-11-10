@@ -202,26 +202,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
         string? Confirm(string team)
         {
             var schedule = schedules.Single(s => Canonical(s.Team) == Canonical(team));
-            var target = schedule.Events.SingleOrDefault(e => e.GetProperty("id").GetString() == game.Id);
-            if (target.ValueKind != System.Text.Json.JsonValueKind.Object ||
-                !target.TryGetProperty("timeValid", out var valid) || valid.ValueKind != System.Text.Json.JsonValueKind.True ||
-                target.GetProperty("season").GetProperty("year").GetInt32() != game.SeasonYear ||
-                target.GetProperty("seasonType").GetProperty("type").GetInt32() != 2 ||
-                target.GetProperty("week").GetProperty("number").GetInt32() != game.WeekNumber ||
-                DateTimeOffset.Parse(target.GetProperty("date").GetString()!, CultureInfo.InvariantCulture).UtcDateTime != game.ScheduledStart)
-                return null;
-            var competition = target.GetProperty("competitions").EnumerateArray().Single();
-            var status = competition.GetProperty("status");
-            var state = status.GetProperty("type");
-            var teams = competition.GetProperty("competitors").EnumerateArray().ToArray();
-            if (!EspnPregameStatus.IsUnstarted("nfl", state.GetProperty("name").GetString(), state.GetProperty("state").GetString(),
-                state.GetProperty("completed").GetBoolean(), status.GetProperty("period").GetInt32()) ||
-                teams.Any(t => t.TryGetProperty("score", out _) && ProCompetitionEvidenceService.ReadScore(t) != 0) ||
-                Canonical(teams.Single(t => t.GetProperty("homeAway").GetString() == "home").GetProperty("team").GetProperty("abbreviation").GetString()!) != Canonical(game.HomeTeamAbbreviation) ||
-                Canonical(teams.Single(t => t.GetProperty("homeAway").GetString() == "away").GetProperty("team").GetProperty("abbreviation").GetString()!) != Canonical(game.AwayTeamAbbreviation)) return null;
-            var next = schedule.Events.Where(e => !schedule.CompletedIds.Contains(e.GetProperty("id").GetString()!))
-                .OrderBy(e => DateTimeOffset.Parse(e.GetProperty("date").GetString()!, CultureInfo.InvariantCulture)).FirstOrDefault();
-            return next.ValueKind == System.Text.Json.JsonValueKind.Object && next.GetProperty("id").GetString() == game.Id ? game.Id : null;
+            return ReadEspn(() => ConfirmNextGame(game, schedule));
         }
         if (Confirm(game.HomeTeamAbbreviation) is not string home || Confirm(game.AwayTeamAbbreviation) is not string away) return null;
         var match = new NflCorroboratedKickoff
@@ -230,6 +211,30 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
             HomeGameId = home, AwayGameId = away, HomeNextGameId = home, AwayNextGameId = away
         };
         return NflPlayoffLeveragePolicy.ValidCorroboratedKickoff(game, match) ? match : null;
+    }
+
+    private static string? ConfirmNextGame(Game game, ProCompetitionEvidenceService.Schedule schedule)
+    {
+        var target = schedule.Events.SingleOrDefault(e => e.GetProperty("id").GetString() == game.Id);
+        if (target.ValueKind != System.Text.Json.JsonValueKind.Object ||
+            !target.TryGetProperty("timeValid", out var valid) || valid.ValueKind != System.Text.Json.JsonValueKind.True ||
+            target.GetProperty("season").GetProperty("year").GetInt32() != game.SeasonYear ||
+            target.GetProperty("seasonType").GetProperty("type").GetInt32() != 2 ||
+            target.GetProperty("week").GetProperty("number").GetInt32() != game.WeekNumber ||
+            DateTimeOffset.Parse(target.GetProperty("date").GetString()!, CultureInfo.InvariantCulture).UtcDateTime != game.ScheduledStart)
+            return null;
+        var competition = target.GetProperty("competitions").EnumerateArray().Single();
+        var status = competition.GetProperty("status");
+        var state = status.GetProperty("type");
+        var teams = competition.GetProperty("competitors").EnumerateArray().ToArray();
+        if (!EspnPregameStatus.IsUnstarted("nfl", state.GetProperty("name").GetString(), state.GetProperty("state").GetString(),
+            state.GetProperty("completed").GetBoolean(), status.GetProperty("period").GetInt32()) ||
+            teams.Any(t => t.TryGetProperty("score", out _) && ProCompetitionEvidenceService.ReadScore(t) != 0) ||
+            Canonical(teams.Single(t => t.GetProperty("homeAway").GetString() == "home").GetProperty("team").GetProperty("abbreviation").GetString()!) != Canonical(game.HomeTeamAbbreviation) ||
+            Canonical(teams.Single(t => t.GetProperty("homeAway").GetString() == "away").GetProperty("team").GetProperty("abbreviation").GetString()!) != Canonical(game.AwayTeamAbbreviation)) return null;
+        var next = schedule.Events.Where(e => !schedule.CompletedIds.Contains(e.GetProperty("id").GetString()!))
+            .OrderBy(e => DateTimeOffset.Parse(e.GetProperty("date").GetString()!, CultureInfo.InvariantCulture)).FirstOrDefault();
+        return next.ValueKind == System.Text.Json.JsonValueKind.Object && next.GetProperty("id").GetString() == game.Id ? game.Id : null;
     }
 
     private static (double Lower, double Upper)? Probability(string value)
@@ -333,7 +338,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
                 { observation.Reason = "This is not both teams' verified next game on the NFL source schedule"; continue; }
                 if (match[0].Start != game.ScheduledStart)
                 {
-                    observation.CorroboratedKickoff = ReadEspn(() => CorroborateKickoff(game, match[0], schedules));
+                    observation.CorroboratedKickoff = CorroborateKickoff(game, match[0], schedules);
                     if (observation.CorroboratedKickoff is null)
                     { observation.Reason = "Kickoff mismatch lacks a corroborated verified next game in both ESPN schedules"; continue; }
                     observation.Version = 2;
