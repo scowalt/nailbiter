@@ -246,6 +246,38 @@ public sealed class ProCompetitionReportingTests
         Assert.Empty(await app.SentEventsAsync());
     }
 
+    [Theory]
+    [InlineData("<td>\u0661\u0668\u201313</td><td><a href=\"#commanders\">WSH</a></td><td>Sun Sep 6, 1:00 pm</td>")]
+    [InlineData("<td>18\u2013\u0661\u0663</td><td><a href=\"#commanders\">WSH</a></td><td>Sun Sep 6, 1:00 pm</td>")]
+    [InlineData("<td>18\u201313</td><td><a href=\"#commanders\">WSH</a></td><td>Sun Sep \u0666, 1:00 pm</td>")]
+    [InlineData("<td>18\u201313</td><td><a href=\"#commanders\">WSH</a></td><td>Sun Sep 6, \u0661:00 pm</td>")]
+    public async Task Schedule_row_in_non_ascii_digits_rejects_the_source_schedule_without_an_event(string row)
+    {
+        const string original = "<td>18\u201313</td><td><a href=\"#commanders\">WSH</a></td><td>Sun Sep 6, 1:00 pm</td>";
+        var source = new NflPlayoffLeverageTests.Handler
+        {
+            Transform = (path, body) =>
+            {
+                if (!path.EndsWith("nflschedule.html", StringComparison.Ordinal)) return body;
+                Assert.Contains(original, body, StringComparison.Ordinal);
+                return body.Replace(original, row, StringComparison.Ordinal);
+            }
+        };
+        using var invoker = new HttpMessageInvoker(source, disposeHandler: false);
+        await using var app = await ReportingApp.StartAsync((request, ct) => invoker.SendAsync(request, ct),
+            services => PinClock(services, new DateTimeOffset(NflPlayoffLeverageTests.Now)));
+        var game = NflPlayoffLeverageTests.Game();
+
+        var result = await app.Services.GetRequiredService<NflPlayoffLeverageCollector>()
+            .CollectAsync([game], NflPlayoffLeverageTests.Schedules(), CancellationToken.None);
+
+        Assert.Empty(await app.SentEventsAsync());
+        Assert.DoesNotContain(app.Logs, l => l.Level >= LogLevel.Warning && l.Category.StartsWith("backend.", StringComparison.Ordinal));
+        var rejected = result[game.Id]!;
+        Assert.False(rejected.ScheduleVerified);
+        Assert.Equal("NFL source schedule, season or publication unavailable", rejected.Reason);
+    }
+
     [Fact]
     public async Task Caller_cancellation_mid_forecast_propagates_without_an_event()
     {
