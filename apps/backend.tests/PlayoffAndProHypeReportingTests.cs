@@ -209,6 +209,7 @@ public sealed class PlayoffAndProHypeReportingTests
     [InlineData("westernstandings", "2026-27٣ NHL Wild Card Standings")]
     [InlineData("nhlpostseasonprob", "٢2027 NHL Postseason Probabilities")]
     [InlineData("nhlpostseasonprob", "2027 NHL Postseason٣ Probabilities")]
+    [InlineData("westernstandings", "२०26-2027 NHL Wild Card Standings")]
     public Task Nhl_model_refresh_season_title_in_non_ascii_digits_is_rejected_as_wrong_season(string page, string title) =>
         AssertNhlModelRejectedAsWrongSeasonAsync((url, published) => NflPlayoffPageTests.PlayoffStatusFixture(url, published, invalidBos: false,
             titleOverride: u => u.Contains(page, StringComparison.Ordinal) ? title : null));
