@@ -41,12 +41,16 @@ public sealed class PowerRankingsGuruPartialTableTests
         ["one row"] = [(1, "KC")],
         ["one team short"] = Nfl.Take(31).Select((team, i) => (i + 1, team)).ToArray(),
         ["a duplicate team filling the count"] = Nfl.Take(31).Select((team, i) => (i + 1, team)).Append((32, "ARI")).ToArray(),
+        ["one team too many"] = Nfl.Select((team, i) => (i + 1, team)).Append((32, "XXX")).ToArray(),
+        ["a duplicate team over the count"] = Nfl.Select((team, i) => (i + 1, team)).Append((32, "ARI")).ToArray(),
     };
 
     [Theory]
     [InlineData("one row")]
     [InlineData("one team short")]
     [InlineData("a duplicate team filling the count")]
+    [InlineData("one team too many")]
+    [InlineData("a duplicate team over the count")]
     public async Task Partial_table_is_rejected_at_warning_without_an_event_and_stores_none_of_its_ranks(string table)
     {
         await using var database = await StartDatabaseAsync();
