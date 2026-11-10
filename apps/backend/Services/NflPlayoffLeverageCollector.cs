@@ -300,6 +300,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
             if (!cache.TryGetValue(url, out var page)) cache[url] = page = FetchAsync(url, ct);
             return page;
         }
+        var reported = new HashSet<Exception>(ReferenceEqualityComparer.Instance);
         var denied = false;
         foreach (var game in games.Where(g => g.Sport == "nfl" && g.SeasonType == 2 && g.SeasonYear.HasValue &&
             g.Status == "scheduled" && !g.IsHistoricalImport && !g.ActualStart.HasValue && g.ScheduledStart > clock.GetUtcNow().UtcDateTime))
@@ -348,17 +349,20 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
                 observation.ObservedAt = clock.GetUtcNow().UtcDateTime;
                 observation.Reason = "PlayoffStatus NFL next-game model forecasts; complete schedule results corroborated with ESPN";
             }
-            catch (Exception ex) when (!ct.IsCancellationRequested && (ex is HttpRequestException or IOException or OperationCanceledException))
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex) when (ex is HttpRequestException or IOException or OperationCanceledException)
             {
                 denied = ex is DeniedException;
                 result[game.Id] = null;
-                logger.LogWarning(ex, "NFL conditional forecast request failed for {GameId}; previous evidence clocks preserved", game.Id);
+                if (reported.Add(ex))
+                    logger.Log(ProCompetitionEvidenceService.FailureLevel(ex), ex, "NFL conditional forecast request failed for {GameId}; previous evidence clocks preserved", game.Id);
             }
             catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException or ArgumentException or KeyNotFoundException)
             {
                 observation.ScheduleVerified = false;
                 observation.Reason = "Malformed or contradictory NFL source/schedule observation";
-                logger.LogWarning(ex, "Rejected NFL conditional forecast observation for {GameId}", game.Id);
+                if (reported.Add(ex))
+                    logger.Log(ProCompetitionEvidenceService.FailureLevel(ex), ex, "Rejected NFL conditional forecast observation for {GameId}", game.Id);
             }
         }
         return result;

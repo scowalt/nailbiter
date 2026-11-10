@@ -31,6 +31,12 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
         [var only] => only,
         _ => throw new JsonException("ESPN returned more than one matching element")
     };
+    internal static LogLevel FailureLevel(Exception exception) => exception switch
+    {
+        HttpRequestException http when !ProviderFailure.Is(http) => LogLevel.Warning,
+        JsonException => LogLevel.Warning,
+        _ => LogLevel.Error
+    };
     internal static int? ReadScore(JsonElement competitor)
     {
         var score = Get(competitor, "score");
@@ -597,9 +603,10 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
                 }
                 foreach (var (game, evidence) in contexts) game.ProEvidenceJson = JsonSerializer.Serialize(evidence);
             }
-            catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or TaskCanceledException && !ct.IsCancellationRequested)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
             {
-                logger.Log(ProviderFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "Pro context request failed for {Sport}/{Season}; previous timestamps preserved", group.Key.Sport, group.Key.Season);
+                logger.Log(FailureLevel(ex), ex, "Pro context request failed for {Sport}/{Season}; previous timestamps preserved", group.Key.Sport, group.Key.Season);
             }
             await db.SaveChangesAsync(ct);
         }
