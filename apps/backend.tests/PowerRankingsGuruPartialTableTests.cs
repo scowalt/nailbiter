@@ -29,6 +29,8 @@ public sealed class PowerRankingsGuruPartialTableTests
     private const int Season = 2026;
     private static readonly DateTimeOffset Now = new(2026, 11, 10, 11, 0, 0, TimeSpan.Zero);
     private static readonly string Category = typeof(PowerRankingsGuruService).FullName!;
+    private const string WrongCount = "PowerRankingsGuru {Sport} rankings rejected: {Parsed} rows parsed for {Expected} teams";
+    private const string Duplicates = "PowerRankingsGuru {Sport} rankings rejected: {Parsed} rows name only {Distinct} distinct teams";
 
     private static readonly string[] Nfl =
     [
@@ -46,12 +48,12 @@ public sealed class PowerRankingsGuruPartialTableTests
     };
 
     [Theory]
-    [InlineData("one row")]
-    [InlineData("one team short")]
-    [InlineData("a duplicate team filling the count")]
-    [InlineData("one team too many")]
-    [InlineData("a duplicate team over the count")]
-    public async Task Partial_table_is_rejected_at_warning_without_an_event_and_stores_none_of_its_ranks(string table)
+    [InlineData("one row", WrongCount)]
+    [InlineData("one team short", WrongCount)]
+    [InlineData("a duplicate team filling the count", Duplicates)]
+    [InlineData("one team too many", WrongCount)]
+    [InlineData("a duplicate team over the count", Duplicates)]
+    public async Task Partial_table_is_rejected_at_warning_without_an_event_and_stores_none_of_its_ranks(string table, string reason)
     {
         await using var database = await StartDatabaseAsync();
         await SeedEarlierBatchAsync(database);
@@ -60,7 +62,7 @@ public sealed class PowerRankingsGuruPartialTableTests
         Assert.Equal(0, await app.RefreshNflAsync());
 
         var rejected = Assert.Single(app.Logs, l => l.Category == Category && l.Level >= LogLevel.Warning);
-        Assert.Equal(LogLevel.Warning, rejected.Level);
+        Assert.Equal((LogLevel.Warning, reason), (rejected.Level, rejected.Template));
         Assert.Empty(await app.SentEventsAsync());
         Assert.All(await RanksAsync(database), rank => Assert.Null(rank.Value));
     }
@@ -120,7 +122,7 @@ public sealed class PowerRankingsGuruPartialTableTests
 
     private sealed record SentEvent(string? Logger, string? Level);
 
-    private sealed record LoggedEntry(string Category, LogLevel Level, string Message);
+    private sealed record LoggedEntry(string Category, LogLevel Level, string? Template);
 
     private sealed class GuruApp : IAsyncDisposable
     {
@@ -198,7 +200,8 @@ public sealed class PowerRankingsGuruPartialTableTests
             public bool IsEnabled(LogLevel logLevel) => true;
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-                entries.Enqueue(new LoggedEntry(category, logLevel, formatter(state, exception)));
+                entries.Enqueue(new LoggedEntry(category, logLevel,
+                    (state as IReadOnlyList<KeyValuePair<string, object?>>)?.FirstOrDefault(p => p.Key == "{OriginalFormat}").Value as string));
         }
     }
 
