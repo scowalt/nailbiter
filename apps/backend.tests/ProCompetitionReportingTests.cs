@@ -296,6 +296,33 @@ public sealed class ProCompetitionReportingTests
     }
 
     [Fact]
+    public async Task Malformed_espn_event_behind_a_kickoff_difference_is_a_warning_without_an_event()
+    {
+        var source = new NflPlayoffLeverageTests.Handler();
+        using var invoker = new HttpMessageInvoker(source, disposeHandler: false);
+        await using var app = await ReportingApp.StartAsync((request, ct) => invoker.SendAsync(request, ct),
+            services => PinClock(services, new DateTimeOffset(NflPlayoffLeverageTests.Now)));
+        var game = NflCorroboratedKickoffTests.Game();
+        var schedules = NflCorroboratedKickoffTests.Schedules(game).Select(s => s with { Events = s.Events.Select(e =>
+        {
+            if (e.GetProperty("id").GetString() != game.Id) return e;
+            var copy = JsonNode.Parse(e.GetRawText())!;
+            copy.AsObject().Remove("season");
+            return JsonSerializer.SerializeToElement(copy);
+        }).ToArray() }).ToArray();
+
+        var result = await app.Services.GetRequiredService<NflPlayoffLeverageCollector>().CollectAsync([game], schedules, CancellationToken.None);
+
+        Assert.Empty(await app.SentEventsAsync());
+        var warning = Assert.Single(app.Logs, l => l.Category == typeof(NflPlayoffLeverageCollector).FullName && l.Exception is not null);
+        Assert.Equal(LogLevel.Warning, warning.Level);
+        Assert.IsType<KeyNotFoundException>(Assert.IsType<JsonException>(warning.Exception).InnerException);
+        var rejected = result[game.Id]!;
+        Assert.False(rejected.ScheduleVerified);
+        Assert.Equal("Malformed or contradictory NFL source/schedule observation", rejected.Reason);
+    }
+
+    [Fact]
     public async Task Caller_cancellation_mid_forecast_propagates_without_an_event()
     {
         await using var app = await ForecastAppAsync(Hang, games: 1);
