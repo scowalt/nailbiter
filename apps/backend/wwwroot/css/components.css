@@ -225,7 +225,7 @@
     gap: 0.25rem;
   }
 
-  @media (min-width: 48rem) {
+  @media (min-width: 64rem) {
     .site-nav {
       display: flex;
     }
@@ -245,7 +245,7 @@
     }
   }
 
-  @media (min-width: 48rem) {
+  @media (min-width: 64rem) {
     .menu-toggle {
       display: none;
     }
@@ -265,7 +265,7 @@
     background-color: var(--color-bg-primary);
   }
 
-  @media (min-width: 48rem) {
+  @media (min-width: 64rem) {
     .mobile-nav {
       display: none;
     }
@@ -353,7 +353,9 @@
     box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
   }
 
-  .nav-link.nav-link-strong {
+  .nav-link[aria-current="page"] {
+    background-color: var(--color-bg-card);
+    color: var(--color-text-primary);
     font-weight: 500;
   }
 

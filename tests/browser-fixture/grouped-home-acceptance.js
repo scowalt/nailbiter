@@ -104,7 +104,7 @@ try {
   assert.match(await page.locator("#scores-group-best-nba").innerText(), /NYK\s+#2 seed\s+BOS\s+#1 seed/);
   const nhl = page.locator("a[href='/game/group-null-nhl']");
   const credit = page.locator("#qualification-credit-group-null-nhl a");
-  assert.match(await nhl.innerText(), /NSH[\s\S]*2nd in NHL \| 25 % playoff odds \(model estimate\)[\s\S]*OTT[\s\S]*1st in NHL \| 57 % playoff odds/);
+  assert.match(await nhl.innerText(), /NSH[\s\S]*2nd in NHL \| 25% playoff odds \(model estimate\)[\s\S]*OTT[\s\S]*1st in NHL \| 57% playoff odds/);
   assert.equal(await page.locator("#qualification-credit-group-null-nhl").innerText(), "NSH playoff probability: MoneyPuck model estimate.");
   assert.equal(await credit.getAttribute("href"), "https://moneypuck.com/predictions.htm");
   assert.equal(await credit.locator("xpath=ancestor::a").count(), 0);

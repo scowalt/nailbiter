@@ -586,39 +586,65 @@
     }
   }
 
-  .league-game-body-stacked {
+  .league-game:focus-visible {
+    outline: 2px solid var(--color-accent-hover);
+    outline-offset: 2px;
+  }
+
+  .league-game-body {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
   }
 
-  @media (min-width: 40rem) {
-    .league-game-body-stacked {
+  @media (min-width: 64rem) {
+    .league-game-body {
       flex-direction: row;
       align-items: center;
       justify-content: space-between;
+      gap: 1.5rem;
     }
   }
 
-  .league-game-body {
-    display: flex;
+  .league-matchup {
+    display: grid;
+    grid-template-columns: 1rem minmax(0, 1fr);
+    grid-template-areas:
+      ". away"
+      "at home";
     align-items: center;
-    justify-content: space-between;
+    column-gap: 0.25rem;
+    row-gap: 0.5rem;
+    min-width: 0;
   }
 
-  .league-matchup {
-    display: flex;
-    min-width: 0;
-    flex: 1;
-    align-items: center;
-    gap: 0.75rem;
+  @media (min-width: 40rem) {
+    .league-matchup {
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      grid-template-areas: "away at home";
+      column-gap: 1rem;
+    }
+  }
+
+  @media (min-width: 64rem) {
+    .league-matchup {
+      flex: 0 1 32rem;
+    }
   }
 
   .league-team {
     display: flex;
     min-width: 0;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.625rem;
+  }
+
+  .league-team:first-child {
+    grid-area: away;
+  }
+
+  .league-team:last-child {
+    grid-area: home;
   }
 
   .league-team-logo {
@@ -632,6 +658,7 @@
   .league-team-label {
     display: flex;
     min-width: 0;
+    flex: 1;
     flex-direction: column;
   }
 
@@ -652,33 +679,65 @@
     }
   }
 
+  .league-game .team-score:empty,
+  .league-game .status-scheduled {
+    display: none;
+  }
+
   .league-at {
-    margin-inline: 0.5rem;
+    grid-area: at;
     font-size: var(--text-xs);
     line-height: var(--text-xs-line-height);
     color: var(--color-text-muted);
   }
 
-  .league-game-aside-stacked {
+  .league-game-aside {
     display: flex;
+    min-width: 0;
     align-items: center;
-    justify-content: space-between;
     gap: 0.75rem;
   }
 
-  @media (min-width: 40rem) {
-    .league-game-aside-stacked {
-      margin-left: 1rem;
+  .league-game-aside > .meta-text {
+    margin-inline-end: auto;
+  }
+
+  .league-game-aside > [id^="excitement-"] {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  @media (min-width: 64rem) {
+    .league-game-aside {
       flex-shrink: 0;
+    }
+
+    .league-game-aside > .meta-text {
+      text-align: end;
+    }
+
+    .league-game-aside > [id^="excitement-"] {
+      min-width: 7.5rem;
     }
   }
 
-  .league-game-aside {
-    margin-left: 1rem;
+  .league-game .metric-block {
     display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    gap: 0.75rem;
+    align-items: baseline;
+    gap: 0.375rem;
+  }
+
+  .league-game .metric-label {
+    margin-bottom: 0;
+  }
+
+  .league-game .hype-low,
+  .league-game .excitement-low {
+    color: var(--color-text-secondary);
+  }
+
+  .league-game .status-final {
+    color: var(--color-text-muted);
   }
 
   .league-game-arrow {
