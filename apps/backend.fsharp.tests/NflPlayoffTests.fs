@@ -39,13 +39,19 @@ let private createDatabase () =
     db.Database.EnsureCreated() |> ignore
     connection, provider
 
+let private rankedTeams =
+    [ "ARI"; "ATL"; "BAL"; "BUF"; "CAR"; "CHI"; "CIN"; "CLE"; "DAL"; "DEN"; "DET"; "GB"; "HOU"; "IND"; "JAX"; "LV"; "LAC"
+      "KC"; "LAR"; "MIA"; "MIN"; "NE"; "NO"; "NYG"; "NYJ"; "PHI"; "PIT"; "SF"; "SEA"; "TB"; "TEN"; "WSH" ]
+
 let private rankingsHtml season =
+    let rows =
+        rankedTeams
+        |> List.mapi (fun i team ->
+            $"""<tr><td class="rank-v2">{i + 1}</td><td><span class="full-name">{team}</span><span class="abbrv">{team}</span></td>
+            <td class="playoff-odds">&lt;1%%</td><td class="champ-odds">&lt;1%%</td></tr>""")
+        |> String.concat ""
     $"""<h1 class="content-title">{season} Composite NFL Power Rankings</h1>
-    <table class="rankings-table"><tbody><tr>
-    <td class="rank-v2">18</td>
-    <td><span class="full-name">Chiefs</span><span class="abbrv">KC</span></td>
-    <td class="playoff-odds">&lt;1%%</td><td class="champ-odds">&lt;1%%</td>
-    </tr></tbody></table>"""
+    <table class="rankings-table"><tbody>{rows}</tbody></table>"""
 
 [<Fact>]
 let ``NFL scraper rejects previous season instead of relabeling it`` () = task {
@@ -388,10 +394,10 @@ let ``Current source page verifies NFL power ranking season`` () = task {
     use http = new HttpClient(handler)
     let clock = Clock()
     let! count = PowerRankingsGuruService(http, NullLogger<PowerRankingsGuruService>.Instance, provider, clock).RefreshNflRatingsAsync()
-    Assert.Equal(1, count)
+    Assert.Equal(32, count)
     use scope = provider.CreateScope()
     let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
-    Assert.Equal(Nullable 2026, db.TeamRatings.Single().SourceSeason)
+    Assert.All(db.TeamRatings, fun r -> Assert.Equal(Nullable 2026, r.SourceSeason))
     let! info = getInfo db clock "KC" 2026
     Assert.Equal(Some 18, info.Value.PowerRank)
     Assert.True(info.Value.PlayoffOdds.IsNone)
