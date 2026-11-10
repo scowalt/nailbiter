@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
@@ -18,7 +19,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
         public string Key => $"{Home}/{Away}/{Date:yyyy-MM-dd}";
     }
     private sealed record League(int Season, string Label, int Week, Contest[] Games);
-    private sealed class DeniedException : HttpRequestException;
+    private sealed class DeniedException(HttpStatusCode status) : HttpRequestException(null, null, status);
     private const string ResultPending = "PlayoffStatus has not yet published a completed NFL result";
     private static readonly TimeZoneInfo Eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
     private static readonly Team[] Teams =
@@ -56,7 +57,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
         deadline.CancelAfter(TimeSpan.FromSeconds(15));
         using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests)
-            throw new DeniedException();
+            throw new DeniedException(response.StatusCode);
         if ((int)response.StatusCode >= 500) response.EnsureSuccessStatusCode();
         if (response.StatusCode != HttpStatusCode.OK || response.Content.Headers.ContentLength > 1024 * 1024)
             return new("", null, false);
@@ -76,6 +77,15 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
             serverDate.HasValue && ProHypePolicy.Fresh(serverDate.Value, now, 1);
         try { return new(new UTF8Encoding(false, true).GetString(buffer.ToArray()), published, valid); }
         catch (DecoderFallbackException) { return new("", published, false); }
+    }
+
+    private static T ReadEspn<T>(Func<T> read)
+    {
+        try { return read(); }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException or ArgumentException or KeyNotFoundException)
+        {
+            throw new JsonException("Malformed ESPN NFL schedule element", ex);
+        }
     }
 
     private static (DateOnly Date, DateTime? Start)? Date(string value, int season)
@@ -308,7 +318,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
                 if (!leagues.TryGetValue(observation.Season, out var verified))
                 {
                     var parsed = ParseLeague(page, observation.Season);
-                    verified = (parsed, parsed is null ? "NFL source schedule, season or publication unavailable" : VerifyResults(parsed, schedules));
+                    verified = (parsed, parsed is null ? "NFL source schedule, season or publication unavailable" : ReadEspn(() => VerifyResults(parsed, schedules)));
                     leagues[observation.Season] = verified;
                 }
                 if (verified.Problem == ResultPending) { result[game.Id] = null; continue; }
@@ -322,7 +332,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
                 { observation.Reason = "This is not both teams' verified next game on the NFL source schedule"; continue; }
                 if (match[0].Start != game.ScheduledStart)
                 {
-                    observation.CorroboratedKickoff = CorroborateKickoff(game, match[0], schedules);
+                    observation.CorroboratedKickoff = ReadEspn(() => CorroborateKickoff(game, match[0], schedules));
                     if (observation.CorroboratedKickoff is null)
                     { observation.Reason = "Kickoff mismatch lacks a corroborated verified next game in both ESPN schedules"; continue; }
                     observation.Version = 2;
@@ -344,7 +354,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
                 result[game.Id] = null;
                 logger.LogWarning(ex, "NFL conditional forecast request failed for {GameId}; previous evidence clocks preserved", game.Id);
             }
-            catch (Exception ex) when (ex is InvalidOperationException or FormatException or ArgumentException or KeyNotFoundException)
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException or ArgumentException or KeyNotFoundException)
             {
                 observation.ScheduleVerified = false;
                 observation.Reason = "Malformed or contradictory NFL source/schedule observation";
