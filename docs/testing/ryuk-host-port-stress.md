@@ -33,6 +33,10 @@ ephemeral range, and each failure message. With `DOCKER_RANGE_LOOPS` it also
 prints how many range containers started and failed. It stops its competitor
 processes and removes only the containers that carry its own label.
 
+Both scripts run each `dotnet` command in its own process group. On SIGINT,
+SIGTERM or exit they stop those groups, so stopping the script also stops its
+test processes.
+
 ## Concurrent test processes
 
 The selection starts at a random port because several test processes on one
