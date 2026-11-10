@@ -36,13 +36,14 @@ public sealed class PlayoffAndProHypeReportingTests
     private const string NhlModelFailure = "Failed NHL PlayoffStatus model refresh for season {Season}";
     private const string NhlModelRejected = "Rejected NHL PlayoffStatus model refresh for season {Season}: {Reason}";
     private const int NhlSeason = 2027;
-    private const string ProCompetitionFailure = "Pro competition refresh failed";
+    private const string ProCompetitionFailure = "Pro context request failed for {Sport}/{Season}; previous timestamps preserved";
     private const string ProHypeFailure = "Pro hype capture failed";
     private const string LockTimeout = ";Options=-c lock_timeout=500";
     private static readonly TimeSpan HangDeadline = TimeSpan.FromSeconds(60);
     private static readonly Answer Hang = new Hanging();
     private static readonly Answer Unavailable = new Reply(HttpStatusCode.ServiceUnavailable, "{}");
     private static readonly Answer Unexpected = new Throwing();
+    private static readonly Answer DisposedAtShutdown = new FaultingAtShutdown();
     private const string BillsStandings = """
         <table><tr data-idx="0"><td><a>Buffalo Bills</a></td><td>7</td><td>2</td><td>0</td><td>4%</td></tr></table>
         """;
@@ -236,14 +237,28 @@ public sealed class PlayoffAndProHypeReportingTests
     }
 
     [Fact]
-    public async Task Unexpected_pro_competition_refresh_failure_is_sent_once_at_error_and_the_loop_keeps_running()
+    public async Task Pro_competition_fault_raised_during_shutdown_stops_the_loop_without_an_event()
+    {
+        await using var database = await Database.StartAsync(ScheduledNbaGame());
+        await using var app = new ReportingApp(_ => DisposedAtShutdown, typeof(ProCompetitionRefreshBackgroundService), database.ConnectionString);
+        await app.Provider.HangStarted.WaitAsync(HangDeadline);
+
+        var sent = await app.StopAsync();
+
+        Assert.Empty(sent);
+        Assert.DoesNotContain(app.Logs, l => l.Exception is ObjectDisposedException);
+        Assert.DoesNotContain(app.Logs, l => l.Level >= LogLevel.Warning && l.Category.StartsWith("backend", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Unexpected_pro_competition_fetch_failure_is_sent_once_by_its_group_and_the_loop_keeps_running()
     {
         await using var database = await Database.StartAsync(ScheduledNbaGame());
         await using var app = new ReportingApp(_ => Unexpected, typeof(ProCompetitionRefreshBackgroundService), database.ConnectionString);
 
-        await app.WaitForLogAsync(typeof(ProCompetitionRefreshBackgroundService), ProCompetitionFailure);
+        await app.WaitForLogAsync(typeof(ProCompetitionEvidenceService), ProCompetitionFailure);
 
-        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(ProCompetitionRefreshBackgroundService), ProCompetitionFailure, typeof(NotSupportedException));
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(ProCompetitionEvidenceService), ProCompetitionFailure, typeof(NotSupportedException));
         var worker = app.Services.GetServices<IHostedService>().OfType<ProCompetitionRefreshBackgroundService>().Single();
         Assert.False(worker.ExecuteTask!.IsCompleted);
     }
@@ -255,10 +270,10 @@ public sealed class PlayoffAndProHypeReportingTests
         await using var app = new ReportingApp(_ => Hang, typeof(ProCompetitionRefreshBackgroundService), database.ConnectionString,
             services => services.ConfigureAll<HttpStandardResilienceOptions>(options => options.AttemptTimeout.Timeout = TimeSpan.FromMilliseconds(50)));
 
-        await app.WaitForLogAsync(typeof(ProCompetitionRefreshBackgroundService), ProCompetitionFailure);
+        await app.WaitForLogAsync(typeof(ProCompetitionEvidenceService), ProCompetitionFailure);
 
         Assert.Equal(StandardAttempts, app.Provider.Requests);
-        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(ProCompetitionRefreshBackgroundService), ProCompetitionFailure, typeof(TimeoutRejectedException));
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(ProCompetitionEvidenceService), ProCompetitionFailure, typeof(TimeoutRejectedException));
     }
 
     [Fact]
@@ -382,6 +397,8 @@ public sealed class PlayoffAndProHypeReportingTests
     private sealed record Hanging : Answer;
 
     private sealed record Throwing : Answer;
+
+    private sealed record FaultingAtShutdown : Answer;
 
     private sealed record SentEvent(string? Logger, string? Level, string? Template, string?[] Exceptions);
 
@@ -571,7 +588,11 @@ public sealed class PlayoffAndProHypeReportingTests
                     throw new NotSupportedException("synthetic unexpected failure");
             }
             hanging.TrySetResult();
-            await Task.Delay(Timeout.Infinite, cancellationToken);
+            try { await Task.Delay(Timeout.Infinite, cancellationToken); }
+            catch (OperationCanceledException) when (answer(request.RequestUri!) is FaultingAtShutdown)
+            {
+                throw new ObjectDisposedException("synthetic service disposed during shutdown");
+            }
             throw new UnreachableException();
         }
     }

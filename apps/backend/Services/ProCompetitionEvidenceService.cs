@@ -25,6 +25,18 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
     private static bool IsTrue(JsonElement e, string name) => Get(e, name).ValueKind == JsonValueKind.True;
     private static JsonElement[] Items(JsonElement e, string name) => Get(e, name).ValueKind == JsonValueKind.Array ? Get(e, name).EnumerateArray().ToArray() : [];
     private static DateTime? Date(JsonElement e, string name) => DateTimeOffset.TryParse(Text(e, name), out var date) ? date.UtcDateTime : null;
+    private static JsonElement One(IEnumerable<JsonElement> items) => items.Take(2).ToArray() switch
+    {
+        [] => default,
+        [var only] => only,
+        _ => throw new JsonException("ESPN returned more than one matching element")
+    };
+    internal static LogLevel FailureLevel(Exception exception) => exception switch
+    {
+        HttpRequestException http when !ProviderFailure.Is(http) => LogLevel.Warning,
+        JsonException => LogLevel.Warning,
+        _ => LogLevel.Error
+    };
     internal static int? ReadScore(JsonElement competitor)
     {
         var score = Get(competitor, "score");
@@ -555,7 +567,7 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
                 if (group.Key.Phase != 1)
                 {
                     var teamsDoc = await Fetch($"{baseUrl}/teams?limit=1000&season={group.Key.Season}");
-                    league = Items(Items(teamsDoc, "sports").SingleOrDefault(), "leagues").SingleOrDefault();
+                    league = One(Items(One(Items(teamsDoc, "sports")), "leagues"));
                 }
                 if (Number(Get(league, "season"), "year") == group.Key.Season)
                 {
@@ -576,7 +588,7 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
                     var easternDate = TimeZoneInfo.ConvertTimeFromUtc(game.ScheduledStart, TimeZoneInfo.FindSystemTimeZoneById("America/New_York"));
                     var url = $"{baseUrl}/scoreboard?dates={easternDate:yyyyMMdd}&limit=1000";
                     var board = await Fetch(url);
-                    var e = Items(board, "events").SingleOrDefault(x => Text(x, "id") == game.Id);
+                    var e = One(Items(board, "events").Where(x => Text(x, "id") == game.Id));
                     var evidence = ParseEvent(game, e, schedules, now, url + "; ESPN season team schedules");
                     if (game.Sport == "nfl" && evidence.Phase == 2)
                         evidence.NflPlayoffLeverage = ProGameEvidence.Parse(game.ProEvidenceJson)?.NflPlayoffLeverage;
@@ -591,9 +603,10 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
                 }
                 foreach (var (game, evidence) in contexts) game.ProEvidenceJson = JsonSerializer.Serialize(evidence);
             }
-            catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException or TaskCanceledException && !ct.IsCancellationRequested)
+            catch (Exception) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex)
             {
-                logger.Log(ProviderFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "Pro context request failed for {Sport}/{Season}; previous timestamps preserved", group.Key.Sport, group.Key.Season);
+                logger.Log(FailureLevel(ex), ex, "Pro context request failed for {Sport}/{Season}; previous timestamps preserved", group.Key.Sport, group.Key.Season);
             }
             await db.SaveChangesAsync(ct);
         }
@@ -612,7 +625,8 @@ public sealed class ProCompetitionRefreshBackgroundService(IServiceScopeFactory 
                 using var scope = scopes.CreateScope();
                 await scope.ServiceProvider.GetRequiredService<ProCompetitionEvidenceService>().RefreshAsync(stoppingToken);
             }
-            catch (Exception ex) when (!stoppingToken.IsCancellationRequested) { logger.LogError(ex, "Pro competition refresh failed"); }
+            catch (Exception) when (stoppingToken.IsCancellationRequested) { return; }
+            catch (Exception ex) { logger.LogError(ex, "Pro competition refresh failed"); }
             await Task.Delay(TimeSpan.FromMinutes(15), stoppingToken);
         }
     }

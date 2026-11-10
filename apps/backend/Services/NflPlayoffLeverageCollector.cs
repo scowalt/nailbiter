@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
@@ -18,7 +19,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
         public string Key => $"{Home}/{Away}/{Date:yyyy-MM-dd}";
     }
     private sealed record League(int Season, string Label, int Week, Contest[] Games);
-    private sealed class DeniedException : HttpRequestException;
+    private sealed class DeniedException(HttpStatusCode status) : HttpRequestException(null, null, status);
     private const string ResultPending = "PlayoffStatus has not yet published a completed NFL result";
     private static readonly TimeZoneInfo Eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
     private static readonly Team[] Teams =
@@ -56,7 +57,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
         deadline.CancelAfter(TimeSpan.FromSeconds(15));
         using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.TooManyRequests)
-            throw new DeniedException();
+            throw new DeniedException(response.StatusCode);
         if ((int)response.StatusCode >= 500) response.EnsureSuccessStatusCode();
         if (response.StatusCode != HttpStatusCode.OK || response.Content.Headers.ContentLength > 1024 * 1024)
             return new("", null, false);
@@ -76,6 +77,15 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
             serverDate.HasValue && ProHypePolicy.Fresh(serverDate.Value, now, 1);
         try { return new(new UTF8Encoding(false, true).GetString(buffer.ToArray()), published, valid); }
         catch (DecoderFallbackException) { return new("", published, false); }
+    }
+
+    private static T ReadEspn<T>(Func<T> read)
+    {
+        try { return read(); }
+        catch (Exception ex) when (ex is InvalidOperationException or FormatException or ArgumentException or KeyNotFoundException)
+        {
+            throw new JsonException("Malformed ESPN NFL schedule element", ex);
+        }
     }
 
     private static (DateOnly Date, DateTime? Start)? Date(string value, int season)
@@ -117,7 +127,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
                 var score = Text(cells[1]);
                 if (score != "")
                 {
-                    var match = Regex.Match(score, @"^(\d{1,3})[\-\u2011\u2013](\d{1,3})(?: \(OT\))?$");
+                    var match = Regex.Match(score, @"^([0-9]{1,3})[\-\u2011\u2013]([0-9]{1,3})(?: \(OT\))?$");
                     if (!match.Success || date.Value.Start is null) return null;
                     hs = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
                     @as = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
@@ -192,26 +202,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
         string? Confirm(string team)
         {
             var schedule = schedules.Single(s => Canonical(s.Team) == Canonical(team));
-            var target = schedule.Events.SingleOrDefault(e => e.GetProperty("id").GetString() == game.Id);
-            if (target.ValueKind != System.Text.Json.JsonValueKind.Object ||
-                !target.TryGetProperty("timeValid", out var valid) || valid.ValueKind != System.Text.Json.JsonValueKind.True ||
-                target.GetProperty("season").GetProperty("year").GetInt32() != game.SeasonYear ||
-                target.GetProperty("seasonType").GetProperty("type").GetInt32() != 2 ||
-                target.GetProperty("week").GetProperty("number").GetInt32() != game.WeekNumber ||
-                DateTimeOffset.Parse(target.GetProperty("date").GetString()!, CultureInfo.InvariantCulture).UtcDateTime != game.ScheduledStart)
-                return null;
-            var competition = target.GetProperty("competitions").EnumerateArray().Single();
-            var status = competition.GetProperty("status");
-            var state = status.GetProperty("type");
-            var teams = competition.GetProperty("competitors").EnumerateArray().ToArray();
-            if (!EspnPregameStatus.IsUnstarted("nfl", state.GetProperty("name").GetString(), state.GetProperty("state").GetString(),
-                state.GetProperty("completed").GetBoolean(), status.GetProperty("period").GetInt32()) ||
-                teams.Any(t => t.TryGetProperty("score", out _) && ProCompetitionEvidenceService.ReadScore(t) != 0) ||
-                Canonical(teams.Single(t => t.GetProperty("homeAway").GetString() == "home").GetProperty("team").GetProperty("abbreviation").GetString()!) != Canonical(game.HomeTeamAbbreviation) ||
-                Canonical(teams.Single(t => t.GetProperty("homeAway").GetString() == "away").GetProperty("team").GetProperty("abbreviation").GetString()!) != Canonical(game.AwayTeamAbbreviation)) return null;
-            var next = schedule.Events.Where(e => !schedule.CompletedIds.Contains(e.GetProperty("id").GetString()!))
-                .OrderBy(e => DateTimeOffset.Parse(e.GetProperty("date").GetString()!, CultureInfo.InvariantCulture)).FirstOrDefault();
-            return next.ValueKind == System.Text.Json.JsonValueKind.Object && next.GetProperty("id").GetString() == game.Id ? game.Id : null;
+            return ReadEspn(() => ConfirmNextGame(game, schedule));
         }
         if (Confirm(game.HomeTeamAbbreviation) is not string home || Confirm(game.AwayTeamAbbreviation) is not string away) return null;
         var match = new NflCorroboratedKickoff
@@ -220,6 +211,30 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
             HomeGameId = home, AwayGameId = away, HomeNextGameId = home, AwayNextGameId = away
         };
         return NflPlayoffLeveragePolicy.ValidCorroboratedKickoff(game, match) ? match : null;
+    }
+
+    private static string? ConfirmNextGame(Game game, ProCompetitionEvidenceService.Schedule schedule)
+    {
+        var target = schedule.Events.SingleOrDefault(e => e.GetProperty("id").GetString() == game.Id);
+        if (target.ValueKind != System.Text.Json.JsonValueKind.Object ||
+            !target.TryGetProperty("timeValid", out var valid) || valid.ValueKind != System.Text.Json.JsonValueKind.True ||
+            target.GetProperty("season").GetProperty("year").GetInt32() != game.SeasonYear ||
+            target.GetProperty("seasonType").GetProperty("type").GetInt32() != 2 ||
+            target.GetProperty("week").GetProperty("number").GetInt32() != game.WeekNumber ||
+            DateTimeOffset.Parse(target.GetProperty("date").GetString()!, CultureInfo.InvariantCulture).UtcDateTime != game.ScheduledStart)
+            return null;
+        var competition = target.GetProperty("competitions").EnumerateArray().Single();
+        var status = competition.GetProperty("status");
+        var state = status.GetProperty("type");
+        var teams = competition.GetProperty("competitors").EnumerateArray().ToArray();
+        if (!EspnPregameStatus.IsUnstarted("nfl", state.GetProperty("name").GetString(), state.GetProperty("state").GetString(),
+            state.GetProperty("completed").GetBoolean(), status.GetProperty("period").GetInt32()) ||
+            teams.Any(t => t.TryGetProperty("score", out _) && ProCompetitionEvidenceService.ReadScore(t) != 0) ||
+            Canonical(teams.Single(t => t.GetProperty("homeAway").GetString() == "home").GetProperty("team").GetProperty("abbreviation").GetString()!) != Canonical(game.HomeTeamAbbreviation) ||
+            Canonical(teams.Single(t => t.GetProperty("homeAway").GetString() == "away").GetProperty("team").GetProperty("abbreviation").GetString()!) != Canonical(game.AwayTeamAbbreviation)) return null;
+        var next = schedule.Events.Where(e => !schedule.CompletedIds.Contains(e.GetProperty("id").GetString()!))
+            .OrderBy(e => DateTimeOffset.Parse(e.GetProperty("date").GetString()!, CultureInfo.InvariantCulture)).FirstOrDefault();
+        return next.ValueKind == System.Text.Json.JsonValueKind.Object && next.GetProperty("id").GetString() == game.Id ? game.Id : null;
     }
 
     private static (double Lower, double Upper)? Probability(string value)
@@ -290,6 +305,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
             if (!cache.TryGetValue(url, out var page)) cache[url] = page = FetchAsync(url, ct);
             return page;
         }
+        var reported = new HashSet<Exception>(ReferenceEqualityComparer.Instance);
         var denied = false;
         foreach (var game in games.Where(g => g.Sport == "nfl" && g.SeasonType == 2 && g.SeasonYear.HasValue &&
             g.Status == "scheduled" && !g.IsHistoricalImport && !g.ActualStart.HasValue && g.ScheduledStart > clock.GetUtcNow().UtcDateTime))
@@ -308,7 +324,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
                 if (!leagues.TryGetValue(observation.Season, out var verified))
                 {
                     var parsed = ParseLeague(page, observation.Season);
-                    verified = (parsed, parsed is null ? "NFL source schedule, season or publication unavailable" : VerifyResults(parsed, schedules));
+                    verified = (parsed, parsed is null ? "NFL source schedule, season or publication unavailable" : ReadEspn(() => VerifyResults(parsed, schedules)));
                     leagues[observation.Season] = verified;
                 }
                 if (verified.Problem == ResultPending) { result[game.Id] = null; continue; }
@@ -338,17 +354,20 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
                 observation.ObservedAt = clock.GetUtcNow().UtcDateTime;
                 observation.Reason = "PlayoffStatus NFL next-game model forecasts; complete schedule results corroborated with ESPN";
             }
-            catch (Exception ex) when (!ct.IsCancellationRequested && (ex is HttpRequestException or IOException or OperationCanceledException))
+            catch (Exception) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex) when (ex is HttpRequestException or IOException or OperationCanceledException)
             {
                 denied = ex is DeniedException;
                 result[game.Id] = null;
-                logger.LogWarning(ex, "NFL conditional forecast request failed for {GameId}; previous evidence clocks preserved", game.Id);
+                if (reported.Add(ex))
+                    logger.Log(ProCompetitionEvidenceService.FailureLevel(ex), ex, "NFL conditional forecast request failed for {GameId}; previous evidence clocks preserved", game.Id);
             }
-            catch (Exception ex) when (ex is InvalidOperationException or FormatException or ArgumentException or KeyNotFoundException)
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException or ArgumentException or KeyNotFoundException)
             {
                 observation.ScheduleVerified = false;
                 observation.Reason = "Malformed or contradictory NFL source/schedule observation";
-                logger.LogWarning(ex, "Rejected NFL conditional forecast observation for {GameId}", game.Id);
+                if (reported.Add(ex))
+                    logger.Log(ProCompetitionEvidenceService.FailureLevel(ex), ex, "Rejected NFL conditional forecast observation for {GameId}", game.Id);
             }
         }
         return result;
