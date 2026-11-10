@@ -311,10 +311,7 @@ public sealed class HighlightsFaultReportingTests(HighlightsFaultReportingTests.
     public async Task Non_ascii_year_in_a_provider_description_is_not_a_fault()
     {
         var id = await database.AddCompletedGameAsync("fault-non-ascii-year");
-        await using var app = new App(database.ConnectionString, services => services.Identity((request, _) => Task.FromResult(Ok(
-            request.RequestUri!.Host == "statsapi.mlb.com"
-                ? """{"dates":[{"date":"2026-10-06","games":[{"gamePk":849819,"gameDate":"2026-10-06T22:00:00Z","officialDate":"2026-10-06","season":"2026","doubleHeader":"N","gameNumber":1,"status":{"abstractGameState":"Final","detailedState":"Final","codedGameState":"F"},"teams":{"home":{"team":{"id":144}},"away":{"team":{"id":119}}}}]}]}"""
-                : $$$"""{"header":{"id":"{{{id}}}","season":{"year":2026},"competitions":[{"id":"{{{id}}}","date":"2026-10-06T22:00:00Z","status":{"type":{"name":"STATUS_FINAL","state":"post","completed":true}},"competitors":[{"homeAway":"home","team":{"id":"15","abbreviation":"ATL"}},{"homeAway":"away","team":{"id":"19","abbreviation":"LAD"}}]}]}}"""))));
+        await using var app = new App(database.ConnectionString, services => services.Identity(VerifiedIdentity(id)));
         var now = DateTimeOffset.UtcNow;
         var video = new YouTubeVideoEvidence("asciiYear01", YouTubeAvailability.Playable, YouTubeHighlightsClient.ApprovedChannelId,
             "Dodgers vs. Braves Highlights (10/6/26) | MLB Highlights", "Single game recap 20\u0662\u0666", now.AddDays(-1),
@@ -325,6 +322,27 @@ public sealed class HighlightsFaultReportingTests(HighlightsFaultReportingTests.
         Assert.Equal(("Processed", 1), (result.Reason, result.Selected));
         Assert.Empty(await app.SentEventsAsync(expected: 0));
     }
+
+    [Theory]
+    [InlineData("\"season\":\"2026\"", "\"season\":\"\\u0662\\u0660\\u0662\\u0666\"")]
+    [InlineData("\"season\":\"2026\"", "\"season\":null")]
+    [InlineData("\"gameDate\":\"2026-10-06T22:00:00Z\"", "\"gameDate\":null")]
+    [InlineData("\"officialDate\":\"2026-10-06\"", "\"officialDate\":null")]
+    [InlineData("\"date\":\"2026-10-06T22:00:00Z\"", "\"date\":null")]
+    public async Task Identity_malformed_field_is_a_warning_and_the_pass_continues(string field, string malformed)
+    {
+        var id = await database.AddCompletedGameAsync($"fault-identity-field-{Guid.NewGuid():N}");
+        await using var app = new App(database.ConnectionString, services => services.Identity(VerifiedIdentity(id, field, malformed)));
+
+        Assert.Equal("Processed", (await app.ProcessAsync([id])).Reason);
+        await AssertLoggedAsync(app, typeof(MlbHighlightsIdentityClient), LogLevel.Warning);
+    }
+
+    private static Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> VerifiedIdentity(string id, string field = "", string replacement = "") =>
+        (request, _) => Task.FromResult(Ok((request.RequestUri!.Host == "statsapi.mlb.com"
+            ? """{"dates":[{"date":"2026-10-06","games":[{"gamePk":849819,"gameDate":"2026-10-06T22:00:00Z","officialDate":"2026-10-06","season":"2026","doubleHeader":"N","gameNumber":1,"status":{"abstractGameState":"Final","detailedState":"Final","codedGameState":"F"},"teams":{"home":{"team":{"id":144}},"away":{"team":{"id":119}}}}]}]}"""
+            : $$$"""{"header":{"id":"{{{id}}}","season":{"year":2026},"competitions":[{"id":"{{{id}}}","date":"2026-10-06T22:00:00Z","status":{"type":{"name":"STATUS_FINAL","state":"post","completed":true}},"competitors":[{"homeAway":"home","team":{"id":"15","abbreviation":"ATL"}},{"homeAway":"away","team":{"id":"19","abbreviation":"LAD"}}]}]}}""")
+            .Replace(field.Length == 0 ? "\0" : field, replacement)));
 
     private static HttpResponseMessage Ok(string body) => new(HttpStatusCode.OK) { Content = new StringContent(body) };
 
