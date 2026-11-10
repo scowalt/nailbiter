@@ -161,6 +161,23 @@ public sealed class ProCompetitionReportingTests
         Assert.Empty(await app.SentEventsAsync());
     }
 
+    [Fact]
+    public async Task Fault_raised_after_caller_cancellation_propagates_without_an_event()
+    {
+        using var caller = new CancellationTokenSource();
+        await using var app = await GroupAppAsync((_, _) =>
+        {
+            caller.Cancel();
+            throw new ObjectDisposedException("synthetic service disposed during shutdown");
+        });
+
+        await Assert.ThrowsAnyAsync<Exception>(() => app.RefreshAsync(caller.Token));
+
+        Assert.DoesNotContain(app.Logs, l => l.Exception is not null && l.Category.StartsWith("backend.", StringComparison.Ordinal));
+        Assert.Empty(await app.SentEventsAsync());
+        Assert.Equal(PreviousEvidence, await app.EvidenceAsync(Basketball.Id));
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.ServiceUnavailable, "System.Net.Http.HttpRequestException")]
     [InlineData(HttpStatusCode.TooManyRequests, "backend.Services.NflPlayoffLeverageCollector+DeniedException")]
@@ -291,6 +308,23 @@ public sealed class ProCompetitionReportingTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => refresh);
         Assert.DoesNotContain(app.Logs, l => l.Exception is not null && l.Category.StartsWith("backend.", StringComparison.Ordinal));
         Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Fact]
+    public async Task Fault_raised_after_caller_cancellation_mid_forecast_propagates_without_an_event()
+    {
+        using var caller = new CancellationTokenSource();
+        await using var app = await ForecastAppAsync((_, _) =>
+        {
+            caller.Cancel();
+            throw new ObjectDisposedException("synthetic service disposed during shutdown");
+        }, games: 1);
+
+        await Assert.ThrowsAnyAsync<Exception>(() => app.RefreshAsync(caller.Token));
+
+        Assert.DoesNotContain(app.Logs, l => l.Exception is not null && l.Category.StartsWith("backend.", StringComparison.Ordinal));
+        Assert.Empty(await app.SentEventsAsync());
+        Assert.Equal("previous", ProGameEvidence.Parse(await app.EvidenceAsync(ForecastGameId(0)))?.Source);
     }
 
     private static async Task AssertGroupFailureSentOnceAsync(ReportingApp app, Type exception)
