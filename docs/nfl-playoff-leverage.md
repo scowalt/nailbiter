@@ -25,7 +25,7 @@ Detail pages show away/home **Playoff chances by result**, **If win / If loss**,
 
 ## Quiet playoff markets
 
-NFL qualification markets with no buyers and an ask of at most five cents follow the shared empty-bid rule in [playoff-odds.md](playoff-odds.md): they show the ask as an upper bound such as `<4%` and score half the ask. This replaced the 2026-11-05 display-only `<1%` convention for one- to two-cent asks on 2026-11-08. Qualification odds do not change conditional NFL Stakes, which come from the leverage forecast.
+NFL qualification markets with no buyers and an ask of at most 25 cents follow the shared empty-bid rule in [playoff-odds.md](playoff-odds.md): they show the ask as an upper bound such as `<4%` and score half the ask. This replaced the 2026-11-05 display-only `<1%` convention for one- to two-cent asks on 2026-11-08. Qualification odds do not change conditional NFL Stakes, which come from the leverage forecast.
 
 ## Implemented source contract — not live conformance proof
 
