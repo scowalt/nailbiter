@@ -1,8 +1,7 @@
 using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using backend.tests;
 using DotNet.Testcontainers.Configurations;
 using Testcontainers.PostgreSql;
 
@@ -22,17 +21,6 @@ internal static class FixtureProgram
             Console.Error.WriteLine($"Fixture setup failed: {error.GetType().Name}");
             return 1;
         }
-    }
-
-    private static ushort SelectDisposableHostPort()
-    {
-        using var reservation = new Socket(AddressFamily.InterNetworkV6, SocketType.Stream, ProtocolType.Tcp)
-        {
-            DualMode = true,
-            ExclusiveAddressUse = true
-        };
-        reservation.Bind(new IPEndPoint(IPAddress.IPv6Any, 0));
-        return checked((ushort)((IPEndPoint)reservation.LocalEndPoint!).Port);
     }
 
     private static async Task RunAsync(string[] args)
@@ -67,14 +55,14 @@ internal static class FixtureProgram
 #pragma warning disable CS0618
         TestcontainersSettings.ResourceReaperPublicHostPort = _ =>
         {
-            var selectedPort = SelectDisposableHostPort();
+            var selectedPort = DisposableHostPorts.SelectFree();
             Console.WriteLine($"Disposable Ryuk host port: {selectedPort}");
             return selectedPort;
         };
 #pragma warning restore CS0618
         await using var database = new PostgreSqlBuilder("postgres:16-alpine")
             .WithDatabase("nailbiter_browser_fixture").WithUsername("fixture").WithPassword(Guid.NewGuid().ToString("N"))
-            .WithPortBinding("61000-65535", PostgreSqlBuilder.PostgreSqlPort.ToString(CultureInfo.InvariantCulture))
+            .WithPortBinding(DisposableHostPorts.Range, PostgreSqlBuilder.PostgreSqlPort.ToString(CultureInfo.InvariantCulture))
             .Build();
         var root = Directory.CreateTempSubdirectory("nailbiter-browser-fixture-").FullName;
         try
