@@ -26,10 +26,11 @@ public sealed class YouTubeHighlightsClient(IHttpClientFactory clients, IOptions
         return new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(DateTime.SpecifyKind(local.Date.AddDays(1), DateTimeKind.Unspecified), QuotaZone));
     }
 
-    private sealed class Failure(YouTubeOutcome outcome, DateTimeOffset? retryAtUtc = null) : Exception
+    private sealed class Failure(YouTubeOutcome outcome, DateTimeOffset? retryAtUtc = null, HttpStatusCode? status = null) : Exception
     {
         public YouTubeOutcome Outcome { get; } = outcome;
         public DateTimeOffset? RetryAtUtc { get; } = retryAtUtc;
+        public HttpStatusCode? Status { get; } = status;
     }
 
     private sealed class Session(HttpClient http, CancellationToken cancellationToken, Func<CancellationToken, Task<YouTubeRequestAuthorization>>? authorizeRequest)
@@ -90,7 +91,7 @@ public sealed class YouTubeHighlightsClient(IHttpClientFactory clients, IOptions
             var retry = response.Headers.RetryAfter;
             var until = retry?.Date ?? clock.GetUtcNow().Add(retry?.Delta ?? TimeSpan.FromMinutes(15));
             if (until < clock.GetUtcNow().AddMinutes(15)) until = clock.GetUtcNow().AddMinutes(15);
-            if (response.StatusCode == HttpStatusCode.TooManyRequests) throw new Failure(YouTubeOutcome.Throttled, until);
+            if (response.StatusCode == HttpStatusCode.TooManyRequests) throw new Failure(YouTubeOutcome.Throttled, until, response.StatusCode);
             if (response.StatusCode == HttpStatusCode.Forbidden)
             {
                 try
@@ -100,15 +101,15 @@ public sealed class YouTubeHighlightsClient(IHttpClientFactory clients, IOptions
                     if (errors.ValueKind == JsonValueKind.Array)
                     {
                         if (errors.EnumerateArray().Any(item => Text(item, "reason") is "quotaExceeded" or "dailyLimitExceeded"))
-                            throw new Failure(YouTubeOutcome.QuotaExhausted, NextQuotaDay());
+                            throw new Failure(YouTubeOutcome.QuotaExhausted, NextQuotaDay(), response.StatusCode);
                         if (errors.EnumerateArray().Any(item => Text(item, "reason") is "rateLimitExceeded" or "userRateLimitExceeded"))
-                            throw new Failure(YouTubeOutcome.Throttled, until);
+                            throw new Failure(YouTubeOutcome.Throttled, until, response.StatusCode);
                     }
                 }
                 catch (JsonException) { }
-                throw new Failure(YouTubeOutcome.InvalidConfiguration);
+                throw new Failure(YouTubeOutcome.InvalidConfiguration, null, response.StatusCode);
             }
-            throw new Failure(response.StatusCode == HttpStatusCode.Unauthorized ? YouTubeOutcome.InvalidConfiguration : YouTubeOutcome.TemporaryFailure, until);
+            throw new Failure(response.StatusCode == HttpStatusCode.Unauthorized ? YouTubeOutcome.InvalidConfiguration : YouTubeOutcome.TemporaryFailure, until, response.StatusCode);
         }
         var document = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 16 });
         if (Get(document.RootElement, "error").ValueKind != JsonValueKind.Undefined)
@@ -254,7 +255,7 @@ public sealed class YouTubeHighlightsClient(IHttpClientFactory clients, IOptions
                 uploadStatus is not ("processed" or "uploaded" or "failed" or "rejected" or "deleted") ||
                 Get(status, "embeddable").ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw new Failure(YouTubeOutcome.InvalidResponse);
             var notProcessed = broadcast != "none" || uploadStatus != "processed";
-            var duration = XmlConvert.ToTimeSpan(durationText);
+            var duration = Duration(durationText);
             if (duration < TimeSpan.Zero || duration == TimeSpan.Zero && !notProcessed) throw new Failure(YouTubeOutcome.InvalidResponse);
             var kid = Get(status, "madeForKids");
             if (kid.ValueKind is not (JsonValueKind.Undefined or JsonValueKind.True or JsonValueKind.False)) throw new Failure(YouTubeOutcome.InvalidResponse);
@@ -291,6 +292,12 @@ public sealed class YouTubeHighlightsClient(IHttpClientFactory clients, IOptions
                 madeForKids, allowed ?? [], blocked ?? [], clock.GetUtcNow()));
         }
         return evidence.ToArray();
+    }
+
+    private static TimeSpan Duration(string text)
+    {
+        try { return XmlConvert.ToTimeSpan(text); }
+        catch (Exception e) when (e is FormatException or OverflowException) { throw new Failure(YouTubeOutcome.InvalidResponse); }
     }
 
     private static bool ValidRegion(string? value) => value is { Length: 2 } && value.All(c => c is >= 'A' and <= 'Z');
