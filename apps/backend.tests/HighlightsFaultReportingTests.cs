@@ -307,6 +307,25 @@ public sealed class HighlightsFaultReportingTests(HighlightsFaultReportingTests.
         Assert.DoesNotContain(app.Logs.Entries, e => e.Level >= LogLevel.Warning && e.Category.StartsWith("backend.Services.Highlights", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task Non_ascii_year_in_a_provider_description_is_not_a_fault()
+    {
+        var id = await database.AddCompletedGameAsync("fault-non-ascii-year");
+        await using var app = new App(database.ConnectionString, services => services.Identity((request, _) => Task.FromResult(Ok(
+            request.RequestUri!.Host == "statsapi.mlb.com"
+                ? """{"dates":[{"date":"2026-10-06","games":[{"gamePk":849819,"gameDate":"2026-10-06T22:00:00Z","officialDate":"2026-10-06","season":"2026","doubleHeader":"N","gameNumber":1,"status":{"abstractGameState":"Final","detailedState":"Final","codedGameState":"F"},"teams":{"home":{"team":{"id":144}},"away":{"team":{"id":119}}}}]}]}"""
+                : $$$"""{"header":{"id":"{{{id}}}","season":{"year":2026},"competitions":[{"id":"{{{id}}}","date":"2026-10-06T22:00:00Z","status":{"type":{"name":"STATUS_FINAL","state":"post","completed":true}},"competitors":[{"homeAway":"home","team":{"id":"15","abbreviation":"ATL"}},{"homeAway":"away","team":{"id":"19","abbreviation":"LAD"}}]}]}}"""))));
+        var now = DateTimeOffset.UtcNow;
+        var video = new YouTubeVideoEvidence("asciiYear01", YouTubeAvailability.Playable, YouTubeHighlightsClient.ApprovedChannelId,
+            "Dodgers vs. Braves Highlights (10/6/26) | MLB Highlights", "Single game recap 20\u0662\u0666", now.AddDays(-1),
+            TimeSpan.FromMinutes(8), false, [], [], now.AddMinutes(-1));
+
+        var result = await app.ProcessAsync([id], [video]);
+
+        Assert.Equal(("Processed", 1), (result.Reason, result.Selected));
+        Assert.Empty(await app.SentEventsAsync(expected: 0));
+    }
+
     private static HttpResponseMessage Ok(string body) => new(HttpStatusCode.OK) { Content = new StringContent(body) };
 
     private static void AssertReportedOnce(App app, IReadOnlyCollection<SentEvent> sent, Type logger, string originalType)
@@ -477,11 +496,14 @@ public sealed class HighlightsFaultReportingTests(HighlightsFaultReportingTests.
             return app.Services.GetRequiredService<YouTubeHighlightsClient>().ValidateVideosAsync([LeakVideo], cancellationToken);
         }
 
-        public async Task<HighlightsApplicationResult> ProcessAsync(string[] games, CancellationToken cancellationToken = default)
+        public Task<HighlightsApplicationResult> ProcessAsync(string[] games, CancellationToken cancellationToken = default) =>
+            ProcessAsync(games, [], cancellationToken);
+
+        public async Task<HighlightsApplicationResult> ProcessAsync(string[] games, YouTubeVideoEvidence[] videos, CancellationToken cancellationToken = default)
         {
             _ = Client;
             using var scope = app.Services.CreateScope();
-            return await scope.ServiceProvider.GetRequiredService<HighlightsApplicationService>().ProcessCandidatesAsync(games, [], cancellationToken: cancellationToken);
+            return await scope.ServiceProvider.GetRequiredService<HighlightsApplicationService>().ProcessCandidatesAsync(games, videos, cancellationToken: cancellationToken);
         }
 
         public async Task<IReadOnlyCollection<SentEvent>> SentEventsAsync(int expected)
