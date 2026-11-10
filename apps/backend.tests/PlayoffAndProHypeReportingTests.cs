@@ -205,23 +205,21 @@ public sealed class PlayoffAndProHypeReportingTests
     [InlineData("easternstandings", "2026-٢٧ NHL Wild Card Standings")]
     [InlineData("westernstandings", "2026-٢٠٢٧ NHL Wild Card Standings")]
     [InlineData("nhlpostseasonprob", "٢٠٢٧ NHL Postseason Probabilities")]
-    public async Task Nhl_model_refresh_season_title_in_non_ascii_digits_is_rejected_as_wrong_season(string page, string title)
-    {
-        var published = DateTime.UtcNow.AddHours(-24);
-        await using var database = await Database.StartAsync();
-        var previous = await database.SeedNhlModelRowsAsync(NhlSeason);
-        await using var app = NhlModelApp(uri => new Reply(HttpStatusCode.OK, NflPlayoffPageTests.PlayoffStatusFixture(uri.AbsoluteUri, published, invalidBos: false,
-            titleOverride: url => url.Contains(page, StringComparison.Ordinal) ? title : null)), connectionString: database.ConnectionString);
+    [InlineData("easternstandings", "२2026-27 NHL Wild Card Standings")]
+    [InlineData("westernstandings", "2026-27٣ NHL Wild Card Standings")]
+    [InlineData("nhlpostseasonprob", "٢2027 NHL Postseason Probabilities")]
+    [InlineData("nhlpostseasonprob", "2027 NHL Postseason٣ Probabilities")]
+    public Task Nhl_model_refresh_season_title_in_non_ascii_digits_is_rejected_as_wrong_season(string page, string title) =>
+        AssertNhlModelRejectedAsWrongSeasonAsync((url, published) => NflPlayoffPageTests.PlayoffStatusFixture(url, published, invalidBos: false,
+            titleOverride: u => u.Contains(page, StringComparison.Ordinal) ? title : null));
 
-        Assert.Equal(0, await RefreshNhlModelAsync(app));
-
-        Assert.Equal(3, app.Provider.Requests);
-        Assert.Empty(await app.SentEventsAsync());
-        var rejected = Assert.Single(app.Logs, l => l.Category == typeof(PlayoffStatusService).FullName && l.Level >= LogLevel.Warning);
-        Assert.Equal((LogLevel.Warning, NhlModelRejected), (rejected.Level, rejected.Template));
-        Assert.EndsWith($"{NhlSeason}: wrong_season", rejected.Message, StringComparison.Ordinal);
-        Assert.Equal(previous, await database.NhlModelRowsAsync(NhlSeason));
-    }
+    [Theory]
+    [InlineData("easternstandings", "٢٠٢٥-٢٦ NHL Wild Card Standings")]
+    [InlineData("westernstandings", "٢٠٢٦-٢٧ NHL Wild Card Standings")]
+    [InlineData("nhlpostseasonprob", "٢٠٢٦ NHL Postseason Probabilities")]
+    public Task Nhl_model_refresh_second_heading_with_a_non_ascii_season_is_rejected_as_wrong_season(string page, string heading) =>
+        AssertNhlModelRejectedAsWrongSeasonAsync((url, published) => NflPlayoffPageTests.PlayoffStatusFixture(url, published, invalidBos: false,
+            extraBody: url.Contains(page, StringComparison.Ordinal) ? $"<h2>{heading}</h2>" : ""));
 
     [Fact]
     public async Task Pro_competition_refresh_shutdown_stops_the_loop_without_an_event()
@@ -324,6 +322,23 @@ public sealed class PlayoffAndProHypeReportingTests
     {
         using var scope = app.Services.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<PlayoffStatusService>().RefreshNhlRatingsForSeasonAsync(NhlSeason, CancellationToken.None);
+    }
+
+    private static async Task AssertNhlModelRejectedAsWrongSeasonAsync(Func<string, DateTime, string> page)
+    {
+        var published = DateTime.UtcNow.AddHours(-24);
+        await using var database = await Database.StartAsync();
+        var previous = await database.SeedNhlModelRowsAsync(NhlSeason);
+        await using var app = NhlModelApp(uri => new Reply(HttpStatusCode.OK, page(uri.AbsoluteUri, published)), connectionString: database.ConnectionString);
+
+        Assert.Equal(0, await RefreshNhlModelAsync(app));
+
+        Assert.Equal(3, app.Provider.Requests);
+        Assert.Empty(await app.SentEventsAsync());
+        var rejected = Assert.Single(app.Logs, l => l.Category == typeof(PlayoffStatusService).FullName && l.Level >= LogLevel.Warning);
+        Assert.Equal((LogLevel.Warning, NhlModelRejected), (rejected.Level, rejected.Template));
+        Assert.EndsWith($"{NhlSeason}: wrong_season", rejected.Message, StringComparison.Ordinal);
+        Assert.Equal(previous, await database.NhlModelRowsAsync(NhlSeason));
     }
 
     private static Game ScheduledNbaGame() => new()
