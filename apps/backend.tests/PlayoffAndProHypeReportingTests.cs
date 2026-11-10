@@ -35,7 +35,7 @@ public sealed class PlayoffAndProHypeReportingTests
     private const string PlayoffStatusFailure = "Failed to refresh {Sport} ratings from PlayoffStatus";
     private const string NhlModelFailure = "Failed NHL PlayoffStatus model refresh for season {Season}";
     private const int NhlSeason = 2027;
-    private const string ProCompetitionFailure = "Pro competition refresh failed";
+    private const string ProCompetitionFailure = "Pro context request failed for {Sport}/{Season}; previous timestamps preserved";
     private const string ProHypeFailure = "Pro hype capture failed";
     private const string LockTimeout = ";Options=-c lock_timeout=500";
     private static readonly TimeSpan HangDeadline = TimeSpan.FromSeconds(60);
@@ -212,14 +212,14 @@ public sealed class PlayoffAndProHypeReportingTests
     }
 
     [Fact]
-    public async Task Unexpected_pro_competition_refresh_failure_is_sent_once_at_error_and_the_loop_keeps_running()
+    public async Task Unexpected_pro_competition_fetch_failure_is_sent_once_by_its_group_and_the_loop_keeps_running()
     {
         await using var database = await Database.StartAsync(ScheduledNbaGame());
         await using var app = new ReportingApp(_ => Unexpected, typeof(ProCompetitionRefreshBackgroundService), database.ConnectionString);
 
-        await app.WaitForLogAsync(typeof(ProCompetitionRefreshBackgroundService), ProCompetitionFailure);
+        await app.WaitForLogAsync(typeof(ProCompetitionEvidenceService), ProCompetitionFailure);
 
-        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(ProCompetitionRefreshBackgroundService), ProCompetitionFailure, typeof(NotSupportedException));
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(ProCompetitionEvidenceService), ProCompetitionFailure, typeof(NotSupportedException));
         var worker = app.Services.GetServices<IHostedService>().OfType<ProCompetitionRefreshBackgroundService>().Single();
         Assert.False(worker.ExecuteTask!.IsCompleted);
     }
@@ -231,10 +231,10 @@ public sealed class PlayoffAndProHypeReportingTests
         await using var app = new ReportingApp(_ => Hang, typeof(ProCompetitionRefreshBackgroundService), database.ConnectionString,
             services => services.ConfigureAll<HttpStandardResilienceOptions>(options => options.AttemptTimeout.Timeout = TimeSpan.FromMilliseconds(50)));
 
-        await app.WaitForLogAsync(typeof(ProCompetitionRefreshBackgroundService), ProCompetitionFailure);
+        await app.WaitForLogAsync(typeof(ProCompetitionEvidenceService), ProCompetitionFailure);
 
         Assert.Equal(StandardAttempts, app.Provider.Requests);
-        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(ProCompetitionRefreshBackgroundService), ProCompetitionFailure, typeof(TimeoutRejectedException));
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(ProCompetitionEvidenceService), ProCompetitionFailure, typeof(TimeoutRejectedException));
     }
 
     [Fact]
