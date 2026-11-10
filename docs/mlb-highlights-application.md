@@ -1,6 +1,6 @@
 # MLB highlights application and corrections
 
-The highlights application boundary is `backend.Services.Highlights.HighlightsApplicationService`. Rendering consumes `backend.Models.HighlightsDetailState` from `backend.shared`. `GetDetailAsync` and `InspectAsync` read persisted data only: no ESPN, MLB, or YouTube call is made to compose a detail page. Discovery and revalidation are separate, explicit background operations. A browser playback error is not an application mutation.
+The highlights application boundary is `backend.Services.Highlights.HighlightsApplicationService`. Rendering consumes `backend.Models.HighlightsDetailState` from `backend.shared`. `GetDetailAsync` and `InspectAsync` read persisted data only: no ESPN, MLB, or YouTube call is made to compose a detail page. If composing fails, the page renders with highlights hidden and the failure is logged at Error as `mlb-highlights-lifecycle.md` describes. Discovery and revalidation are separate, explicit background operations. A browser playback error is not an application mutation.
 
 ## Authoritative identity
 

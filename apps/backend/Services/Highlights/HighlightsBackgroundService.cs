@@ -17,7 +17,7 @@ public sealed class HighlightsBackgroundService(IServiceScopeFactory scopes, Tim
                 previousReason = result.Reason;
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
-            catch (Exception) { logger.LogWarning("Highlights lifecycle skipped: {Reason}", "OperationFailure"); }
+            catch (Exception ex) { logger.LogError(HighlightsFault.Reportable(ex), "Highlights lifecycle skipped: {Reason}", "OperationFailure"); }
             try { await Task.Delay(TimeSpan.FromMinutes(1), time, stoppingToken); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
         }

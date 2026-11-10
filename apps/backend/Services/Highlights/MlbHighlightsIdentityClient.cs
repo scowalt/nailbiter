@@ -4,8 +4,10 @@ using backend.Models;
 
 namespace backend.Services.Highlights;
 
-public sealed class MlbHighlightsIdentityClient(IHttpClientFactory clients, TimeProvider time)
+public sealed class MlbHighlightsIdentityClient(IHttpClientFactory clients, TimeProvider time, ILogger<MlbHighlightsIdentityClient> logger)
 {
+    private bool providerFailureReported;
+
     public const string HttpClientName = "MlbHighlightsIdentity";
     internal sealed record Team(string Abbreviation, string EspnId, int MlbId, string Nickname);
     internal static readonly Team[] Teams =
@@ -77,10 +79,24 @@ public sealed class MlbHighlightsIdentityClient(IHttpClientFactory clients, Time
                 Text(row, "resumedFromDate"), Text(row, "rescheduledToDate"), Text(row, "resumeDate"), start.UtcDateTime,
                 pair.Count(r => r.GetProperty("officialDate").GetString() == date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)), observed), completion, true, "Verified");
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { return new(null, null, false, "IdentityTemporaryFailure"); }
-        catch (Exception e) when (e is HttpRequestException or IOException) { return new(null, null, false, "IdentityTemporaryFailure"); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (HttpRequestException e) when (!ProviderFailure.Is(e))
+        {
+            logger.LogWarning("Highlights identity unavailable: {Reason} {Status}", "ProviderRejected", (int?)e.StatusCode);
+            return new(null, null, false, "IdentityTemporaryFailure");
+        }
+        catch (Exception e) when (e is HttpRequestException or IOException or OperationCanceledException)
+        {
+            if (providerFailureReported) logger.LogWarning("Highlights identity unavailable: {Reason}", "ProviderFailure");
+            else logger.LogError(HighlightsFault.From(e), "Highlights identity unavailable: {Reason}", "ProviderFailure");
+            providerFailureReported = true;
+            return new(null, null, false, "IdentityTemporaryFailure");
+        }
         catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException)
-        { return new(null, null, true, "MalformedIdentity"); }
+        {
+            logger.LogWarning("Highlights identity unavailable: {Reason}", "MalformedIdentity");
+            return new(null, null, true, "MalformedIdentity");
+        }
     }
 
     private static string? Text(JsonElement value, string name) => value.TryGetProperty(name, out var field) && field.ValueKind != JsonValueKind.Null ? field.GetString() : null;

@@ -133,17 +133,48 @@ public sealed class YouTubeHighlightsClient(IHttpClientFactory clients, IOptions
             using var http = clients.CreateClient(HttpClientName);
             var session = new Session(http, cancellationToken, authorizeRequest);
             try { return await operation(session); }
-            catch (Failure failure) { return Failed(failure.Outcome, session.Units, failure.RetryAtUtc); }
+            catch (Failure failure)
+            {
+                Report(failure);
+                return Failed(failure.Outcome, session.Units, failure.RetryAtUtc);
+            }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw new OperationCanceledException(cancellationToken); }
+            catch (HttpRequestException failure) when (!ProviderFailure.Is(failure))
+            {
+                logger.LogWarning("YouTube highlights request rejected: {Outcome} {Status}", YouTubeOutcome.TemporaryFailure, (int?)failure.StatusCode);
+                return Failed(YouTubeOutcome.TemporaryFailure, session.Units);
+            }
             catch (Exception failure) when (failure is HttpRequestException or IOException or OperationCanceledException)
-            { return Failed(YouTubeOutcome.TemporaryFailure, session.Units); }
-            catch (Exception failure) when (failure is JsonException or InvalidOperationException or FormatException or ArgumentException or XmlException or OverflowException)
+            {
+                logger.LogError(HighlightsFault.From(failure), "YouTube highlights request failed: {Outcome}", YouTubeOutcome.TemporaryFailure);
+                return Failed(YouTubeOutcome.TemporaryFailure, session.Units);
+            }
+            catch (JsonException)
+            {
+                logger.LogWarning("YouTube highlights response malformed: {Outcome}", YouTubeOutcome.InvalidResponse);
+                return Failed(YouTubeOutcome.InvalidResponse, session.Units);
+            }
+            catch (Exception failure) when (failure is InvalidOperationException or FormatException or ArgumentException or XmlException or OverflowException)
             {
                 if (DatabaseFailure.Is(failure)) logger.LogError(failure, "YouTube request authorization failed");
+                else logger.LogError(HighlightsFault.From(failure), "YouTube highlights request failed: {Outcome}", YouTubeOutcome.InvalidResponse);
                 return Failed(YouTubeOutcome.InvalidResponse, session.Units);
             }
         }
         finally { operationGate.Release(); }
+    }
+
+    private void Report(Failure failure)
+    {
+        if (failure.Status is { } status)
+        {
+            var answer = new HttpRequestException(null, null, status);
+            if (ProviderFailure.Is(answer))
+                logger.LogError(HighlightsFault.From(answer), "YouTube highlights request failed: {Outcome}", failure.Outcome);
+            else logger.LogWarning("YouTube highlights request rejected: {Outcome} {Status}", failure.Outcome, (int)status);
+        }
+        else if (failure.Outcome is YouTubeOutcome.InvalidResponse or YouTubeOutcome.ChannelUnverified)
+            logger.LogWarning("YouTube highlights response malformed: {Outcome}", failure.Outcome);
     }
 
     private void RefreshQuotaDay()
