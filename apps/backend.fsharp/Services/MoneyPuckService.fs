@@ -95,7 +95,9 @@ type MoneyPuckService(httpClient: HttpClient, logger: ILogger<MoneyPuckService>,
                     rankings <- collected
                 with
                 | :? OperationCanceledException when ct.IsCancellationRequested -> cancelled <- true
-                | ex -> logger.Log((if DatabaseFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "MoneyPuck daily collection stopped; uncommitted input observations retained")
+                | :? HttpRequestException as ex when not (ProviderFailure.Is ex) ->
+                    logger.LogWarning(ex, "MoneyPuck daily collection stopped; uncommitted input observations retained")
+                | ex -> logger.LogError(ex, "MoneyPuck daily collection stopped; uncommitted input observations retained")
                 do! gate.CompleteAsync()
                 if cancelled then return raise (OperationCanceledException(ct))
                 else return { Rankings = rankings; Qualification = forecasts; NextAttemptAt = gate.NextAttempt }
@@ -129,10 +131,11 @@ type MoneyPuckRefreshBackgroundService(serviceProvider: IServiceProvider, logger
                 let service = scope.ServiceProvider.GetRequiredService<MoneyPuckService>()
                 let! result = service.RefreshNhlAsync(stoppingToken)
                 let delay = if result.NextAttemptAt.HasValue then result.NextAttemptAt.Value - timeProvider.GetUtcNow().UtcDateTime else MoneyPuckRefreshGate.Interval
-                do! Task.Delay(max (TimeSpan.FromSeconds(1.0)) delay, timeProvider, stoppingToken)
+                let wait = if delay > TimeSpan.Zero then max (TimeSpan.FromSeconds(1.0)) delay else MoneyPuckRefreshGate.AdmissionRetry
+                do! Task.Delay(wait, timeProvider, stoppingToken)
             with
             | :? OperationCanceledException when stoppingToken.IsCancellationRequested -> ()
             | ex ->
-                logger.LogWarning(ex, "MoneyPuck daily background cycle failed")
+                logger.LogError(ex, "MoneyPuck daily background cycle failed")
                 do! Task.Delay(MoneyPuckRefreshGate.Interval, timeProvider, stoppingToken)
     }

@@ -163,6 +163,12 @@ type KalshiPlayoffRatingsService
     let baseUrl = "https://api.elections.kalshi.com/trade-api/v2"
     let mutable accessRefused = false
 
+    let failureLevel (ex: exn) =
+        match ex with
+        | :? HttpRequestException when not (KalshiFailure.Is ex) -> LogLevel.Warning
+        | :? JsonException -> LogLevel.Warning
+        | _ -> LogLevel.Error
+
     let archivedMarkets (eventTicker: string) (ct: CancellationToken) = task {
         let markets = ResizeArray<KalshiMarket>()
         let seen = HashSet<string>(StringComparer.Ordinal)
@@ -251,7 +257,7 @@ type KalshiPlayoffRatingsService
                             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
                             | ex ->
                                 if ex :? KalshiAccessRefusedException then accessRefused <- true
-                                logger.Log((if KalshiFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to recover archived {Sport} playoff finals for season {Season}; missing nonfinal probabilities are cleared without advancing their timestamps", sport, season)
+                                logger.Log(failureLevel ex, ex, "Failed to recover archived {Sport} playoff finals for season {Season}; missing nonfinal probabilities are cleared without advancing their timestamps", sport, season)
                                 return None
                     }
                     let canAssumeNoMarket =
@@ -362,7 +368,7 @@ type KalshiPlayoffRatingsService
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex ->
                 if ex :? KalshiAccessRefusedException then accessRefused <- true
-                logger.Log((if DatabaseFailure.Is ex || KalshiFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to refresh Kalshi {Sport} playoff probabilities for season {Season}", sport, season)
+                logger.Log(failureLevel ex, ex, "Failed to refresh Kalshi {Sport} playoff probabilities for season {Season}", sport, season)
                 return 0
     }
 

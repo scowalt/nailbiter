@@ -31,6 +31,7 @@ public sealed class MotorsportProviderReportingTests
     private const int StandardAttempts = 4;
     private static readonly Answer Hang = new Hanging();
     private static readonly Answer Unavailable = new Reply(HttpStatusCode.ServiceUnavailable, "{}");
+    private static readonly Answer Fault = new Faulting();
 
     private static readonly Dictionary<string, Fetch> Scoreboards = new()
     {
@@ -61,6 +62,48 @@ public sealed class MotorsportProviderReportingTests
         ["NascarLiveFeed"] = new(typeof(NascarLiveFeedService), null,
             async (services, ct) => await services.GetRequiredService<NascarLiveFeedService>().GetLiveFeedAsync(ct)),
     };
+
+    private const string NoCompetitions = """{"competitions":[]}""";
+    private const string NoCompetitors = """{"count":0,"items":[]}""";
+    private const string OneCompetitorRef = """{"count":1,"items":[{"$ref":"http://sports.core.api.espn.pvt/v2/sports/racing/leagues/synthetic/events/9001/competitions/9001/competitors/77?lang=en"}]}""";
+
+    private static readonly Dictionary<string, Site> Sites = new()
+    {
+        ["F1 scoreboard"] = new(Scoreboards["F1"], target => _ => target),
+        ["NASCAR scoreboard"] = new(Scoreboards["NASCAR"], target => _ => target),
+        ["IndyCar scoreboard"] = new(Scoreboards["IndyCar"], target => _ => target),
+        ["F1 competition"] = new(Competitors["F1"] with { Template = "Could not resolve F1 competition ID for event {EventId}, using event ID" },
+            target => uri => uri.AbsolutePath.EndsWith("/events/9001", StringComparison.Ordinal) ? target : new Reply(HttpStatusCode.OK, NoCompetitors)),
+        ["F1 competitors"] = new(Competitors["F1"] with { Template = "Failed to fetch ESPN core F1 competitors for event {EventId} (falling back to scoreboard data)" },
+            target => uri => uri.AbsolutePath.EndsWith("/competitors", StringComparison.Ordinal) ? target : new Reply(HttpStatusCode.OK, NoCompetitions)),
+        ["F1 competitor ref"] = new(Competitors["F1"] with { Template = "Failed to resolve competitor ref: {Url}" }, target => uri => uri.AbsolutePath switch
+        {
+            var path when path.Contains("/competitors/", StringComparison.Ordinal) => target,
+            var path when path.EndsWith("/competitors", StringComparison.Ordinal) => new Reply(HttpStatusCode.OK, OneCompetitorRef),
+            _ => new Reply(HttpStatusCode.OK, NoCompetitions),
+        }),
+        ["NASCAR competitors"] = new(Competitors["NASCAR"] with { Template = "Failed to fetch ESPN core NASCAR competitors for event {EventId}" }, target => _ => target),
+        ["IndyCar competitors"] = new(Competitors["IndyCar"] with { Template = "Failed to fetch ESPN core IndyCar competitors for event {EventId} (falling back to scoreboard data)" },
+            target => _ => target),
+        ["IndyCar competitor ref"] = new(Competitors["IndyCar"] with { Template = "Failed to resolve competitor ref: {Url}" },
+            target => uri => uri.AbsolutePath.Contains("/competitors/", StringComparison.Ordinal) ? target : new Reply(HttpStatusCode.OK, OneCompetitorRef)),
+        ["KalshiF1"] = new(MotorsportFeeds["KalshiF1"] with { Template = "Failed to fetch F1 markets from Kalshi" }, target => _ => target),
+        ["KalshiNascar"] = new(MotorsportFeeds["KalshiNascar"] with { Template = "Failed to fetch NASCAR markets from Kalshi" }, target => _ => target),
+        ["NascarLiveFeed"] = new(MotorsportFeeds["NascarLiveFeed"] with { Template = "Failed to fetch NASCAR.com live feed" }, target => _ => target),
+    };
+
+    public static TheoryData<string> SiteNames() => new(Sites.Keys);
+
+    public static TheoryData<string, HttpStatusCode, string> ProviderAnswers()
+    {
+        var cases = new TheoryData<string, HttpStatusCode, string>();
+        foreach (var site in Sites.Keys)
+        {
+            cases.Add(site, HttpStatusCode.NotFound, "{}");
+            cases.Add(site, HttpStatusCode.OK, """{"leagues":[""");
+        }
+        return cases;
+    }
 
     private static readonly Dictionary<string, (Type Service, Func<IServiceProvider, Task<int>> Refresh)> ScheduleRefreshes = new()
     {
@@ -219,6 +262,45 @@ public sealed class MotorsportProviderReportingTests
         Assert.Equal((service.FullName, "error"), (reported.Logger, reported.Level));
     }
 
+    [Theory]
+    [MemberData(nameof(SiteNames))]
+    public async Task Own_fault_below_a_motorsport_fetch_is_sent_once_at_error(string name)
+    {
+        var site = Sites[name];
+        await using var app = new MotorsportApp(site.At(Fault));
+
+        await site.Fetch.Run(app.Services, CancellationToken.None);
+
+        AssertSentOnceAtError(await app.SentEventsAsync(), site.Fetch, typeof(InvalidOperationException));
+    }
+
+    [Theory]
+    [MemberData(nameof(SiteNames))]
+    public async Task Client_deadline_on_a_motorsport_fetch_is_sent_once_at_error(string name)
+    {
+        var site = Sites[name];
+        await using var app = new MotorsportApp(site.At(Hang), services => services.ConfigureAll<HttpClientFactoryOptions>(options =>
+            options.HttpClientActions.Add(client => client.Timeout = TimeSpan.FromMilliseconds(200))));
+
+        await site.Fetch.Run(app.Services, CancellationToken.None);
+
+        AssertSentOnceAtError(await app.SentEventsAsync(), site.Fetch, typeof(TaskCanceledException));
+    }
+
+    [Theory]
+    [MemberData(nameof(ProviderAnswers))]
+    public async Task Missing_or_unreadable_motorsport_answer_is_a_warning_without_an_event(string name, HttpStatusCode status, string body)
+    {
+        var site = Sites[name];
+        await using var app = new MotorsportApp(site.At(new Reply(status, body)));
+
+        await site.Fetch.Run(app.Services, CancellationToken.None);
+
+        var failure = Assert.Single(app.Logs, l => l.Category == site.Fetch.Service.FullName && l.Exception is not null);
+        Assert.Equal(LogLevel.Warning, failure.Level);
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
     private static async Task AssertCallerCancellationPropagatesAsync(Fetch fetch, Func<Uri, Answer> answer)
     {
         await using var app = new MotorsportApp(answer);
@@ -249,6 +331,10 @@ public sealed class MotorsportProviderReportingTests
     private sealed record Reply(HttpStatusCode Status, string Body) : Answer;
 
     private sealed record Hanging : Answer;
+
+    private sealed record Faulting : Answer;
+
+    private sealed record Site(Fetch Fetch, Func<Answer, Func<Uri, Answer>> At);
 
     private sealed record SentEvent(string? Logger, string? Level, string? Template, (string? Type, string? Value)[] Exceptions);
 
@@ -318,8 +404,13 @@ public sealed class MotorsportProviderReportingTests
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref requests);
-            if (answer(request.RequestUri!) is Reply reply)
-                return new HttpResponseMessage(reply.Status) { Content = new StringContent(reply.Body) };
+            switch (answer(request.RequestUri!))
+            {
+                case Reply reply:
+                    return new HttpResponseMessage(reply.Status) { Content = new StringContent(reply.Body) };
+                case Faulting:
+                    throw new InvalidOperationException("Synthetic fault below the fetch");
+            }
             hanging.TrySetResult();
             await Task.Delay(Timeout.Infinite, cancellationToken);
             throw new UnreachableException();

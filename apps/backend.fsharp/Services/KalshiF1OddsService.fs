@@ -1,10 +1,12 @@
 namespace backend.Services.Kalshi
 
 open System
+open System.Net.Http
 open System.Collections.Generic
 open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
+open backend.Services
 open Microsoft.Extensions.Logging
 
 type KalshiF1OddsService(httpClient: System.Net.Http.HttpClient, logger: ILogger<KalshiF1OddsService>) =
@@ -80,8 +82,11 @@ type KalshiF1OddsService(httpClient: System.Net.Http.HttpClient, logger: ILogger
                     return markets
                 with
                 | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
-                | ex ->
+                | ex when ex :? HttpRequestException || ex :? JsonException || ProviderFailure.Is ex ->
                     logger.LogWarning(ex, "Failed to fetch F1 markets from Kalshi")
+                    return ResizeArray<KalshiMarket>()
+                | ex ->
+                    logger.LogError(ex, "Failed to fetch F1 markets from Kalshi")
                     return ResizeArray<KalshiMarket>()
         }
 

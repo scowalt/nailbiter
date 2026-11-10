@@ -133,7 +133,7 @@ public sealed class CollegeKalshiClient(HttpClient http, ILogger<CollegeKalshiCl
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            logger.Log(KalshiFailure.Is(ex) ? LogLevel.Error : LogLevel.Warning, ex, "College game quotes unavailable for {Ticker}", pair.HomeTicker);
+            logger.Log(CollegeFailure.Level(ex, KalshiFailure.Is), ex, "College game quotes unavailable for {Ticker}", pair.HomeTicker);
             return null;
         }
     }
@@ -170,7 +170,7 @@ public sealed class CollegeKalshiClient(HttpClient http, ILogger<CollegeKalshiCl
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            logger.LogWarning(ex, "College market history unavailable for {Ticker}", pair.HomeTicker);
+            logger.Log(CollegeFailure.Level(ex, KalshiFailure.Is), ex, "College market history unavailable for {Ticker}", pair.HomeTicker);
             return [];
         }
     }

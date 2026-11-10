@@ -1,6 +1,7 @@
 namespace backend.Services.EspnIndyCar
 
 open System
+open System.Net.Http
 open System.Text.Json
 open System.Threading
 open Backend.FSharp
@@ -35,8 +36,14 @@ type EspnIndyCarService
                 return JsonSerializer.Deserialize<EspnNascarScoreboardResponse>(json, HttpHelpers.jsonOptions)
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
+            | :? HttpRequestException as ex when not (ProviderFailure.Is ex) ->
+                logger.LogWarning(ex, "Failed to fetch ESPN IndyCar scoreboard from {Url}", url)
+                return Unchecked.defaultof<EspnNascarScoreboardResponse>
+            | :? JsonException as ex ->
+                logger.LogWarning(ex, "Failed to fetch ESPN IndyCar scoreboard from {Url}", url)
+                return Unchecked.defaultof<EspnNascarScoreboardResponse>
             | ex ->
-                logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch ESPN IndyCar scoreboard from {Url}", url)
+                logger.LogError(ex, "Failed to fetch ESPN IndyCar scoreboard from {Url}", url)
                 return Unchecked.defaultof<EspnNascarScoreboardResponse>
         }
 
@@ -80,8 +87,10 @@ type EspnIndyCarService
                                     competitors.Add(comp)
                             with
                             | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
-                            | ex ->
+                            | ex when ex :? HttpRequestException || ex :? JsonException || ProviderFailure.Is ex ->
                                 logger.LogWarning(ex, "Failed to resolve competitor ref: {Url}", resolvedUrl)
+                            | ex ->
+                                logger.LogError(ex, "Failed to resolve competitor ref: {Url}", resolvedUrl)
                     | false, _ ->
                         let comp = JsonSerializer.Deserialize<EspnCoreCompetitorItem>(item.GetRawText(), HttpHelpers.jsonOptions)
                         if not (isNull (box comp)) then
@@ -92,7 +101,10 @@ type EspnIndyCarService
                 return result
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
-            | ex ->
+            | ex when ex :? HttpRequestException || ex :? JsonException || ProviderFailure.Is ex ->
                 logger.LogWarning(ex, "Failed to fetch ESPN core IndyCar competitors for event {EventId} (falling back to scoreboard data)", eventId)
+                return Unchecked.defaultof<EspnCoreCompetitorsResponse>
+            | ex ->
+                logger.LogError(ex, "Failed to fetch ESPN core IndyCar competitors for event {EventId} (falling back to scoreboard data)", eventId)
                 return Unchecked.defaultof<EspnCoreCompetitorsResponse>
         }

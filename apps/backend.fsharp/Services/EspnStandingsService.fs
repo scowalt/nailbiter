@@ -1,6 +1,7 @@
 namespace backend.Services.Espn
 
 open System
+open System.Net.Http
 open System.Text.Json
 open backend.Data
 open backend.Models
@@ -152,8 +153,14 @@ type EspnStandingsService
                 return count
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
+            | :? HttpRequestException as ex when not (ProviderFailure.Is ex) ->
+                logger.LogWarning(ex, "Failed to refresh {Sport} standings from ESPN", sport)
+                return 0
+            | :? JsonException as ex ->
+                logger.LogWarning(ex, "Failed to refresh {Sport} standings from ESPN", sport)
+                return 0
             | ex ->
-                logger.Log((if DatabaseFailure.Is ex || ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to refresh {Sport} standings from ESPN", sport)
+                logger.LogError(ex, "Failed to refresh {Sport} standings from ESPN", sport)
                 return 0
         }
 

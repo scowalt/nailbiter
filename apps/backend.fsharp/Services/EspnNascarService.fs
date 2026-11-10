@@ -1,6 +1,7 @@
 namespace backend.Services.EspnNascar
 
 open System
+open System.Net.Http
 open System.Text.Json
 open System.Threading
 open Backend.FSharp
@@ -34,8 +35,14 @@ type EspnNascarService
                 return JsonSerializer.Deserialize<EspnNascarScoreboardResponse>(json, HttpHelpers.jsonOptions)
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
+            | :? HttpRequestException as ex when not (ProviderFailure.Is ex) ->
+                logger.LogWarning(ex, "Failed to fetch ESPN NASCAR scoreboard from {Url}", url)
+                return Unchecked.defaultof<EspnNascarScoreboardResponse>
+            | :? JsonException as ex ->
+                logger.LogWarning(ex, "Failed to fetch ESPN NASCAR scoreboard from {Url}", url)
+                return Unchecked.defaultof<EspnNascarScoreboardResponse>
             | ex ->
-                logger.Log((if ProviderFailure.Is ex then LogLevel.Error else LogLevel.Warning), ex, "Failed to fetch ESPN NASCAR scoreboard from {Url}", url)
+                logger.LogError(ex, "Failed to fetch ESPN NASCAR scoreboard from {Url}", url)
                 return Unchecked.defaultof<EspnNascarScoreboardResponse>
         }
 
@@ -63,7 +70,10 @@ type EspnNascarService
                 return JsonSerializer.Deserialize<EspnCoreCompetitorsResponse>(json, HttpHelpers.jsonOptions)
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
-            | ex ->
+            | ex when ex :? HttpRequestException || ex :? JsonException || ProviderFailure.Is ex ->
                 logger.LogWarning(ex, "Failed to fetch ESPN core NASCAR competitors for event {EventId}", eventId)
+                return Unchecked.defaultof<EspnCoreCompetitorsResponse>
+            | ex ->
+                logger.LogError(ex, "Failed to fetch ESPN core NASCAR competitors for event {EventId}", eventId)
                 return Unchecked.defaultof<EspnCoreCompetitorsResponse>
         }
