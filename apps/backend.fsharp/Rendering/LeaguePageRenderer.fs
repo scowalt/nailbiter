@@ -37,10 +37,10 @@ module LeaguePageRenderer =
 
         let homeWinProb = latestOdds |> Option.map (fun o -> o.HomeWinProbability) |> Option.defaultValue 0.5
         let liveClass = if isLive then " is-live" else ""
-        let responsiveRows = game.Sport = "cfb"
+        let showScores = game.Status <> "scheduled"
 
         let card = Elem.a [ Attr.href $"/game/{game.Id}"; cls $"league-game{liveClass}" ] [
-            Elem.div [ cls (if responsiveRows then "league-game-body-stacked" else "league-game-body") ] [
+            Elem.div [ cls "league-game-body" ] [
                 Elem.div [ cls "league-matchup"; Attr.id $"scores-{game.Id}" ] [
                     Elem.div [ cls "league-team" ] [
                         match awayLogoUrl with
@@ -59,7 +59,7 @@ module LeaguePageRenderer =
                             | _ -> ()
                         ]
                         Elem.span [ cls "team-score"; Attr.id $"away-score-{game.Id}" ] [
-                            if game.AwayScore.HasValue then Text.raw $"{game.AwayScore.Value}"
+                            if showScores && game.AwayScore.HasValue then Text.raw $"{game.AwayScore.Value}"
                         ]
                     ]
                     Elem.span [ cls "league-at" ] [ Text.raw "@" ]
@@ -80,14 +80,23 @@ module LeaguePageRenderer =
                             | _ -> ()
                         ]
                         Elem.span [ cls "team-score"; Attr.id $"home-score-{game.Id}" ] [
-                            if game.HomeScore.HasValue then Text.raw $"{game.HomeScore.Value}"
+                            if showScores && game.HomeScore.HasValue then Text.raw $"{game.HomeScore.Value}"
                         ]
                     ]
                 ]
-                Elem.div [ cls (if responsiveRows then "league-game-aside-stacked" else "league-game-aside") ] [
+                Elem.div [ cls "league-game-aside" ] [
                     Elem.span [ cls $"status-badge {statusClass}"; Attr.id $"status-{game.Id}" ] [
                         Text.raw statusLabel
                     ]
+                    if game.Status = "scheduled" || game.Status = "final" then
+                        Elem.span [ cls "meta-text" ] [
+                            FormatHelpers.scheduledTimeNode game.ScheduledStart
+                            yield! FormatHelpers.broadcastNodes game
+                        ]
+                    elif isLive then
+                        match FormatHelpers.broadcastNodes game with
+                        | [] -> ()
+                        | nodes -> Elem.span [ cls "meta-text" ] (List.tail nodes)
                     Elem.div [ Attr.id $"excitement-{game.Id}" ] [
                         if (game.Sport = "cfb" || backend.Scoring.ProHypePolicy.Supports(game.Sport)) && game.Status = "scheduled" && not hypeScore.HasValue then
                             Elem.span [ cls "unavailable-note" ] [ Text.raw "Hype unavailable" ]
@@ -112,15 +121,6 @@ module LeaguePageRenderer =
                                 ]
                             ]
                     ]
-                    if game.Status = "scheduled" || game.Status = "final" then
-                        Elem.span [ cls "meta-text" ] [
-                            FormatHelpers.scheduledTimeNode game.ScheduledStart
-                            yield! FormatHelpers.broadcastNodes game
-                        ]
-                    elif isLive then
-                        match FormatHelpers.broadcastNodes game with
-                        | [] -> ()
-                        | nodes -> Elem.span [ cls "meta-text" ] (List.tail nodes)
                     Elem.span [ cls "league-game-arrow" ] [
                         Text.raw "→"
                     ]

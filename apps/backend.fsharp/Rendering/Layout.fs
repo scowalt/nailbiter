@@ -6,26 +6,27 @@ open backend.GraphQL.Types
 module Layout =
 
     let private scriptReleaseVersion = "2026-11-07-plain-css"
-    let private styleReleaseVersion = "2026-11-07-start-hype"
+    let private styleReleaseVersion = "2026-11-10-league-rows"
     let private stylesheets = [ "global"; "components"; "games"; "world-cup"; "motorsport" ]
     let private iconVersion = "swing-1"
 
     let cls = Attr.``class'``
 
-    let private navItem (config: LeagueConfig.LeagueConfig) =
-        Elem.a [ Attr.href config.Path; cls "nav-link" ] [
-            Elem.img [ Attr.src (Logos.getLeagueLogoUrl config.Sport); Attr.alt config.ShortName; cls "nav-link-logo"; Attr.create "loading" "lazy" ]
-            Text.raw config.ShortName
-        ]
+    let private navLink (href: string) (isCurrent: bool) (children: XmlNode list) =
+        Elem.a [
+            Attr.href href
+            cls "nav-link"
+            if isCurrent then Attr.create "aria-current" "page"
+        ] children
 
     let private navLinks (activeSport: Sport option) =
-        let allLink =
-            Elem.a [ Attr.href "/"; cls (if activeSport.IsNone then "nav-link nav-link-strong" else "nav-link") ] [
-                Text.raw "All"
-            ]
         [
-            allLink
-            yield! LeagueConfig.allLeagues |> List.map navItem
+            navLink "/" activeSport.IsNone [ Text.raw "All" ]
+            for config in LeagueConfig.allLeagues do
+                navLink config.Path (activeSport = Some config.Sport) [
+                    Elem.img [ Attr.src (Logos.getLeagueLogoUrl config.Sport); Attr.alt ""; cls "nav-link-logo"; Attr.create "loading" "lazy" ]
+                    Text.raw config.ShortName
+                ]
         ]
 
     let private desktopNav (activeSport: Sport option) =

@@ -46,13 +46,14 @@ let ``Playoff extreme estimates use bounds instead of rounding to certainty`` pr
     Assert.Equal(expected, FormatHelpers.formatPlayoffOutlook false None probability)
 
 [<Theory>]
-[<InlineData(0.01)>]
-[<InlineData(0.02)>]
-[<InlineData(0.635)>]
-[<InlineData(0.98)>]
-[<InlineData(0.99)>]
-let ``Ordinary playoff estimates retain percentage formatting`` probability =
-    Assert.Equal($"{probability:P0}", FormatHelpers.formatPlayoffOutlook false None probability)
+[<InlineData(0.01, "1%")>]
+[<InlineData(0.02, "2%")>]
+[<InlineData(0.575, "57%")>]
+[<InlineData(0.635, "64%")>]
+[<InlineData(0.98, "98%")>]
+[<InlineData(0.99, "99%")>]
+let ``Ordinary playoff estimates use whole percentages like the bounded estimates`` probability expected =
+    Assert.Equal(expected, FormatHelpers.formatPlayoffOutlook false None probability)
 
 [<Theory>]
 [<InlineData(0.0, "Missed playoffs")>]

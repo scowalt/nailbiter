@@ -171,7 +171,7 @@ public sealed class ProHypePageTests
                 Assert.Null(fragments.QuerySelector($"#excitement-{game.Id}"));
                 Assert.Equal("Scheduled", fragments.QuerySelector($"#status-{game.Id}")!.TextContent);
                 Assert.Null(fragments.QuerySelector($"#scores-{game.Id}"));
-                Assert.Equal(reader == liveReader ? "" : "7", fragments.QuerySelector($"#home-score-{game.Id}")!.TextContent);
+                Assert.Equal("", fragments.QuerySelector($"#home-score-{game.Id}")!.TextContent);
                 Assert.Null(fragments.QuerySelector($"#probbar-{game.Id}"));
             }
             Score(await Page(host.Client, "/", true), game, captured.Total.Value);

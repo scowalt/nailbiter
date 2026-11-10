@@ -12,6 +12,11 @@ module FormatHelpers =
         elif prob.Value > 0.99 && prob.Value < 1.0 then ">99%"
         else $"{Math.Round(prob.Value * 100.0)}%%"
 
+    let private wholePercent =
+        let format = Globalization.CultureInfo.InvariantCulture.NumberFormat.Clone() :?> Globalization.NumberFormatInfo
+        format.PercentPositivePattern <- 1
+        format
+
     let formatPlayoffOutlook isFinal (upperBound: float option) (prob: float) =
         if isFinal && prob = 1.0 then "Clinched playoffs"
         elif isFinal && prob = 0.0 then "Missed playoffs"
@@ -20,7 +25,7 @@ module FormatHelpers =
             | Some bound -> $"<{max 1.0 (Math.Ceiling(Math.Round(bound * 100.0, 6)))}%%"
             | None when prob < 0.01 -> "<1%"
             | None when prob > 0.99 -> ">99%"
-            | None -> $"{prob:P0}"
+            | None -> prob.ToString("P0", wholePercent)
 
     let pollRank (poll: Nullable<backend.Models.CollegePoll>) (rank: Nullable<int>) =
         [ if poll.HasValue && rank.HasValue && rank.Value >= 1 && rank.Value <= 25 then

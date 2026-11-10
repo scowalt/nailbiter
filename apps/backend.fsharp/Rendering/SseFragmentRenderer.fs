@@ -165,7 +165,7 @@ module SseFragmentRenderer =
 
     let renderHomeGameCardFragments (update: GameUpdate) = renderCardFragments true true update
 
-    let renderLeagueGameCardFragments (update: GameUpdate) = renderCardFragments true false update
+    let renderLeagueGameCardFragments (update: GameUpdate) = renderCardFragments true true update
 
     let renderDetailAwayScore (awayScore: int option) =
         Elem.span [ cls "detail-score"; Attr.id "detail-away-score" ] [
