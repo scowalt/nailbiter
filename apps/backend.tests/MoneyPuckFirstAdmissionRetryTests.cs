@@ -64,6 +64,30 @@ public sealed class MoneyPuckFirstAdmissionRetryTests
         AssertAdmissionErrors(await app.SentEventsAsync(), 1, failure);
     }
 
+    [Theory]
+    [InlineData("own fault")]
+    [InlineData("database failure")]
+    public async Task Route_refresh_between_failed_attempts_holds_the_loop_to_the_daily_limit(string failure)
+    {
+        await using var app = await WorkerApp.StartAsync();
+        await app.BreakAdmissionAsync(failure);
+        await app.StartWorkerAsync();
+        Assert.Equal(AdmissionRetry, await app.NextWaitAsync());
+
+        await app.RepairAdmissionAsync(failure);
+        app.Clock.Advance(TimeSpan.FromMinutes(10));
+        app.Harness.Handler.Marker = app.Clock.GetUtcNow().AddMinutes(-5).ToString("O");
+        var routed = await app.Harness.App.Services.GetRequiredService<MoneyPuckService>().RefreshNhlAsync(CancellationToken.None);
+        Assert.Equal((32, 32), (routed.Qualification, routed.Rankings));
+        var fetched = app.Harness.Handler.Requests.Count;
+        Assert.NotEqual(0, fetched);
+
+        app.Clock.Advance(TimeSpan.FromMinutes(50));
+        Assert.Equal(DailyInterval - TimeSpan.FromMinutes(50), await app.NextWaitAsync());
+        Assert.Equal(fetched, app.Harness.Handler.Requests.Count);
+        AssertAdmissionErrors(await app.SentEventsAsync(), 1, failure);
+    }
+
     [Fact]
     public async Task Successful_first_admission_keeps_the_daily_cadence()
     {
@@ -170,7 +194,7 @@ public sealed class MoneyPuckFirstAdmissionRetryTests
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
         {
             var timer = base.CreateTimer(callback, state, dueTime, period);
-            if (dueTime >= TimeSpan.FromMinutes(30)) LoopWaits.Writer.TryWrite(dueTime);
+            if (state is not CancellationTokenSource) LoopWaits.Writer.TryWrite(dueTime);
             return timer;
         }
     }
