@@ -603,7 +603,7 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
                 }
                 foreach (var (game, evidence) in contexts) game.ProEvidenceJson = JsonSerializer.Serialize(evidence);
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex)
             {
                 logger.Log(FailureLevel(ex), ex, "Pro context request failed for {Sport}/{Season}; previous timestamps preserved", group.Key.Sport, group.Key.Season);

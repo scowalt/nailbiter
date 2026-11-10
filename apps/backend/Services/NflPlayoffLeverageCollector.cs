@@ -354,7 +354,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
                 observation.ObservedAt = clock.GetUtcNow().UtcDateTime;
                 observation.Reason = "PlayoffStatus NFL next-game model forecasts; complete schedule results corroborated with ESPN";
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex) when (ex is HttpRequestException or IOException or OperationCanceledException)
             {
                 denied = ex is DeniedException;
