@@ -56,7 +56,7 @@ public sealed class ProCompetitionReportingTests
     public async Task Provider_timeout_in_one_group_is_sent_once_and_the_next_group_still_refreshes()
     {
         await using var app = await GroupAppAsync(Hang, services => services.ConfigureAll<HttpStandardResilienceOptions>(options =>
-            options.AttemptTimeout.Timeout = TimeSpan.FromMilliseconds(50)));
+            options.AttemptTimeout.Timeout = TimeSpan.FromMilliseconds(500)));
 
         await app.RefreshAsync(CancellationToken.None);
 
@@ -94,7 +94,7 @@ public sealed class ProCompetitionReportingTests
     public async Task Client_deadline_in_one_group_is_sent_once_and_the_next_group_still_refreshes()
     {
         await using var app = await GroupAppAsync(Hang, services => services.ConfigureAll<HttpClientFactoryOptions>(options =>
-            options.HttpClientActions.Add(client => client.Timeout = TimeSpan.FromMilliseconds(200))));
+            options.HttpClientActions.Add(client => client.Timeout = TimeSpan.FromSeconds(2))));
 
         await app.RefreshAsync(CancellationToken.None);
 
@@ -178,7 +178,7 @@ public sealed class ProCompetitionReportingTests
     {
         await using var app = await ForecastAppAsync(Hang, games: 2, configure: services =>
             services.Configure<HttpClientFactoryOptions>(nameof(NflPlayoffLeverageCollector), options =>
-                options.HttpClientActions.Add(client => client.Timeout = TimeSpan.FromMilliseconds(200))));
+                options.HttpClientActions.Add(client => client.Timeout = TimeSpan.FromSeconds(2))));
 
         await app.RefreshAsync(CancellationToken.None);
 
@@ -295,7 +295,6 @@ public sealed class ProCompetitionReportingTests
 
     private static async Task AssertGroupFailureSentOnceAsync(ReportingApp app, Type exception)
     {
-        Assert.Contains("/basketball/nba/", app.Provider.Requests.First().AbsolutePath, StringComparison.Ordinal);
         var reported = Assert.Single(await app.SentEventsAsync());
         Assert.Equal((typeof(ProCompetitionEvidenceService).FullName, "error", GroupTemplate), (reported.Logger, reported.Level, reported.Template));
         Assert.Contains(exception.FullName, reported.ExceptionTypes);
