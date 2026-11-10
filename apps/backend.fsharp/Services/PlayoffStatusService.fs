@@ -178,29 +178,28 @@ type PlayoffStatusService
                     cells |> Array.tryFindIndex (fun h -> this.ColumnMatches(h, column)) |> Option.map (fun idx -> column, idx))
             if pairs.Length = requiredColumns.Length then Some(Map.ofList pairs) else None)
 
-    member private this.SeasonAssertions(text: string) =
+    member private this.SeasonAssertions(text: string) : int option list =
         let text = this.NormalizeText(text)
-        let seasons = ResizeArray<int>()
-        for m in Regex.Matches(text, @"(?<!\d)(\d{4})\s*[-/]\s*(\d{2}|\d{4})(?!\d)") do
-            let first = Int32.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)
-            let secondText = m.Groups[2].Value
-            let ending =
-                if secondText.Length = 2 then
-                    let century = (first / 100) * 100
-                    let candidate = century + Int32.Parse(secondText, CultureInfo.InvariantCulture)
-                    if candidate < first then candidate + 100 else candidate
-                else Int32.Parse(secondText, CultureInfo.InvariantCulture)
-            seasons.Add(ending)
-        for m in Regex.Matches(text, @"(?<!\d)(\d{4})\s+NHL\s+Postseason(?!\d)", RegexOptions.IgnoreCase) do
-            seasons.Add(Int32.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture))
-        seasons |> Seq.toList
+        let year (group: Group) =
+            match Int32.TryParse(group.Value, NumberStyles.None, CultureInfo.InvariantCulture) with
+            | true, value -> Some value
+            | _ -> None
+        [ for m in Regex.Matches(text, @"(?<!\d)(\d{4})\s*[-/]\s*(\d{2}|\d{4})(?!\d)") do
+              match year m.Groups[1], year m.Groups[2] with
+              | Some first, Some second when m.Groups[2].Length = 2 ->
+                  let candidate = (first / 100) * 100 + second
+                  Some(if candidate < first then candidate + 100 else candidate)
+              | Some _, ending -> ending
+              | None, _ -> None
+          for m in Regex.Matches(text, @"(?<!\d)(\d{4})\s+NHL\s+Postseason(?!\d)", RegexOptions.IgnoreCase) do
+              year m.Groups[1] ]
 
     member private this.SeasonMatches(season: int, document: IDocument) =
         let assertedSeasons =
             document.QuerySelectorAll("h1,h2,title,caption,[data-nailbiter-source-season-title]")
             |> Seq.collect (fun element -> this.SeasonAssertions(element.TextContent))
             |> Seq.toList
-        not assertedSeasons.IsEmpty && assertedSeasons |> List.forall ((=) season)
+        not assertedSeasons.IsEmpty && assertedSeasons |> List.forall ((=) (Some season))
 
     member private this.ParseNhlTeamRowsAsync(html: string, season: int, requiredColumns: string list, requireWildCards: bool, missingReason: string, ct: CancellationToken) : Task<Result<((string * string * Map<string, string>) list * bool), string>> = task {
         let context = BrowsingContext.New(Configuration.Default)
