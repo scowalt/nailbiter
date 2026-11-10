@@ -101,14 +101,22 @@ host and handing it to Docker does not help either. The selection is released
 before Docker binds it, so a parallel test or another container can take it in
 between (issue #83). `IsolatedPostgreSql` in `backend.tests` uses the same range.
 
-Ryuk still uses one host-OS-selected dual-stack port through the public
-`ResourceReaperPublicHostPort` callback: although obsolete, the
+Ryuk gets its host port through the public `ResourceReaperPublicHostPort`
+callback: although obsolete, the
 [pinned 4.15.0 constructor](https://github.com/testcontainers/testcontainers-dotnet/blob/4.15.0/src/Testcontainers/Containers/ResourceReaper.cs)
 still invokes it in `WithPortBinding`; actual container bindings were runtime-verified.
 The callback returns a single port, so Ryuk cannot use a Docker-allocated range.
-Its selection runs once per process, before any PostgreSQL container exists, and
-the suite's PostgreSQL containers no longer allocate from the OS range.
-Only this obsolete assignment is warning-suppressed; its pinned-version
+`DisposableHostPorts.SelectFree` probes the same 61000-65535 range instead. It
+starts at a random port and returns the first one it can bind with a dual-stack
+socket. The port is released before Docker binds it, but Linux with its default
+ephemeral range never assigns ports in that range, so only Docker allocating it
+to another container in the gap, or a process that binds it by number, can take
+it (issue #102). The random start makes it unlikely that concurrent test
+processes choose the same port.
+`DisposableHostPorts.cs` lives in `backend.tests` and this fixture compiles it
+through a linked `Compile` item, so both use one selection and one range.
+[The Ryuk stress probe](../../docs/testing/ryuk-host-port-stress.md) measures
+the race. Only this obsolete assignment is warning-suppressed; its pinned-version
 rationale stays here in Markdown, not source comments. Revalidate this behavior
 on any Testcontainers upgrade.
 

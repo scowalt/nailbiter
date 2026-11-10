@@ -7,6 +7,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../backend.tests/DisposableHostPorts.cs" Link="DisposableHostPorts.cs" />
     <Content Include="../backend.tests/Fixtures/ProHype/mlb-pregame-401907973.json" Link="Fixtures/ProHype/mlb-pregame-401907973.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../backend/Migrations/034_PlayoffSeriesObservation.sql" Link="Migrations/034_PlayoffSeriesObservation.sql" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../backend/Migrations/035_ProHypeLifecycle.sql" Link="Migrations/035_ProHypeLifecycle.sql" CopyToOutputDirectory="PreserveNewest" />
