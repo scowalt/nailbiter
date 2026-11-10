@@ -309,12 +309,20 @@ type PowerRankingsGuruService [<ActivatorUtilitiesConstructor>]
                     let! _ = invalidationDb.SaveChangesAsync(ct)
 
                     if not complete then
-                        logger.LogWarning(
-                            "Incomplete PowerRankingsGuru {Sport} rankings rejected: {Parsed} rows parsed for {Expected} teams",
-                            sport,
-                            teams.Count,
-                            expected
-                        )
+                        if distinctTeams < teams.Count then
+                            logger.LogWarning(
+                                "PowerRankingsGuru {Sport} rankings rejected: {Parsed} rows name only {Distinct} distinct teams",
+                                sport,
+                                teams.Count,
+                                distinctTeams
+                            )
+                        else
+                            logger.LogWarning(
+                                "PowerRankingsGuru {Sport} rankings rejected: {Parsed} rows parsed for {Expected} teams",
+                                sport,
+                                teams.Count,
+                                expected
+                            )
 
                         return 0
                     else
