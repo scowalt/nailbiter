@@ -136,7 +136,9 @@ let ``Every page shows the upper bound`` page = task {
 [<InlineData("0.0200", 0.01, "<2%")>]
 [<InlineData("0.0450", 0.0225, "<5%")>]
 [<InlineData("0.0500", 0.025, "<5%")>]
-let ``Asks up to five cents round the bound up to a whole percent`` (ask: string) (expected: float) (display: string) = task {
+[<InlineData("0.1100", 0.055, "<11%")>]
+[<InlineData("0.2500", 0.125, "<25%")>]
+let ``Asks within the spread limit round the bound up to a whole percent`` (ask: string) (expected: float) (display: string) = task {
     use h = new Harness()
     let root = payload ()
     (noBuyers root "KC")["yes_ask_dollars"] <- JsonValue.Create(ask)
@@ -147,8 +149,8 @@ let ``Asks up to five cents round the bound up to a whole percent`` (ask: string
 }
 
 [<Theory>]
-[<InlineData("yes_ask_dollars", "0.0501")>]
-[<InlineData("yes_ask_dollars", "0.06")>]
+[<InlineData("yes_ask_dollars", "0.2501")>]
+[<InlineData("yes_ask_dollars", "0.30")>]
 [<InlineData("yes_ask_dollars", "broken")>]
 [<InlineData("yes_ask_dollars", null)>]
 [<InlineData("yes_ask_size_fp", "0")>]
@@ -176,10 +178,10 @@ let ``Wider missing and unsafe quotes stay unavailable`` (field: string) (value:
 }
 
 [<Fact>]
-let ``A no-buyer ask above the cap keeps its insufficient depth reason`` () = task {
+let ``A market with no orders on either side keeps its insufficient depth reason`` () = task {
     use h = new Harness()
     let root = payload ()
-    (noBuyers root "KC")["yes_ask_dollars"] <- JsonValue.Create("0.0600")
+    (noBuyers root "KC")["yes_ask_size_fp"] <- JsonValue.Create("0.00")
     let! _ = h.Refresh(root)
     use scope = h.Provider.CreateScope()
     let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
@@ -187,7 +189,7 @@ let ``A no-buyer ask above the cap keeps its insufficient depth reason`` () = ta
     Assert.False(row.PlayoffProbability.HasValue)
     let evidence = PlayoffQuoteEvidence.Parse(row.PlayoffEvidenceJson)
     Assert.Equal("insufficient_depth", evidence.ReasonCode)
-    Assert.Equal(Nullable 0.06M, evidence.Ask)
+    Assert.Equal(Nullable 0.04M, evidence.Ask)
 }
 
 [<Theory>]

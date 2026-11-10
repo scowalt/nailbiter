@@ -80,9 +80,9 @@ There is no minimum trading-volume threshold. A market can pass these rules desp
 
 An extreme one-sided market can also supply an estimate, with the same identity, status, closing-time, and price checks.
 A YES bid of at least 99 cents with positive order size permits an empty ask at one dollar.
-A YES ask of at most five cents with positive order size permits an empty bid at zero dollars. The user widened this from one cent on 2026-11-08 after quiet NFL and NHL markets with 2–6 cent asks and no buyers showed as unavailable; the cap is `QualificationQuotePolicy.maxEmptyBidAsk`.
+A YES ask with positive order size permits an empty bid at zero dollars when the ask is within the 25-point spread limit, so the ask is at most 25 cents. The user widened this from one cent to five cents on 2026-11-08 after quiet NFL and NHL markets with 2–6 cent asks and no buyers showed as unavailable. On 2026-11-09 Vancouver's NHL market (no buyers, 11-cent ask) still showed as unavailable, so the separate five-cent cap was removed: an empty bid at zero is held to the same spread limit as a two-sided quote, and its midpoint has the same worst-case error.
 The empty side must explicitly report zero order size. Missing or malformed prices and sizes do not count as an empty side.
-Ordinary one-sided quotes, markets with no orders on either side, and last trades remain unavailable. Missing markets also remain unavailable except for the explicit college no-market assumption below.
+Empty-bid quotes with an ask above 25 cents (`wide_spread`), empty-ask quotes with a bid below 99 cents, markets with no orders on either side, and last trades remain unavailable. Missing markets also remain unavailable except for the explicit college no-market assumption below.
 
 For these one-sided quotes, the importer stores the midpoint between the populated quote and the zero-or-one endpoint for scoring.
 A 99-cent bid becomes an internal estimate of 99.5%. A four-cent ask becomes an internal estimate of 2%.

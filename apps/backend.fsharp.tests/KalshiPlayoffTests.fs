@@ -306,7 +306,7 @@ let ``Only populated extreme side is needed for a nonfinal estimate`` bid ask bi
 
 [<Theory>]
 [<InlineData("ATL", "yes_bid_dollars", "0.9899")>]
-[<InlineData("CIN", "yes_ask_dollars", "0.0501")>]
+[<InlineData("CIN", "yes_ask_dollars", "0.2501")>]
 [<InlineData("ATL", "yes_ask_dollars", "0.9990")>]
 [<InlineData("CIN", "yes_bid_dollars", "0.0010")>]
 [<InlineData("ATL", "yes_bid_size_fp", "0.00")>]

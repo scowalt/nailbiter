@@ -9,8 +9,6 @@ module QualificationQuotePolicy =
         | true, value -> Some value
         | _ -> None
 
-    let maxEmptyBidAsk = 0.05M
-
     let evaluate bid ask bidSize askSize =
         match bid, ask, bidSize, askSize with
         | Some bid, Some ask, Some bidSize, Some askSize ->
@@ -19,7 +17,7 @@ module QualificationQuotePolicy =
             else
                 let twoSided = bidSize > 0M && askSize > 0M
                 let highBound = bid >= 0.99M && bidSize > 0M && ask = 1M && askSize = 0M
-                let lowBound = ask <= maxEmptyBidAsk && askSize > 0M && bid = 0M && bidSize = 0M
+                let lowBound = askSize > 0M && bid = 0M && bidSize = 0M
                 if twoSided || highBound || lowBound then Ok ((bid + ask) / 2M)
                 else Error "insufficient_depth"
         | _ -> Error "malformed_quote"
