@@ -78,9 +78,10 @@ def main():
     parser.add_argument("--filter", default=DEFAULT_FILTER, help="dotnet test --filter expression")
     parser.add_argument("--out", type=Path, help="directory for logs and TSV results (default: a new temp dir)")
     args = parser.parse_args()
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
 
     repo = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True).stdout.strip()
-    out = args.out or Path(tempfile.mkdtemp(prefix="nailbiter-listing-timing-results-"))
+    out = (args.out or Path(tempfile.mkdtemp(prefix="nailbiter-listing-timing-results-"))).resolve()
     out.mkdir(parents=True, exist_ok=True)
     work = Path(tempfile.mkdtemp(prefix="nailbiter-listing-timing-trees-"))
     sides = {"before": args.before, "after": args.after}
