@@ -7,7 +7,8 @@ open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 
-type NascarBackgroundService(serviceProvider: IServiceProvider, logger: ILogger<NascarBackgroundService>) =
+type NascarBackgroundService
+    (serviceProvider: IServiceProvider, logger: ILogger<NascarBackgroundService>, timeProvider: TimeProvider) =
     inherit BackgroundService()
 
     let pollInterval = TimeSpan.FromSeconds(30.0)
@@ -15,7 +16,7 @@ type NascarBackgroundService(serviceProvider: IServiceProvider, logger: ILogger<
     override _.ExecuteAsync(stoppingToken: CancellationToken) =
         task {
             logger.LogInformation("NASCAR background service starting (interval: {Interval}s)", pollInterval.TotalSeconds)
-            do! Task.Delay(TimeSpan.FromSeconds(10.0), stoppingToken)
+            do! Task.Delay(TimeSpan.FromSeconds(10.0), timeProvider, stoppingToken)
 
             while not stoppingToken.IsCancellationRequested do
                 try
@@ -23,7 +24,7 @@ type NascarBackgroundService(serviceProvider: IServiceProvider, logger: ILogger<
                     let nascarService = scope.ServiceProvider.GetRequiredService<NascarDataService>()
                     let liveDataService = scope.ServiceProvider.GetRequiredService<NascarLiveDataService>()
 
-                    let year = DateTime.UtcNow.Year
+                    let year = timeProvider.GetUtcNow().Year
                     let! _ = nascarService.RefreshScheduleAsync(year, stoppingToken)
                     let! _ = nascarService.RefreshRaceResultsAsync(year, stoppingToken)
                     let! _ = nascarService.RefreshStartingGridAsync(year, stoppingToken)
@@ -33,5 +34,5 @@ type NascarBackgroundService(serviceProvider: IServiceProvider, logger: ILogger<
                 | ex ->
                     logger.LogError(ex, "Error during NASCAR schedule refresh cycle")
 
-                do! Task.Delay(pollInterval, stoppingToken)
+                do! Task.Delay(pollInterval, timeProvider, stoppingToken)
         }
