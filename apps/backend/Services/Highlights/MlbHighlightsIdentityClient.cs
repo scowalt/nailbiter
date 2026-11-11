@@ -34,50 +34,51 @@ public sealed class MlbHighlightsIdentityClient(IHttpClientFactory clients, Time
         if (game.Sport != "mlb" || game.Status != "final") return new(null, null, true, "NotCompletedMlb");
         try
         {
-            var header = (await ReadAsync($"https://site.web.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event={Uri.EscapeDataString(game.Id)}", cancellationToken)).GetProperty("header");
-            var competitions = header.GetProperty("competitions");
-            if (header.GetProperty("id").GetString() != game.Id || competitions.GetArrayLength() != 1)
+            var header = Get(await ReadAsync($"https://site.web.api.espn.com/apis/site/v2/sports/baseball/mlb/summary?event={Uri.EscapeDataString(game.Id)}", cancellationToken), "header");
+            var competitions = Get(header, "competitions");
+            if (Value(header, "id") != game.Id || Length(competitions) != 1)
                 return new(null, null, true, "ConflictingEvent");
             var competition = competitions[0];
-            var status = Status(competition.GetProperty("status").GetProperty("type"));
+            var status = Status(Get(Get(competition, "status"), "type"));
             var observed = time.GetUtcNow().UtcDateTime;
-            var completion = new MlbCompletionEvidence(game.Id, competition.GetProperty("id").GetString(),
-                header.TryGetProperty("status", out var headerStatus) ? Status(headerStatus.GetProperty("type")) : status, status, observed);
+            var completion = new MlbCompletionEvidence(game.Id, Value(competition, "id"),
+                header.TryGetProperty("status", out var headerStatus) ? Status(Get(headerStatus, "type")) : status, status, observed);
             if (!completion.ConfirmsCompletion(game.Id)) return new(null, completion, true, "NotActuallyCompleted");
             var home = Teams.SingleOrDefault(t => t.Abbreviation == game.HomeTeamAbbreviation);
             var away = Teams.SingleOrDefault(t => t.Abbreviation == game.AwayTeamAbbreviation);
             if (home is null || away is null || home == away) return new(null, completion, true, "UnknownTeams");
-            var competitors = competition.GetProperty("competitors").EnumerateArray().ToArray();
+            var competitors = Items(competition, "competitors");
             if (competitors.Length != 2 || !Matches(competitors, "home", home, game.HomeTeamId) || !Matches(competitors, "away", away, game.AwayTeamId))
                 return new(null, completion, true, "ConflictingTeams");
-            var season = header.GetProperty("season").GetProperty("year").GetInt32();
-            var start = DateTimeOffset.Parse(Required(competition, "date"), CultureInfo.InvariantCulture);
+            var season = Integer(Get(header, "season"), "year");
+            var start = Instant(competition, "date");
             if (game.SeasonYear != season || start.UtcDateTime != game.ScheduledStart)
                 return new(null, completion, true, "ConflictingSeasonOrStart");
             var from = start.UtcDateTime.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             var to = start.UtcDateTime.AddDays(1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             var schedule = await ReadAsync($"https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate={from}&endDate={to}", cancellationToken);
-            var rows = schedule.GetProperty("dates").EnumerateArray().SelectMany(d => d.GetProperty("games").EnumerateArray()).ToArray();
-            var pair = rows.Where(r => r.GetProperty("teams").GetProperty("home").GetProperty("team").GetProperty("id").GetInt32() == home.MlbId
-                && r.GetProperty("teams").GetProperty("away").GetProperty("team").GetProperty("id").GetInt32() == away.MlbId
+            var rows = Items(schedule, "dates").SelectMany(d => Items(d, "games")).ToArray();
+            var pair = rows.Where(r => Integer(Get(Get(Get(r, "teams"), "home"), "team"), "id") == home.MlbId
+                && Integer(Get(Get(Get(r, "teams"), "away"), "team"), "id") == away.MlbId
                 && Year(r) == season).ToArray();
-            var exact = pair.Where(r => DateTimeOffset.Parse(Required(r, "gameDate"), CultureInfo.InvariantCulture) == start).ToArray();
+            var exact = pair.Where(r => Instant(r, "gameDate") == start).ToArray();
             if (exact.Length != 1) return new(null, completion, true, "AmbiguousSchedule");
             var row = exact[0];
-            var mlbStatus = row.GetProperty("status");
-            if (mlbStatus.GetProperty("abstractGameState").GetString() != "Final" || mlbStatus.GetProperty("detailedState").GetString() != "Final"
-                || mlbStatus.GetProperty("codedGameState").GetString() != "F") return new(null, completion, true, "MlbNotFinal");
-            var date = DateOnly.ParseExact(Required(row, "officialDate"), "yyyy-MM-dd", CultureInfo.InvariantCulture);
-            var pk = row.GetProperty("gamePk").GetInt64();
-            var doubleHeader = row.GetProperty("doubleHeader").GetString();
-            var number = row.GetProperty("gameNumber").GetInt32();
+            var mlbStatus = Get(row, "status");
+            if (Value(mlbStatus, "abstractGameState") != "Final" || Value(mlbStatus, "detailedState") != "Final"
+                || Value(mlbStatus, "codedGameState") != "F") return new(null, completion, true, "MlbNotFinal");
+            var date = DateOnly.TryParseExact(Required(row, "officialDate"), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var official)
+                ? official : throw new JsonException();
+            var pk = Get(row, "gamePk") is { ValueKind: JsonValueKind.Number } gamePk && gamePk.TryGetInt64(out var parsedPk) ? parsedPk : throw new JsonException();
+            var doubleHeader = Value(row, "doubleHeader");
+            var number = Integer(row, "gameNumber");
             if (pk <= 0 || date.Year != season || doubleHeader is not ("N" or "Y" or "S") || number < 1)
                 return new(null, completion, true, "MissingContestContext");
             if (game.MlbGamePk is not null && game.MlbGamePk != pk) return new(null, completion, true, "IdentityChanged");
             return new(new(pk, date, season, home.MlbId, away.MlbId, doubleHeader, number,
                 Text(row, "rescheduledFromDate"), Text(row, "rescheduledFrom"), Text(row, "resumedFrom"),
                 Text(row, "resumedFromDate"), Text(row, "rescheduledToDate"), Text(row, "resumeDate"), start.UtcDateTime,
-                pair.Count(r => r.GetProperty("officialDate").GetString() == date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)), observed), completion, true, "Verified");
+                pair.Count(r => Value(r, "officialDate") == date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)), observed), completion, true, "Verified");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (HttpRequestException e) when (!ProviderFailure.Is(e))
@@ -99,19 +100,36 @@ public sealed class MlbHighlightsIdentityClient(IHttpClientFactory clients, Time
         }
     }
 
-    private static string Required(JsonElement value, string name) => value.GetProperty(name).GetString() ?? throw new JsonException();
+    private static JsonElement Get(JsonElement value, string name) =>
+        value.ValueKind == JsonValueKind.Object && value.TryGetProperty(name, out var field) ? field : throw new JsonException();
+    private static int Length(JsonElement value) => value.ValueKind == JsonValueKind.Array ? value.GetArrayLength() : throw new JsonException();
+    private static JsonElement[] Items(JsonElement value, string name) =>
+        Get(value, name) is { ValueKind: JsonValueKind.Array } array ? array.EnumerateArray().ToArray() : throw new JsonException();
+    private static string? Value(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString(),
+        JsonValueKind.Null => null,
+        _ => throw new JsonException()
+    };
+    private static string? Value(JsonElement value, string name) => Value(Get(value, name));
+    private static int Integer(JsonElement value, string name) =>
+        Get(value, name) is { ValueKind: JsonValueKind.Number } number && number.TryGetInt32(out var parsed) ? parsed : throw new JsonException();
+    private static DateTimeOffset Instant(JsonElement value, string name) =>
+        DateTimeOffset.TryParse(Required(value, name), CultureInfo.InvariantCulture, DateTimeStyles.None, out var instant) ? instant : throw new JsonException();
+    private static string Required(JsonElement value, string name) => Value(value, name) ?? throw new JsonException();
     private static int Year(JsonElement row) =>
         int.TryParse(Required(row, "season"), NumberStyles.None, CultureInfo.InvariantCulture, out var year) ? year : throw new JsonException();
-    private static string? Text(JsonElement value, string name) => value.TryGetProperty(name, out var field) && field.ValueKind != JsonValueKind.Null ? field.GetString() : null;
+    private static string? Text(JsonElement value, string name) =>
+        value.ValueKind != JsonValueKind.Object ? throw new JsonException() : value.TryGetProperty(name, out var field) ? Value(field) : null;
     private static EspnCompletionStatus Status(JsonElement value) => new(Text(value, "name"), Text(value, "state"),
         value.TryGetProperty("completed", out var completed) && completed.ValueKind is JsonValueKind.True or JsonValueKind.False ? completed.GetBoolean() : null,
         Text(value, "description"), Text(value, "detail"), Text(value, "shortDetail"));
     private static bool Matches(JsonElement[] competitors, string side, Team team, string? storedId)
     {
-        var sideRows = competitors.Where(c => c.GetProperty("homeAway").GetString() == side).ToArray();
+        var sideRows = competitors.Where(c => Value(c, "homeAway") == side).ToArray();
         if (sideRows.Length != 1 || storedId is not null && storedId != team.EspnId) return false;
-        var evidence = sideRows[0].GetProperty("team");
-        return evidence.GetProperty("id").GetString() == team.EspnId && evidence.GetProperty("abbreviation").GetString() == team.Abbreviation;
+        var evidence = Get(sideRows[0], "team");
+        return Value(evidence, "id") == team.EspnId && Value(evidence, "abbreviation") == team.Abbreviation;
     }
 
     private async Task<JsonElement> ReadAsync(string uri, CancellationToken cancellationToken)
