@@ -44,7 +44,7 @@ type internal MoneyPuckHttpClient(httpClient: HttpClient, timeProvider: TimeProv
                 body.Write(buffer, 0, count)
                 if body.Length > int64 maxBytes then finished <- true
         let bytes = body.ToArray()
-        if Regex.IsMatch(Encoding.UTF8.GetString(bytes), @"cf-chl-|captcha|verify (?:that )?you are human|checking your browser|just a moment|access denied|challenge-platform|enable javascript and cookies", RegexOptions.IgnoreCase) then
+        if Regex.IsMatch(Encoding.UTF8.GetString(bytes), @"cf-chl-|captcha|verify (?:that )?you are human|checking your browser|just a moment|access denied|_cf_chl_opt|enable javascript and cookies", RegexOptions.IgnoreCase) then
             latchDenial ()
             raise (HttpRequestException("MoneyPuck challenge; collection paused until refusal backoff expires"))
         if body.Length > int64 maxBytes || (response.Content.Headers.ContentLength.HasValue && response.Content.Headers.ContentLength.Value > int64 maxBytes) then
