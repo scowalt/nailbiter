@@ -759,4 +759,42 @@ type PlayoffStatusCollectionBackgroundService
     ) =
     inherit Microsoft.Extensions.Hosting.BackgroundService()
 
-    override _.ExecuteAsync(_: CancellationToken) = Task.CompletedTask
+    static member Interval = TimeSpan.FromHours(24.0)
+    static member Poll = TimeSpan.FromHours(1.0)
+
+    member private _.CollectAsync(league: string, ct: CancellationToken) : Task = task {
+        use scope = serviceProvider.CreateScope()
+        let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
+        let now = timeProvider.GetUtcNow().UtcDateTime
+        let next = now.Add(PlayoffStatusCollectionBackgroundService.Interval)
+        let! claimed =
+            db.Database.ExecuteSqlInterpolatedAsync(
+                $"""INSERT INTO playoffstatus_collection_state (league, next_attempt_at_ticks) VALUES ({league}, {next.Ticks})
+                ON CONFLICT (league) DO UPDATE SET next_attempt_at_ticks = EXCLUDED.next_attempt_at_ticks
+                WHERE playoffstatus_collection_state.next_attempt_at_ticks <= {now.Ticks}""", ct)
+        if claimed = 1 then
+            let service = scope.ServiceProvider.GetRequiredService<PlayoffStatusService>()
+            let! _ =
+                match league with
+                | "nfl" -> service.RefreshNflRatingsAsync(ct)
+                | "nba" -> service.RefreshNbaRatingsAsync(ct)
+                | _ -> service.RefreshMlbRatingsAsync(ct)
+            ()
+    }
+
+    override this.ExecuteAsync(stoppingToken: CancellationToken) = task {
+        if not options.Value.PlayoffStatusCollectionEnabled then
+            logger.LogInformation("PlayoffStatus collection is disabled")
+        else
+            try
+                while not stoppingToken.IsCancellationRequested do
+                    for league in [ "nfl"; "nba"; "mlb" ] do
+                        try
+                            do! this.CollectAsync(league, stoppingToken)
+                        with
+                        | :? OperationCanceledException when stoppingToken.IsCancellationRequested ->
+                            raise (OperationCanceledException(stoppingToken))
+                        | ex -> logger.LogError(ex, "PlayoffStatus {League} collection failed", league)
+                    do! Task.Delay(PlayoffStatusCollectionBackgroundService.Poll, timeProvider, stoppingToken)
+            with :? OperationCanceledException when stoppingToken.IsCancellationRequested -> ()
+    }
