@@ -1,6 +1,5 @@
 using System.Net;
 using System.Text;
-using System.Text.Json;
 using backend.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
@@ -119,7 +118,7 @@ public sealed class MoneyPuckQualificationHostTests
     }
 
     [Fact]
-    public async Task Actual_background_and_manual_HTTP_share_gate_and_cooldown_while_pages_never_collect()
+    public async Task Actual_background_and_a_concurrent_caller_share_gate_and_cooldown_while_pages_never_collect()
     {
         await using var h = new MoneyPuckQualificationHarness();
         await h.StartAsync(configureServices: services => services.ConfigureAll<HttpClientFactoryOptions>(options => options.HttpMessageHandlerBuilderActions.Add(builder =>
@@ -139,11 +138,9 @@ public sealed class MoneyPuckQualificationHostTests
         try
         {
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            var manual = await h.Client.PostAsync("/api/ratings/refresh", null);
-            Assert.True(manual.IsSuccessStatusCode, await manual.Content.ReadAsStringAsync());
-            using var result = JsonDocument.Parse(await manual.Content.ReadAsStringAsync());
-            Assert.Equal(0, result.RootElement.GetProperty("nhl_moneypuckQualification").GetInt32());
-            Assert.Equal(0, result.RootElement.GetProperty("nhl_powerRankings").GetInt32());
+            var concurrent = await h.App.Services.GetRequiredService<MoneyPuckService>().RefreshNhlAsync(CancellationToken.None);
+            Assert.Equal(0, concurrent.Qualification);
+            Assert.Equal(0, concurrent.Rankings);
             Assert.Single(h.Handler.Requests);
             release.SetResult();
             for (var i = 0; i < 100 && (await h.RowsAsync("moneypuck")).Count != 32; i++) await Task.Delay(50);
@@ -158,11 +155,9 @@ public sealed class MoneyPuckQualificationHostTests
         Assert.Equal(0, await h.Service.RefreshNhlRatingsAsync(default));
         Assert.Equal(9, h.Handler.Requests.Count);
         h.Clock.Now = h.Clock.Now.AddTicks(1);
-        var response = await h.Client.PostAsync("/api/ratings/refresh", null);
-        response.EnsureSuccessStatusCode();
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.Equal(32, body.RootElement.GetProperty("nhl_moneypuckQualification").GetInt32());
-        Assert.Equal(32, body.RootElement.GetProperty("nhl_powerRankings").GetInt32());
+        var nextDay = await h.App.Services.GetRequiredService<MoneyPuckService>().RefreshNhlAsync(CancellationToken.None);
+        Assert.Equal(32, nextDay.Qualification);
+        Assert.Equal(32, nextDay.Rankings);
         Assert.Equal(18, h.Handler.Requests.Count);
         foreach (var path in new[] { "/", "/nhl?date=2026-10-11", "/game/missing-synthetic" })
             await h.Client.GetAsync(path);

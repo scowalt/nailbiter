@@ -4,13 +4,13 @@ using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using backend.Data;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Http;
+using backend.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Npgsql;
 using Sentry;
 using Sentry.AspNetCore;
@@ -23,59 +23,58 @@ namespace backend.tests;
 [Collection(nameof(SentryGlobalHubCollection))]
 public sealed class RatingsRefreshReportingTests
 {
-    private const string Path = "/api/ratings/refresh";
+    private const string WorkerFailure = "Kalshi playoff refresh failed";
 
     [Fact]
-    public async Task Failed_step_is_reported_once_at_error_and_the_response_keeps_its_shape()
+    public async Task Failed_refresh_is_reported_once_at_error_and_the_worker_runs_the_next_cycle()
     {
         await using var app = await RefreshApp.StartAsync();
         await app.ExecuteSqlAsync("DROP TABLE college_teams");
 
-        var response = await app.Client.PostAsync(Path, null);
+        await app.Worker.StartAsync(CancellationToken.None);
+        var first = Assert.Single(await app.WaitForSentAsync(1));
+        app.Time.Advance(PlayoffRatingPolicy.refreshInterval);
+        var sent = await app.WaitForSentAsync(2);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.StartsWith("error: ", body.RootElement.GetProperty("kalshiPlayoffs").GetString());
-        Assert.Equal(0, body.RootElement.GetProperty("nfl_powerRankings").GetInt32());
-        var reported = Assert.Single(app.Events, e => e.Level == SentryLevel.Error && e.Message?.Contains("kalshiPlayoffs") == true);
-        var failure = Assert.IsType<PostgresException>(reported.Exception);
-        Assert.Equal(PostgresErrorCodes.UndefinedTable, failure.SqlState);
+        Assert.Equal(("error", WorkerFailure), (first.Level, first.Message));
+        Assert.Equal(2, sent.Count);
+        Assert.All(sent, e => Assert.Equal(("error", WorkerFailure), (e.Level, e.Message)));
+        var reported = app.Events.Where(e => e.Message == WorkerFailure).ToArray();
+        Assert.Equal(2, reported.Length);
+        Assert.All(reported, e => Assert.Equal(PostgresErrorCodes.UndefinedTable, Assert.IsType<PostgresException>(e.Exception).SqlState));
     }
 
     [Fact]
-    public async Task Provider_timeout_in_a_step_is_a_step_error_while_the_client_stays_connected()
+    public async Task Provider_timeout_in_a_refresh_is_sent_once_at_error_and_not_treated_as_shutdown()
     {
-        await using var app = await RefreshApp.StartAsync(db => db.AddInterceptors(new ProviderTimeoutOnCollegeTeamsRead()));
+        var reads = new ProviderTimeoutThenHoldOnCollegeTeamsRead();
+        await using var app = await RefreshApp.StartAsync(db => db.AddInterceptors(reads));
 
-        var response = await app.Client.PostAsync(Path, null);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var steps = body.RootElement.EnumerateObject().ToArray();
-        Assert.Equal("kalshiPlayoffs", steps[0].Name);
-        Assert.StartsWith("error: The request was canceled due to the configured HttpClient.Timeout", steps[0].Value.GetString());
-        Assert.Equal("mlb_playoffStatus", steps[^1].Name);
-        Assert.All(steps[1..], step => Assert.Equal(JsonValueKind.Number, step.Value.ValueKind));
+        await app.Worker.StartAsync(CancellationToken.None);
+        await reads.FirstRead.WaitAsync(TimeSpan.FromSeconds(60));
+        app.Time.Advance(PlayoffRatingPolicy.refreshInterval);
+        await reads.NextCycleRead.WaitAsync(TimeSpan.FromSeconds(60));
         var sent = await app.SentEventsAsync();
-        var reported = Assert.Single(sent, e => e.Level == "error" && e.ExceptionTypes.Contains(typeof(TaskCanceledException).FullName));
-        Assert.Equal("Ratings refresh step kalshiPlayoffs failed", reported.Message);
+
+        var reported = Assert.Single(sent);
+        Assert.Equal(("error", WorkerFailure), (reported.Level, reported.Message));
+        Assert.Contains(typeof(TaskCanceledException).FullName, reported.ExceptionTypes);
+        Assert.False(app.Worker.ExecuteTask!.IsCompleted);
     }
 
     [Fact]
-    public async Task Client_abort_during_a_step_stops_the_refresh_without_an_error_event()
+    public async Task Host_stop_during_a_refresh_ends_the_worker_without_an_error_event()
     {
         await using var app = await RefreshApp.StartAsync();
         await using var teamsLock = await app.LockCollegeTeamsAsync();
 
-        using var abort = new CancellationTokenSource();
-        var request = app.Client.PostAsync(Path, null, abort.Token);
+        await app.Worker.StartAsync(CancellationToken.None);
         await teamsLock.WaitForBlockedQueryAsync();
-        abort.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => request);
-        var status = await app.RequestCompleted.WaitAsync(TimeSpan.FromSeconds(30));
+        await app.Worker.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
 
-        Assert.Equal(StatusCodes.Status499ClientClosedRequest, status);
+        Assert.True(app.Worker.ExecuteTask!.IsCompletedSuccessfully);
         Assert.DoesNotContain(app.Events, e => e.Level >= SentryLevel.Error);
+        Assert.Empty(await app.SentEventsAsync());
     }
 
     private sealed record ReportedEvent(SentryLevel? Level, string? Message, Exception? Exception);
@@ -86,12 +85,14 @@ public sealed class RatingsRefreshReportingTests
     {
         private readonly MoneyPuckQualificationHarness harness = new();
         private readonly SentryRecorder recorder = new();
-        private readonly TaskCompletionSource<int> completed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private KalshiPlayoffRefreshBackgroundService? worker;
 
-        public HttpClient Client => harness.Client;
         public EmptyProviders Providers { get; } = new();
         public IEnumerable<ReportedEvent> Events => recorder.Events;
-        public Task<int> RequestCompleted => completed.Task;
+        public FakeTimeProvider Time { get; } = new(new DateTimeOffset(2026, 10, 11, 18, 0, 0, TimeSpan.Zero));
+
+        public KalshiPlayoffRefreshBackgroundService Worker => worker ??= new(
+            harness.App.Services, Time, harness.App.Services.GetRequiredService<ILogger<KalshiPlayoffRefreshBackgroundService>>());
 
         public static async Task<RefreshApp> StartAsync(Action<DbContextOptionsBuilder>? configureDb = null)
         {
@@ -106,7 +107,6 @@ public sealed class RatingsRefreshReportingTests
                     options.Transport = app.recorder;
                     options.AddEventProcessor(app.recorder);
                 });
-                services.Insert(0, ServiceDescriptor.Singleton<IStartupFilter>(new CompletionSignal(app.completed)));
             });
             return app;
         }
@@ -115,6 +115,18 @@ public sealed class RatingsRefreshReportingTests
         {
             await SentrySdk.FlushAsync(TimeSpan.FromSeconds(5));
             return recorder.Sent.ToArray();
+        }
+
+        public async Task<IReadOnlyCollection<SentEvent>> WaitForSentAsync(int count)
+        {
+            var deadline = Stopwatch.StartNew();
+            while (recorder.Sent.Count < count)
+            {
+                Assert.True(deadline.Elapsed < TimeSpan.FromSeconds(60), $"expected {count} sent events, saw {recorder.Sent.Count}");
+                await SentrySdk.FlushAsync(TimeSpan.FromMilliseconds(200));
+                await Task.Delay(50);
+            }
+            return await SentEventsAsync();
         }
 
         public async Task ExecuteSqlAsync(string sql)
@@ -137,6 +149,11 @@ public sealed class RatingsRefreshReportingTests
 
         public async ValueTask DisposeAsync()
         {
+            if (worker is not null)
+            {
+                await worker.StopAsync(CancellationToken.None);
+                worker.Dispose();
+            }
             await harness.DisposeAsync();
             Providers.Dispose();
         }
@@ -163,17 +180,28 @@ public sealed class RatingsRefreshReportingTests
         }
     }
 
-    private sealed class ProviderTimeoutOnCollegeTeamsRead : DbCommandInterceptor
+    private sealed class ProviderTimeoutThenHoldOnCollegeTeamsRead : DbCommandInterceptor
     {
+        private readonly TaskCompletionSource firstRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource nextCycleRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int reads;
+
+        public Task FirstRead => firstRead.Task;
+        public Task NextCycleRead => nextCycleRead.Task;
+
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
             DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
-            if (command.CommandText.Contains("college_teams", StringComparison.Ordinal))
+            if (!command.CommandText.Contains("college_teams", StringComparison.Ordinal)) return result;
+            if (Interlocked.Increment(ref reads) == 1)
             {
+                firstRead.SetResult();
                 using var provider = new HttpClient(new HangingProvider()) { Timeout = TimeSpan.FromMilliseconds(100) };
                 await provider.GetAsync("https://provider.invalid/", cancellationToken);
             }
-            return result;
+            nextCycleRead.TrySetResult();
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            throw new UnreachableException();
         }
     }
 
@@ -195,22 +223,6 @@ public sealed class RatingsRefreshReportingTests
             Urls.Enqueue(request.RequestUri!.AbsoluteUri);
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("") });
         }
-    }
-
-    private sealed class CompletionSignal(TaskCompletionSource<int> completed) : IStartupFilter
-    {
-        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
-        {
-            app.Use(async (context, inner) =>
-            {
-                try { await inner(context); }
-                finally
-                {
-                    if (context.Request.Path == Path) completed.TrySetResult(context.Response.StatusCode);
-                }
-            });
-            next(app);
-        };
     }
 
     private sealed class SentryRecorder : ITransport, ISentryEventProcessor
