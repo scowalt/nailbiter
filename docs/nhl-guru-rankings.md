@@ -6,7 +6,7 @@ The owner selected [this single NHL rankings page](https://powerrankingsguru.com
 
 `NhlPowerRankingsGuruService.RefreshAsync` retrieves only that page, with an honest Nailbiter user agent, a 15-second timeout, no automatic retries and no redirect following. It does not fetch logos, scripts, team pages or undocumented endpoints. An access challenge or unsuccessful HTTP response stops collection.
 
-The existing ratings worker and manual refresh entrypoint delegate NHL rankings to this module. A PostgreSQL compare-and-update admits at most one attempt per 24 hours across callers, application restarts and failures. A later valid `Retry-After` extends admission. The independent `nhl_guru_refresh_state` ledger is created by additive migration `037_NhlGuruRankings.sql`; replay does not reset it. Apply that migration before running the collector. It never reads or changes MoneyPuck's admission/refusal ledger.
+The ratings worker delegates NHL rankings to this module; there is no manual HTTP refresh. A PostgreSQL compare-and-update admits at most one attempt per 24 hours across callers, application restarts and failures. A later valid `Retry-After` extends admission. The independent `nhl_guru_refresh_state` ledger is created by additive migration `037_NhlGuruRankings.sql`; replay does not reset it. Apply that migration before running the collector. It never reads or changes MoneyPuck's admission/refusal ledger.
 
 ## Validation and storage
 

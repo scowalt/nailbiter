@@ -139,7 +139,7 @@ temporary content root, and sets disabled monitoring/scraper configuration and
 the freshly created disposable connection. Late factory configuration alone is
 not sufficient for Program's early configuration/monitoring reads. Production
 workers are also removed before startup and backend HttpClient requests are denied
-(including accidental calls to manual scrape/refresh routes). Backend Sentry and
+(the backend no longer exposes manual scrape/refresh routes). Backend Sentry and
 OpenTelemetry stay off. This module makes no OAuth/model calls and has no
 TesterArmy dependencies. The next ticket separately owns runner telemetry/auth.
 
