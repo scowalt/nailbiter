@@ -12,8 +12,8 @@ let private pageContexts = None :: (Enum.GetValues<Sport>() |> Array.map Some |>
 let ``page uses one release version for local scripts`` () =
     let html = Layout.renderPage "Nailbiter" "Live games" None []
 
-    Assert.Contains("/js/nailbiter-components.js?v=2026-11-07-plain-css", html)
-    Assert.Contains("/js/live-sync.js?v=2026-11-07-plain-css", html)
+    Assert.Contains("/js/nailbiter-components.js?v=2026-11-10-snapshot-diff", html)
+    Assert.Contains("/js/live-sync.js?v=2026-11-10-snapshot-diff", html)
 
 [<Fact>]
 let ``page links the layered stylesheets in cascade order`` () =
