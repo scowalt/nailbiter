@@ -101,7 +101,7 @@ public sealed class MlbHighlightsIdentityClient(IHttpClientFactory clients, Time
         catch (Exception e)
         {
             logger.LogError(HighlightsFault.Reportable(e), "Highlights identity unavailable: {Reason}", "OperationFailure");
-            return new(null, null, true, "MalformedIdentity");
+            return new(null, null, false, "IdentityOperationFailure");
         }
     }
 
