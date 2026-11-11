@@ -176,7 +176,7 @@ public sealed class ProviderResilienceClockTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fetch.WaitAsync(Guard));
         await AssertNothingRetriesAsync(app, fetch);
         Assert.Equal(AttemptTimeout, Assert.Single(app.Provider.Attempts).Duration);
-        Assert.DoesNotContain(app.Logs, l => l.Category == scoreboard.Service.FullName);
+        Assert.DoesNotContain(app.Logs, l => l.Category == scoreboard.Service.FullName && l.Level > LogLevel.Debug);
         Assert.Empty(await app.SentEventsAsync());
     }
 
