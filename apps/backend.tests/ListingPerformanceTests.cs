@@ -14,18 +14,18 @@ using Xunit.Abstractions;
 
 namespace backend.tests;
 
-public sealed class ListingPerformanceTests : IAsyncLifetime
+public sealed class ListingPerformanceTests : IClassFixture<SharedPostgreSql>, IAsyncLifetime
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 13, 18, 0, 0, TimeSpan.Zero);
     private readonly CommandRecorder recorder = new();
     private readonly HostedGameFixture host;
     private readonly ITestOutputHelper output;
 
-    public ListingPerformanceTests(ITestOutputHelper output)
+    public ListingPerformanceTests(SharedPostgreSql server, ITestOutputHelper output)
     {
         this.output = output;
         host = new HostedGameFixture(Now, services =>
-            services.AddDbContext<ExcitementDbContext>(options => options.AddInterceptors(recorder)));
+            services.AddDbContext<ExcitementDbContext>(options => options.AddInterceptors(recorder)), server);
     }
 
     public Task InitializeAsync() => host.InitializeAsync();
