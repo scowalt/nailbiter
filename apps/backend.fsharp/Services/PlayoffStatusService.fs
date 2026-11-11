@@ -749,3 +749,14 @@ type PlayoffStatusNhlRefreshBackgroundService(serviceProvider: IServiceProvider,
                 logger.LogError(ex, "Error during NHL PlayoffStatus model refresh background cycle")
                 do! Task.Delay(TimeSpan.FromHours(1.0), timeProvider, stoppingToken)
     }
+
+type PlayoffStatusCollectionBackgroundService
+    (
+        serviceProvider: IServiceProvider,
+        logger: ILogger<PlayoffStatusCollectionBackgroundService>,
+        timeProvider: TimeProvider,
+        options: IOptions<PlayoffRatingsOptions>
+    ) =
+    inherit Microsoft.Extensions.Hosting.BackgroundService()
+
+    override _.ExecuteAsync(_: CancellationToken) = Task.CompletedTask

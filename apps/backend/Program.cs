@@ -212,6 +212,7 @@ if (!builder.Environment.IsDevelopment() || builder.Configuration.GetValue<bool>
     builder.Services.AddHostedService<ProCompetitionRefreshBackgroundService>();
     builder.Services.AddHostedService<KalshiPlayoffRefreshBackgroundService>();
     builder.Services.AddHostedService<PlayoffStatusNhlRefreshBackgroundService>();
+    builder.Services.AddHostedService<PlayoffStatusCollectionBackgroundService>();
     builder.Services.AddHostedService<MoneyPuckRefreshBackgroundService>();
     builder.Services.AddHostedService<NascarBackgroundService>();
     builder.Services.AddHostedService<IndyCarBackgroundService>();
