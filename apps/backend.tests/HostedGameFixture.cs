@@ -8,16 +8,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Time.Testing;
-using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace backend.tests;
 
 internal sealed class HostedGameFixture : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer database = IsolatedPostgreSql.CreateContainer();
     private readonly AppFactory entry = new();
     private readonly Action<IServiceCollection>? configureServices;
+    private TestDatabase? database;
     private WebApplicationFactory<Program>? app;
     private readonly string timingOwner = "case-" + Guid.NewGuid().ToString("N");
     private long initializedAt;
@@ -35,13 +34,14 @@ internal sealed class HostedGameFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        await FixtureTimings.MeasureAsync(timingOwner, "container", () => database.StartAsync());
+        database = await FixtureTimings.MeasureAsync(timingOwner, "container", TestDatabase.StartContainerAsync);
+        var connectionString = database.ConnectionString;
         var hostStarted = Stopwatch.GetTimestamp();
         app = entry.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
         {
             services.RemoveAll<IDbContextOptionsConfiguration<ExcitementDbContext>>();
             services.RemoveAll<DbContextOptions<ExcitementDbContext>>();
-            services.AddDbContext<ExcitementDbContext>(options => options.UseNpgsql(database.GetConnectionString()));
+            services.AddDbContext<ExcitementDbContext>(options => options.UseNpgsql(connectionString));
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
             services.AddSingleton<IHttpMessageHandlerBuilderFilter, RejectOutboundRequests>();
@@ -84,7 +84,7 @@ internal sealed class HostedGameFixture : IAsyncLifetime
         Client?.Dispose();
         if (app is not null) await app.DisposeAsync();
         await entry.DisposeAsync();
-        await database.DisposeAsync();
+        if (database is not null) await database.DisposeAsync();
         FixtureTimings.Record(timingOwner, "dispose", Stopwatch.GetElapsedTime(disposeStarted));
     }
 
