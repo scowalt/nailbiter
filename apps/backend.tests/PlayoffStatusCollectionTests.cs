@@ -88,7 +88,8 @@ public sealed class PlayoffStatusCollectionTests
     [Fact]
     public async Task Two_instances_starting_together_fetch_each_league_once()
     {
-        await using var app = await CollectorApp.StartAsync(Healthy);
+        var rendezvous = new ClaimRendezvous();
+        await using var app = await CollectorApp.StartAsync(Healthy, configureDb: db => db.AddInterceptors(rendezvous));
         await Task.WhenAll(app.StartWorkerAsync(), app.StartPeerWorkerAsync());
 
         Assert.Equal(Poll, await app.NextWaitAsync());
@@ -96,6 +97,15 @@ public sealed class PlayoffStatusCollectionTests
 
         Assert.Equal(9, app.Provider.Requests.Count);
         Assert.Equal(6, (await app.RatingsAsync()).Count);
+        Assert.Equal(3, rendezvous.Pairs);
+
+        app.Clock.Advance(Interval);
+        Assert.Equal(Poll, await app.NextWaitAsync());
+        Assert.Equal(Poll, await app.NextWaitAsync());
+
+        Assert.Equal(18, app.Provider.Requests.Count);
+        Assert.Equal(6, rendezvous.Pairs);
+        Assert.Empty(await app.SentEventsAsync());
     }
 
     [Fact]
@@ -447,6 +457,59 @@ public sealed class PlayoffStatusCollectionTests
                     hanging.TrySetResult();
                     await Task.Delay(Timeout.Infinite, cancellationToken);
                     throw new UnreachableException();
+            }
+        }
+    }
+
+    private sealed class ClaimRendezvous : DbCommandInterceptor
+    {
+        private readonly ConcurrentDictionary<string, TaskCompletionSource> waiting = new();
+        private int pairs;
+
+        public int Pairs => Volatile.Read(ref pairs);
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            await MeetAsync(command);
+            return result;
+        }
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            await MeetAsync(command);
+            return result;
+        }
+
+        public override async ValueTask<InterceptionResult<object>> ScalarExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<object> result, CancellationToken cancellationToken = default)
+        {
+            await MeetAsync(command);
+            return result;
+        }
+
+        private async Task MeetAsync(DbCommand command)
+        {
+            if (!command.CommandText.Contains("playoffstatus_collection_state", StringComparison.Ordinal)) return;
+            var league = command.Parameters.Cast<DbParameter>().Select(p => p.Value as string).FirstOrDefault(v => v is "nfl" or "nba" or "mlb");
+            if (league is null) return;
+            var arrival = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var first = waiting.GetOrAdd(league, arrival);
+            if (first != arrival)
+            {
+                waiting.TryRemove(new KeyValuePair<string, TaskCompletionSource>(league, first));
+                Interlocked.Increment(ref pairs);
+                first.TrySetResult();
+                return;
+            }
+            try
+            {
+                await arrival.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            catch (TimeoutException)
+            {
+                waiting.TryRemove(new KeyValuePair<string, TaskCompletionSource>(league, arrival));
             }
         }
     }
