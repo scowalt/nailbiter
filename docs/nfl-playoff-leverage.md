@@ -38,7 +38,7 @@ The collector supports ordinary HTTPS pages on `www.playoffstatus.com/nfl/`:
 
 ## Clocks and collection
 
-Observation age must be strictly under one hour. Schedule and team publications require actual UTC HTTP `Last-Modified`, strictly under seven days old and not future. HTTP `Date` is required, nonfuture and under one hour old. Team publication must be within ten minutes of the schedule publication, with the same visible generation/week token. Every score read rechecks current completed-result coverage.
+Observation age must be strictly under one hour. Schedule and team publications require actual UTC HTTP `Last-Modified`, strictly under seven days old and not future. HTTP `Date` is required, under one hour old and at most one minute ahead of Nailbiter's clock. The publisher's second-resolution `Date` routinely reads up to a second ahead, and rejecting it as future flipped random teams, or the whole schedule, to unavailable on each refresh. Team publication must be within ten minutes of the schedule publication, with the same visible generation/week token. Every score read rechecks current completed-result coverage.
 
 The seven-day ceiling is a bounded publication policy, not an hourly update or freshness guarantee. Re-fetching unchanged content cannot renew its publication clock or fabricate result coverage.
 
