@@ -1,0 +1,470 @@
+using System.Collections.Concurrent;
+using System.Net;
+using System.Text.Json;
+using backend.Services;
+using backend.Services.Backfill;
+using backend.Services.Espn;
+using backend.Services.EspnF1;
+using backend.Services.EspnIndyCar;
+using backend.Services.EspnNascar;
+using backend.Services.Nascar;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
+using Polly.Timeout;
+using Sentry;
+using Sentry.AspNetCore;
+using Sentry.Extensibility;
+using Sentry.Protocol.Envelopes;
+using Xunit;
+
+namespace backend.tests;
+
+[Collection(nameof(SentryGlobalHubCollection))]
+public sealed class ProviderResilienceClockTests
+{
+    private const int StandardAttempts = 4;
+    private const int HungAttemptsWithinTotal = 3;
+    private static readonly TimeSpan AttemptTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan TotalRequestTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Guard = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan Step = TimeSpan.FromMilliseconds(10);
+
+    private static readonly Dictionary<string, Fetch> Scoreboards = new()
+    {
+        ["EspnOdds"] = new(typeof(EspnOddsService), "Failed to fetch ESPN scoreboard for {Sport} on {Date}",
+            async (services, ct) => await services.GetRequiredService<EspnOddsService>().FetchScoreboardAsync("nba", "20261107", ct)),
+        ["NflBackfill"] = new(typeof(NflBackfillService), "Failed to fetch ESPN scoreboard for {Year} ST{Type} Week {Week}",
+            async (services, ct) => await services.GetRequiredService<NflBackfillService>().FetchScoreboardByWeekAsync(2026, 2, 1, ct)),
+        ["EspnF1"] = new(typeof(EspnF1Service), "Failed to fetch ESPN F1 scoreboard from {Url}",
+            async (services, ct) => await services.GetRequiredService<EspnF1Service>().FetchScoreboardAsync(null, ct)),
+        ["EspnNascar"] = new(typeof(EspnNascarService), "Failed to fetch ESPN NASCAR scoreboard from {Url}",
+            async (services, ct) => await services.GetRequiredService<EspnNascarService>().FetchScoreboardAsync(null, ct)),
+        ["EspnIndyCar"] = new(typeof(EspnIndyCarService), "Failed to fetch ESPN IndyCar scoreboard from {Url}",
+            async (services, ct) => await services.GetRequiredService<EspnIndyCarService>().FetchScoreboardAsync(null, ct)),
+    };
+
+    public static TheoryData<string> ScoreboardNames => [.. Scoreboards.Keys];
+
+    [Theory]
+    [MemberData(nameof(ScoreboardNames))]
+    public async Task Hung_scoreboard_ends_at_the_total_timeout_and_is_sent_once_at_error(string name)
+    {
+        var scoreboard = Scoreboards[name];
+        await using var app = new ClockedApp(Answer.Hang);
+
+        var fetch = scoreboard.Run(app.Services, CancellationToken.None);
+
+        Assert.Equal(TotalRequestTimeout, await app.RunAsync(fetch));
+        Assert.Null(await fetch);
+        AssertHungAttempts(app.Provider.Attempts);
+        var reported = Assert.Single(await app.SentEventsAsync());
+        Assert.Equal((scoreboard.Service.FullName, "error", scoreboard.Template), (reported.Logger, reported.Level, reported.Template));
+        Assert.Equal(typeof(TimeoutRejectedException).FullName, reported.ExceptionTypes[^1]);
+        Assert.DoesNotContain(app.Logs, l => l.Category == "Polly" && l.Level >= LogLevel.Error);
+    }
+
+    [Fact]
+    public async Task Every_resilient_provider_client_ends_a_hung_request_at_the_total_timeout()
+    {
+        await using var app = new ClockedApp(Answer.Hang);
+        var clients = app.Services.GetRequiredService<IHttpClientFactory>();
+        var names = HttpClientRegistrations.Names(app.Services).Except(HttpClientRegistrations.DeadlineBound).Order().ToArray();
+        Assert.Contains(nameof(EspnOddsService), names);
+        Assert.Contains(nameof(NascarLiveFeedService), names);
+
+        foreach (var name in names)
+        {
+            app.Provider.Reset();
+            var started = app.Clock.Elapsed;
+            var request = clients.CreateClient(name).GetStringAsync("https://provider.invalid/hung");
+
+            var ended = await app.RunAsync(request);
+
+            Assert.True(ended - started == TotalRequestTimeout, $"{name} ended after {ended - started}");
+            Assert.IsType<TimeoutRejectedException>(await Record.ExceptionAsync(() => request));
+            AssertHungAttempts(app.Provider.Attempts, started);
+        }
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.ServiceUnavailable)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    [InlineData(HttpStatusCode.TooManyRequests)]
+    [InlineData(HttpStatusCode.RequestTimeout)]
+    [InlineData(null)]
+    public async Task Retryable_scoreboard_failure_stops_after_the_standard_attempts_and_is_sent_once_at_error(HttpStatusCode? status)
+    {
+        var scoreboard = Scoreboards["EspnOdds"];
+        await using var app = new ClockedApp(status is { } code ? Answer.Status(code) : Answer.Unreachable);
+
+        var fetch = scoreboard.Run(app.Services, CancellationToken.None);
+
+        Assert.InRange(await app.RunAsync(fetch), TimeSpan.Zero, TotalRequestTimeout - AttemptTimeout);
+        Assert.Null(await fetch);
+        Assert.Equal(StandardAttempts, app.Provider.Attempts.Count);
+        var reported = Assert.Single(await app.SentEventsAsync());
+        Assert.Equal((scoreboard.Service.FullName, "error", scoreboard.Template), (reported.Logger, reported.Level, reported.Template));
+        Assert.Equal(typeof(HttpRequestException).FullName, reported.ExceptionTypes[^1]);
+        var finalAttempt = Assert.Single(app.Logs, l => l.Category == "Polly" && l.Message.Contains($"Attempt: '{StandardAttempts - 1}'", StringComparison.Ordinal));
+        Assert.Equal(LogLevel.Warning, finalAttempt.Level);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    [InlineData(HttpStatusCode.BadRequest)]
+    public async Task Non_retryable_scoreboard_answer_is_fetched_once_and_stays_a_warning(HttpStatusCode status)
+    {
+        var scoreboard = Scoreboards["EspnOdds"];
+        await using var app = new ClockedApp(Answer.Status(status));
+
+        var fetch = scoreboard.Run(app.Services, CancellationToken.None);
+
+        Assert.Equal(TimeSpan.Zero, await app.RunAsync(fetch));
+        Assert.Null(await fetch);
+        Assert.Single(app.Provider.Attempts);
+        Assert.Equal(LogLevel.Warning, Assert.Single(app.Logs, l => l.Category == scoreboard.Service.FullName).Level);
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Theory]
+    [MemberData(nameof(ScoreboardNames))]
+    public async Task Caller_cancellation_during_a_hung_attempt_stops_at_once_without_a_retry_or_a_log(string name)
+    {
+        var scoreboard = Scoreboards[name];
+        await using var app = new ClockedApp(Answer.Hang);
+        using var caller = new CancellationTokenSource();
+
+        var fetch = scoreboard.Run(app.Services, caller.Token);
+        await app.RunUntilAsync(fetch, () => app.Clock.Elapsed >= AttemptTimeout / 2, AttemptTimeout);
+        caller.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fetch.WaitAsync(Guard));
+        await AssertNothingRetriesAsync(app, fetch);
+        Assert.Equal(AttemptTimeout / 2, Assert.Single(app.Provider.Attempts).Ended);
+        Assert.DoesNotContain(app.Logs, l => l.Level >= LogLevel.Warning);
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Theory]
+    [MemberData(nameof(ScoreboardNames))]
+    public async Task Caller_cancellation_during_the_retry_delay_stops_at_once_without_a_retry_or_a_log(string name)
+    {
+        var scoreboard = Scoreboards[name];
+        await using var app = new ClockedApp(Answer.Hang);
+        using var caller = new CancellationTokenSource();
+
+        var fetch = scoreboard.Run(app.Services, caller.Token);
+        await app.RunUntilAsync(fetch, () => app.Provider.Attempts is [{ Ended: not null }], AttemptTimeout * 2);
+        caller.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fetch.WaitAsync(Guard));
+        await AssertNothingRetriesAsync(app, fetch);
+        Assert.Equal(AttemptTimeout, Assert.Single(app.Provider.Attempts).Duration);
+        Assert.DoesNotContain(app.Logs, l => l.Category == scoreboard.Service.FullName);
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    private static async Task AssertNothingRetriesAsync(ClockedApp app, Task fetch)
+    {
+        Assert.Equal(0, app.Clock.LiveTimers);
+        var attempts = app.Provider.Attempts.Count;
+        await app.RunUntilAsync(fetch, () => false, TotalRequestTimeout);
+        Assert.Equal(attempts, app.Provider.Attempts.Count);
+    }
+
+    private static void AssertHungAttempts(IReadOnlyList<Attempt> attempts, TimeSpan started = default)
+    {
+        Assert.Equal(HungAttemptsWithinTotal, attempts.Count);
+        Assert.All(attempts.SkipLast(1), attempt => Assert.Equal(AttemptTimeout, attempt.Duration));
+        var last = attempts[^1];
+        Assert.Equal(started + TotalRequestTimeout, last.Ended);
+        Assert.True(last.Duration < AttemptTimeout, $"the last attempt ran {last.Duration}, so the total timeout restarted with a retry");
+    }
+
+    private sealed record Fetch(Type Service, string Template, Func<IServiceProvider, CancellationToken, Task<object?>> Run);
+
+    private sealed record SentEvent(string? Logger, string? Level, string? Template, string?[] ExceptionTypes);
+
+    private sealed record LoggedEntry(string Category, LogLevel Level, string Message);
+
+    private sealed record Attempt(TimeSpan Entered, TimeSpan? Ended = null, int TimersAtEnd = 0)
+    {
+        public TimeSpan? Duration => Ended - Entered;
+    }
+
+    private abstract record Answer
+    {
+        public static readonly Answer Hang = new Hanging();
+        public static readonly Answer Unreachable = new Failing();
+
+        public static Answer Status(HttpStatusCode status) => new Reply(status);
+
+        public sealed record Hanging : Answer;
+        public sealed record Failing : Answer;
+        public sealed record Reply(HttpStatusCode Code) : Answer;
+    }
+
+    private sealed class SteppedClock() : FakeTimeProvider(Origin)
+    {
+        private static readonly DateTimeOffset Origin = new(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
+        private readonly List<TrackedTimer> timers = [];
+
+        public TimeSpan Elapsed => GetUtcNow() - Origin;
+
+        public int TimersCreated
+        {
+            get { lock (timers) return timers.Count; }
+        }
+
+        public int LiveTimers
+        {
+            get { lock (timers) return timers.Count(t => t.Live); }
+        }
+
+        public bool HasLiveTimerSince(int created)
+        {
+            lock (timers) return timers.Skip(created).Any(t => t.Live);
+        }
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = new TrackedTimer();
+            timer.Arm(dueTime, period);
+            timer.Inner = base.CreateTimer(s =>
+            {
+                timer.Fired();
+                callback(s);
+            }, state, dueTime, period);
+            lock (timers) timers.Add(timer);
+            return timer;
+        }
+
+        private sealed class TrackedTimer : ITimer
+        {
+            private TimeSpan period;
+            private volatile bool live;
+
+            public ITimer Inner { get; set; } = null!;
+
+            public bool Live => live;
+
+            public void Arm(TimeSpan dueTime, TimeSpan period)
+            {
+                this.period = period;
+                live = dueTime != Timeout.InfiniteTimeSpan;
+            }
+
+            public void Fired() => live = period != Timeout.InfiniteTimeSpan && period != TimeSpan.Zero;
+
+            public bool Change(TimeSpan dueTime, TimeSpan period)
+            {
+                Arm(dueTime, period);
+                return Inner.Change(dueTime, period);
+            }
+
+            public void Dispose()
+            {
+                live = false;
+                Inner.Dispose();
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                live = false;
+                return Inner.DisposeAsync();
+            }
+        }
+    }
+
+    private sealed class ClockedApp : IAsyncDisposable
+    {
+        private readonly AppFactory entry = new();
+        private readonly WebApplicationFactory<Program> app;
+        private readonly SentTransport transport = new();
+        private readonly LogRecorder logs = new();
+
+        public ClockedApp(Answer answer)
+        {
+            Provider = new ControlledProvider(answer, Clock);
+            app = entry.WithWebHostBuilder(builder =>
+            {
+                builder.UseEnvironment("Production");
+                builder.ConfigureServices(services =>
+                {
+                    foreach (var worker in services.Where(s => s.ServiceType == typeof(IHostedService)
+                        && s.ImplementationType?.Namespace?.StartsWith("backend", StringComparison.Ordinal) == true).ToArray())
+                        services.Remove(worker);
+                    services.RemoveAll<TimeProvider>();
+                    services.AddSingleton<TimeProvider>(Clock);
+                    services.ConfigureAll<HttpClientFactoryOptions>(options =>
+                        options.HttpMessageHandlerBuilderActions.Add(handlers => handlers.PrimaryHandler = Provider));
+                    services.AddSingleton<ILoggerProvider>(logs);
+                    services.PostConfigure<SentryAspNetCoreOptions>(options =>
+                    {
+                        options.Dsn = "https://public@sentry.invalid/1";
+                        options.Transport = transport;
+                    });
+                });
+            });
+        }
+
+        public SteppedClock Clock { get; } = new();
+
+        public async Task<TimeSpan> RunAsync(Task work)
+        {
+            await RunUntilAsync(work, () => work.IsCompleted, TotalRequestTimeout * 2);
+            Assert.True(work.IsCompleted, $"still running after {Clock.Elapsed}: {string.Join(", ", Provider.Attempts)}");
+            return Clock.Elapsed;
+        }
+
+        public async Task RunUntilAsync(Task work, Func<bool> done, TimeSpan limit)
+        {
+            var end = Clock.Elapsed + limit;
+            while (true)
+            {
+                await WaitForTimerAsync(work);
+                if (done() || Clock.Elapsed >= end) return;
+                Clock.Advance(Step);
+            }
+        }
+
+        private async Task WaitForTimerAsync(Task work)
+        {
+            var deadline = DateTime.UtcNow + Guard;
+            while (!work.IsCompleted && !WaitingOnTimer())
+            {
+                if (DateTime.UtcNow > deadline) throw new TimeoutException($"nothing waited on a timer at {Clock.Elapsed}");
+                await Task.Delay(1);
+            }
+        }
+
+        private bool WaitingOnTimer() => Provider.Attempts switch
+        {
+            [] => false,
+            [.., { Ended: null }] => Provider.Hangs,
+            [.., var last] => Clock.HasLiveTimerSince(last.TimersAtEnd)
+        };
+
+        public ControlledProvider Provider { get; }
+
+        public IServiceProvider Services => app.Services;
+
+        public IEnumerable<LoggedEntry> Logs => logs.Entries;
+
+        public async Task<IReadOnlyCollection<SentEvent>> SentEventsAsync()
+        {
+            await SentrySdk.FlushAsync(TimeSpan.FromSeconds(5));
+            return transport.Events.ToArray();
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await app.DisposeAsync();
+            await entry.DisposeAsync();
+            Provider.Dispose();
+        }
+    }
+
+    private sealed class ControlledProvider(Answer answer, SteppedClock clock) : HttpMessageHandler
+    {
+        private readonly List<Attempt> attempts = [];
+
+        public bool Hangs => answer is Answer.Hanging;
+
+        public IReadOnlyList<Attempt> Attempts
+        {
+            get { lock (attempts) return attempts.ToArray(); }
+        }
+
+        public void Reset()
+        {
+            lock (attempts) attempts.Clear();
+        }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            int index;
+            lock (attempts)
+            {
+                index = attempts.Count;
+                attempts.Add(new Attempt(clock.Elapsed));
+            }
+            void End()
+            {
+                lock (attempts) attempts[index] = attempts[index] with { Ended = clock.Elapsed, TimersAtEnd = clock.TimersCreated };
+            }
+            switch (answer)
+            {
+                case Answer.Hanging:
+                    var hung = new TaskCompletionSource<HttpResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    await using (cancellationToken.Register(() =>
+                    {
+                        End();
+                        hung.TrySetCanceled(cancellationToken);
+                    }))
+                        return await hung.Task;
+                case Answer.Failing:
+                    End();
+                    throw new HttpRequestException("synthetic provider connection failure");
+                case Answer.Reply reply:
+                    End();
+                    return new HttpResponseMessage(reply.Code) { Content = new StringContent("{}") };
+                default:
+                    throw new InvalidOperationException(answer.ToString());
+            }
+        }
+    }
+
+    private sealed class LogRecorder : ILoggerProvider
+    {
+        public ConcurrentQueue<LoggedEntry> Entries { get; } = new();
+
+        public ILogger CreateLogger(string categoryName) => new Logger(categoryName, Entries);
+
+        public void Dispose() { }
+
+        private sealed class Logger(string category, ConcurrentQueue<LoggedEntry> entries) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+                entries.Enqueue(new LoggedEntry(category, logLevel, formatter(state, exception)));
+        }
+    }
+
+    private sealed class SentTransport : ITransport
+    {
+        public ConcurrentQueue<SentEvent> Events { get; } = new();
+
+        public async Task SendEnvelopeAsync(Envelope envelope, CancellationToken cancellationToken = default)
+        {
+            using var stream = new MemoryStream();
+            await envelope.SerializeAsync(stream, null, cancellationToken);
+            var lines = System.Text.Encoding.UTF8.GetString(stream.ToArray()).Split('\n');
+            for (var i = 1; i + 1 < lines.Length; i++)
+            {
+                using var header = JsonDocument.Parse(lines[i]);
+                if (header.RootElement.GetProperty("type").GetString() != "event") continue;
+                using var payload = JsonDocument.Parse(lines[++i]);
+                var root = payload.RootElement;
+                var exceptionTypes = root.TryGetProperty("exception", out var exception)
+                    ? exception.GetProperty("values").EnumerateArray().Select(e => Text(e, "type")).ToArray()
+                    : [];
+                var template = root.TryGetProperty("logentry", out var logEntry) ? Text(logEntry, "message") : null;
+                Events.Enqueue(new SentEvent(Text(root, "logger"), Text(root, "level"), template, exceptionTypes));
+            }
+        }
+
+        private static string? Text(JsonElement element, string name) =>
+            element.TryGetProperty(name, out var value) ? value.GetString() : null;
+    }
+}
