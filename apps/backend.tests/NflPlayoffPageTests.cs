@@ -691,7 +691,8 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
             app.Services, clock, Microsoft.Extensions.Options.Options.Create(new PlayoffRatingsOptions()), new PlayoffStatusNhlRefreshGate(clock));
 
         Assert.Equal(4, await service.RefreshNbaRatingsAsync(default));
-        var season = DateTime.UtcNow.Month >= 10 ? DateTime.UtcNow.Year + 1 : DateTime.UtcNow.Year;
+        var now = clock.GetUtcNow().UtcDateTime;
+        var season = now.Month >= 10 ? now.Year + 1 : now.Year;
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
         var rows = await db.TeamRatings.AsNoTracking().Where(r => r.Sport == "nba" && r.Source == "playoffstatus" && r.Season == season).ToDictionaryAsync(r => r.TeamAbbreviation);
