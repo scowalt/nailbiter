@@ -17,7 +17,9 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
     public async Task<GameHighlightsInspection?> InspectAsync(string gameId, CancellationToken cancellationToken = default)
     {
         var state = await inspection.InspectAsync(gameId, cancellationToken);
-        return state is not null && PersistedIdentityFailure(state.Game) == "MlbNotFinal" ? state with { IsActuallyCompleted = false } : state;
+        if (state is null) return null;
+        var completed = ActuallyCompleted(state.Game);
+        return state with { IsActuallyCompleted = PersistedIdentityFailure(state.Game) != "MlbNotFinal" && completed };
     }
 
     public async Task<HighlightsDetailState> GetDetailAsync(string gameId, CancellationToken cancellationToken = default)
@@ -84,7 +86,7 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
                 selection.Availability = HighlightsAvailability.Unknown;
                 selection.UnavailableReason = "NoConfidentRecap";
             }
-            if (recorded && evidence.Identity is not null && MlbCompletionEvidence.IsActuallyCompleted(current)
+            if (recorded && evidence.Identity is not null && ActuallyCompleted(current)
                 && !selection.Suppressed && selection.Ownership != HighlightsOwnership.Manual
                 && (selection.SelectedVideoId is null || selection.Availability == HighlightsAvailability.Unavailable)
                 && (catchup
@@ -126,7 +128,7 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
                 || selection.ValidatedAt > video.ValidatedAtUtc.UtcDateTime || !SameContext(current, game))
             { db.ChangeTracker.Clear(); continue; }
             if (!await RecordIdentityAsync(current, evidence, cancellationToken)) { db.ChangeTracker.Clear(); continue; }
-            var valid = evidence.Identity is not null && MlbCompletionEvidence.IsActuallyCompleted(current)
+            var valid = evidence.Identity is not null && ActuallyCompleted(current)
                 && Suitable(video, evidence.Identity, selection.Ownership == HighlightsOwnership.Manual);
             Refresh(selection, video, valid);
             if (evidence.Reason == "MlbNotFinal") selection.UnavailableReason = evidence.Reason;
@@ -181,7 +183,7 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
                 if (request.Action == HighlightsOperatorAction.Attach && HasDecision(selection)) return new(false, false, "UseReplace", before);
                 if (request.Action == HighlightsOperatorAction.Replace && !HasDecision(selection)) return new(false, false, "UseAttach", before);
                 var recorded = await RecordIdentityAsync(current, identity!, cancellationToken);
-                if (!recorded || !MlbCompletionEvidence.IsActuallyCompleted(current)) return new(false, false, "NotActuallyCompleted", before);
+                if (!recorded || !ActuallyCompleted(current)) return new(false, false, "NotActuallyCompleted", before);
                 if (!await LockVideoChoiceAsync(request.GameId, video!.VideoId, cancellationToken))
                 { db.ChangeTracker.Clear(); return new(false, false, "VideoAlreadySelected", before); }
                 Choose(selection, video, HighlightsOwnership.Manual, identity!.Identity!);
@@ -331,6 +333,13 @@ public sealed class HighlightsApplicationService(ExcitementDbContext db, GameHig
                     && (game.AwayTeamId is null || game.AwayTeamId == t.EspnId));
         }
         catch (JsonException ex) { Unreadable(ex, nameof(Game.HighlightsIdentityEvidenceJson), game.Id); return false; }
+    }
+
+    private bool ActuallyCompleted(Game game)
+    {
+        var completed = MlbCompletionEvidence.IsActuallyCompleted(game, out var unreadable);
+        if (unreadable is not null) Unreadable(unreadable, nameof(Game.EspnCompletionEvidenceJson), game.Id);
+        return completed;
     }
 
     private void Unreadable(JsonException exception, string evidence, string gameId)
