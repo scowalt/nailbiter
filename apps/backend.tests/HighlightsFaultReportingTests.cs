@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net;
+using System.Reflection;
 using System.Text.Json;
 using backend.Data;
 using backend.Models;
@@ -75,6 +76,64 @@ public sealed class HighlightsFaultReportingTests(HighlightsFaultReportingTests.
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.DoesNotContain(LeakVideo, await response.Content.ReadAsStringAsync());
         AssertReportedOnce(app, await app.SentEventsAsync(expected: 1), typeof(HighlightsApplicationService), "System.Text.Json.JsonException");
+    }
+
+    [Fact]
+    public async Task Unreadable_stored_completion_evidence_is_reported_once_and_the_page_still_renders()
+    {
+        var id = await database.AddCompletedGameAsync("fault-stored-completion", game => game.EspnCompletionEvidenceJson = $$"""{"EventId":"{{LeakUrl}} {{LeakTitle}}",""");
+        await using var app = new App(database.ConnectionString);
+
+        using var response = await app.Client.GetAsync($"/game/{id}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertReportedOnce(app, await app.SentEventsAsync(expected: 1), typeof(HighlightsApplicationService), "System.Text.Json.JsonException");
+    }
+
+    [Fact]
+    public async Task Unreadable_stored_completion_and_identity_evidence_are_each_reported_once_per_view()
+    {
+        var id = await database.AddCompletedGameAsync("fault-stored-both", game =>
+        {
+            game.EspnCompletionEvidenceJson = $$"""{"EventId":"{{LeakUrl}}",""";
+            game.HighlightsIdentityEvidenceJson = $$"""{"GamePk":"{{LeakTitle}}""";
+        });
+        await using var app = new App(database.ConnectionString);
+
+        using var response = await app.Client.GetAsync($"/game/{id}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await AssertLoggedAsync(app, typeof(HighlightsApplicationService), LogLevel.Error, LogLevel.Error);
+        var errors = app.Logs.Entries.Where(e => e.Level == LogLevel.Error && e.Category == typeof(HighlightsApplicationService).FullName).ToArray();
+        Assert.Single(errors, e => e.Text.Contains(nameof(Game.EspnCompletionEvidenceJson), StringComparison.Ordinal));
+        Assert.Single(errors, e => e.Text.Contains(nameof(Game.HighlightsIdentityEvidenceJson), StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Operator_inspect_of_unreadable_stored_completion_evidence_is_reported_once()
+    {
+        var id = await database.AddCompletedGameAsync("fault-stored-completion-cli", game => game.EspnCompletionEvidenceJson = $$"""{"EventId":"{{LeakUrl}}",""");
+        await using var app = new App(database.ConnectionString);
+
+        var (exit, output) = await app.OperateAsync("inspect", id);
+
+        Assert.Equal(0, exit);
+        Assert.Contains("\"IsActuallyCompleted\":false", output);
+        AssertReportedOnce(app, await app.SentEventsAsync(expected: 1), typeof(HighlightsApplicationService), "System.Text.Json.JsonException");
+    }
+
+    [Fact]
+    public async Task Lifecycle_rewrites_unreadable_completion_evidence_before_reading_it()
+    {
+        var id = await database.AddCompletedGameAsync("fault-stored-completion-lifecycle", game => game.EspnCompletionEvidenceJson = $$"""{"EventId":"{{LeakUrl}}",""");
+        await using var app = new App(database.ConnectionString, services => services.Identity(VerifiedIdentity(id, "\"gamePk\":849819", "\"gamePk\":849903")));
+
+        Assert.Equal("Processed", (await app.ProcessAsync([id])).Reason);
+        using var response = await app.Client.GetAsync($"/game/{id}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty(await app.SentEventsAsync(expected: 0));
+        Assert.DoesNotContain(app.Logs.Entries, e => e.Level >= LogLevel.Warning && e.Category.StartsWith("backend.Services.Highlights", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -338,6 +397,52 @@ public sealed class HighlightsFaultReportingTests(HighlightsFaultReportingTests.
         await AssertLoggedAsync(app, typeof(MlbHighlightsIdentityClient), LogLevel.Warning);
     }
 
+    [Theory]
+    [InlineData("\"gamePk\":849819", "\"gamePk\":\"849819\"")]
+    [InlineData("\"gameNumber\":1", "\"gameNumber\":2147483648")]
+    [InlineData("\"homeAway\":\"home\"", "\"homeAway\":5")]
+    [InlineData("{\"type\":{\"name\":\"STATUS_FINAL\",\"state\":\"post\",\"completed\":true}}", "{\"type\":\"final\"}")]
+    [InlineData("{\"home\":{\"team\":{\"id\":144}},\"away\":{\"team\":{\"id\":119}}}", "[]")]
+    [InlineData("\"officialDate\":\"2026-10-06\"", "\"officialDate\":\"October 6\"")]
+    [InlineData("\"gameDate\":\"2026-10-06T22:00:00Z\"", "\"gameDate\":\"not a date\"")]
+    public async Task Identity_field_of_the_wrong_shape_is_a_warning(string field, string malformed)
+    {
+        var id = await database.AddCompletedGameAsync($"fault-identity-shape-{Guid.NewGuid():N}");
+        await using var app = new App(database.ConnectionString, services => services.Identity(VerifiedIdentity(id, field, malformed)));
+
+        Assert.Equal("Processed", (await app.ProcessAsync([id])).Reason);
+        await AssertLoggedAsync(app, typeof(MlbHighlightsIdentityClient), LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task Identity_own_fault_is_reported_once_without_its_text_and_every_game_is_still_tried()
+    {
+        var games = await database.AddFinalGamesAsync("fault-identity-own", 2);
+        var requests = 0;
+        await using var app = new App(database.ConnectionString, services => services.Identity((_, _) =>
+        {
+            if (Interlocked.Increment(ref requests) == 1) throw new InvalidOperationException(Leak);
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }));
+
+        Assert.Equal("Processed", (await app.ProcessAsync(games)).Reason);
+        Assert.Equal(2, requests);
+        await AssertLoggedAsync(app, typeof(MlbHighlightsIdentityClient), LogLevel.Error, LogLevel.Warning);
+        Assert.Contains("System.InvalidOperationException", Assert.Single(await app.SentEventsAsync(expected: 1)).Exceptions[0].Value);
+    }
+
+    [Fact]
+    public async Task Identity_duplicate_team_is_reported_once()
+    {
+        var id = await database.AddCompletedGameAsync("fault-identity-duplicate-team");
+        await using var app = new App(database.ConnectionString, services => services.Identity(VerifiedIdentity(id)));
+
+        using (IdentityTeams.Duplicate("ATL", over: "BOS"))
+            Assert.Equal("Processed", (await app.ProcessAsync([id])).Reason);
+
+        AssertReportedOnce(app, await app.SentEventsAsync(expected: 1), typeof(MlbHighlightsIdentityClient), "System.InvalidOperationException");
+    }
+
     private static Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> VerifiedIdentity(string id, string field = "", string replacement = "") =>
         (request, _) => Task.FromResult(Ok((request.RequestUri!.Host == "statsapi.mlb.com"
             ? """{"dates":[{"date":"2026-10-06","games":[{"gamePk":849819,"gameDate":"2026-10-06T22:00:00Z","officialDate":"2026-10-06","season":"2026","doubleHeader":"N","gameNumber":1,"status":{"abstractGameState":"Final","detailedState":"Final","codedGameState":"F"},"teams":{"home":{"team":{"id":144}},"away":{"team":{"id":119}}}}]}]}"""
@@ -524,6 +629,15 @@ public sealed class HighlightsFaultReportingTests(HighlightsFaultReportingTests.
             return await scope.ServiceProvider.GetRequiredService<HighlightsApplicationService>().ProcessCandidatesAsync(games, videos, cancellationToken: cancellationToken);
         }
 
+        public async Task<(int Exit, string Output)> OperateAsync(params string[] arguments)
+        {
+            _ = Client;
+            using var scope = app.Services.CreateScope();
+            using var output = new StringWriter();
+            var exit = await scope.ServiceProvider.GetRequiredService<HighlightsOperatorCommand>().RunAsync(arguments, output);
+            return (exit, output.ToString());
+        }
+
         public async Task<IReadOnlyCollection<SentEvent>> SentEventsAsync(int expected)
         {
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(expected > 0 ? 15 : 1));
@@ -589,6 +703,24 @@ public sealed class HighlightsFaultReportingTests(HighlightsFaultReportingTests.
 
         private static string? Text(JsonElement element, string name) =>
             element.TryGetProperty(name, out var value) ? value.GetString() : null;
+    }
+}
+
+internal static class IdentityTeams
+{
+    public static IDisposable Duplicate(string abbreviation, string over)
+    {
+        var teams = (Array)typeof(MlbHighlightsIdentityClient).GetField("Teams", BindingFlags.NonPublic | BindingFlags.Static)!.GetValue(null)!;
+        var entries = teams.Cast<object>().ToArray();
+        string Abbreviation(object team) => (string)team.GetType().GetProperty("Abbreviation")!.GetValue(team)!;
+        var target = System.Array.FindIndex(entries, team => Abbreviation(team) == over);
+        teams.SetValue(entries.Single(team => Abbreviation(team) == abbreviation), target);
+        return new Restore(() => teams.SetValue(entries[target], target));
+    }
+
+    private sealed class Restore(Action restore) : IDisposable
+    {
+        public void Dispose() => restore();
     }
 }
 
