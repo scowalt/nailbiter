@@ -103,3 +103,32 @@ module Logos =
         match leagueLogos.TryGetValue(sport) with
         | true, url -> url
         | _ -> ""
+
+    let networkLogos: IReadOnlyDictionary<string, string> =
+        [ "abc", [ "ABC" ]
+          "acc-network", [ "ACCN"; "ACC Network" ]
+          "apple-tv", [ "Apple TV"; "Apple TV+" ]
+          "btn", [ "BTN"; "Big Ten Network" ]
+          "cbs", [ "CBS" ]
+          "espn", [ "ESPN" ]
+          "espn2", [ "ESPN2" ]
+          "espn-plus", [ "ESPN+" ]
+          "fox", [ "FOX" ]
+          "fs1", [ "FS1" ]
+          "fs2", [ "FS2" ]
+          "hbo-max", [ "HBO Max"; "Max" ]
+          "nbc", [ "NBC" ]
+          "netflix", [ "Netflix" ]
+          "paramount-plus", [ "Paramount+" ]
+          "peacock", [ "Peacock" ]
+          "prime-video", [ "Prime Video"; "Amazon Prime Video" ]
+          "tnt", [ "TNT" ]
+          "trutv", [ "truTV" ]
+          "usa-network", [ "USA Net"; "USA Network" ] ]
+        |> List.collect (fun (file, names) -> names |> List.map (fun name -> KeyValuePair(name, $"/logos/networks/{file}.svg")))
+        |> fun entries -> Dictionary(entries, System.StringComparer.OrdinalIgnoreCase)
+
+    let networkLogoUrl (network: string) =
+        match networkLogos.TryGetValue(network) with
+        | true, url -> Some url
+        | _ -> None

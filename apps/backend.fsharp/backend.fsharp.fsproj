@@ -9,9 +9,9 @@
     <Compile Include="HttpHelpers.fs" />
     <Compile Include="OddsConverter.fs" />
     <Compile Include="Services/ExcitementScore.fs" />
+    <Compile Include="Rendering/Logos.fs" />
     <Compile Include="Rendering/FormatHelpers.fs" />
     <Compile Include="Rendering/TeamColors.fs" />
-    <Compile Include="Rendering/Logos.fs" />
     <Compile Include="Rendering/LeagueConfig.fs" />
     <Compile Include="Rendering/SseBroadcaster.fs" />
     <Compile Include="Rendering/Layout.fs" />
