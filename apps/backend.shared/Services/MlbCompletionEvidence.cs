@@ -25,16 +25,20 @@ public sealed record MlbCompletionEvidence(
     public bool ConfirmsCompletion(string gameId) => EventId == gameId && CompetitionId == gameId
         && Confirmed(EventStatus) && Confirmed(CompetitionStatus);
 
-    public static bool IsActuallyCompleted(Game game)
+    public static bool IsActuallyCompleted(Game game) => IsActuallyCompleted(game, out _);
+
+    public static bool IsActuallyCompleted(Game game, out JsonException? unreadable)
     {
+        unreadable = null;
         if (game.Sport != "mlb" || game.Status != "final" || game.EspnCompletionEvidenceJson is null)
             return false;
         try
         {
             return JsonSerializer.Deserialize<MlbCompletionEvidence>(game.EspnCompletionEvidenceJson)?.ConfirmsCompletion(game.Id) == true;
         }
-        catch (JsonException)
+        catch (JsonException exception)
         {
+            unreadable = exception;
             return false;
         }
     }

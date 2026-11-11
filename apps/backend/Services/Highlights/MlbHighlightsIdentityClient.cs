@@ -93,9 +93,14 @@ public sealed class MlbHighlightsIdentityClient(IHttpClientFactory clients, Time
             providerFailureReported = true;
             return new(null, null, false, "IdentityTemporaryFailure");
         }
-        catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or OverflowException)
+        catch (JsonException)
         {
             logger.LogWarning("Highlights identity unavailable: {Reason}", "MalformedIdentity");
+            return new(null, null, true, "MalformedIdentity");
+        }
+        catch (Exception e)
+        {
+            logger.LogError(HighlightsFault.Reportable(e), "Highlights identity unavailable: {Reason}", "OperationFailure");
             return new(null, null, true, "MalformedIdentity");
         }
     }
