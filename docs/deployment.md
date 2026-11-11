@@ -37,6 +37,10 @@ The owner requested normal daily collection on 2026-10-13 and explicitly request
 
 Source configuration is not a completed deployment or proof of usable forecasts. Review actual settings through the authorized PR/release workflow. The persisted provider-wide 24-hour admission budget and refusal/interruption state remain authoritative across deployments. The owner-approved refusal TTL blocks both inputs for at least 24 hours from observation, honoring a later valid Retry-After, even when both settings are true. Apply `036_MoneyPuckRefusalExpiry.sql` before the new collector; legacy timestamp-free denials receive one 24-hour window at first migration, and replay does not renew it or reset the daily budget/active state. Normal admission—not deletion or manual repair—can resume after both deadlines. Interrupted/unfinalized cycles stay blocked pending review. Preserve existing operator stops. No extra refresh, ledger reset or provider probe is a deployment check. See the [runbook](nhl-moneypuck-qualification.md) for remaining live-source readiness evidence.
 
+## PlayoffStatus collection control
+
+The owner authorized automatic NFL, NBA and MLB PlayoffStatus collection on 2026-11-11 ([ADR 0008](adr/0008-automatic-playoffstatus-collection.md)). Production Compose defaults it on; `PLAYOFFSTATUS_COLLECTION_ENABLED=false` stops it. Apply additive, repeatable `041_PlayoffStatusCollection.sql` before the worker. The per-league daily claim in `playoffstatus_collection_state` persists across deployments and restarts; do not delete its rows to force a fetch. The NHL PlayoffStatus model controls are separate and stay off.
+
 ## Validation contract
 
 Every PR/main validation includes source policy/regressions, independent secret scanning without README exclusions, deterministic synthetic fixture checks, Bun/Biome/live-sync browser tests, deployment-contract tests, Python analysis and real isolated Timescale recovery tests, web-component build, .NET Release build and both .NET test suites, independent Astro build, icon verification, and an image scan blocking fixed HIGH/CRITICAL vulnerabilities.

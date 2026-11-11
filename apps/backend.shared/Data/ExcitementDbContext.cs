@@ -26,6 +26,7 @@ public class ExcitementDbContext : DbContext
     public DbSet<TeamRating> TeamRatings => Set<TeamRating>();
     public DbSet<MoneyPuckRefreshState> MoneyPuckRefreshOperations => Set<MoneyPuckRefreshState>();
     public DbSet<NhlGuruRefreshState> NhlGuruRefreshOperations => Set<NhlGuruRefreshState>();
+    public DbSet<PlayoffStatusCollectionState> PlayoffStatusCollectionOperations => Set<PlayoffStatusCollectionState>();
     public DbSet<TeamStanding> TeamStandings => Set<TeamStanding>();
     public DbSet<F1Race> F1Races => Set<F1Race>();
     public DbSet<F1Driver> F1Drivers => Set<F1Driver>();
@@ -121,6 +122,18 @@ public class ExcitementDbContext : DbContext
             });
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedNever();
+            entity.Property(e => e.NextAttemptAtTicks).HasColumnName("next_attempt_at_ticks");
+        });
+
+        modelBuilder.Entity<PlayoffStatusCollectionState>(entity =>
+        {
+            entity.ToTable("playoffstatus_collection_state", table =>
+            {
+                table.HasCheckConstraint("ck_playoffstatus_collection_league", "league IN ('nfl', 'nba', 'mlb')");
+                table.HasCheckConstraint("ck_playoffstatus_collection_ticks", "next_attempt_at_ticks BETWEEN 1 AND 3155378975999999999");
+            });
+            entity.HasKey(e => e.League);
+            entity.Property(e => e.League).HasColumnName("league");
             entity.Property(e => e.NextAttemptAtTicks).HasColumnName("next_attempt_at_ticks");
         });
 

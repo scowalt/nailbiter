@@ -118,6 +118,16 @@ For omitted markets, the importer requests the same event from Kalshi's historic
 It follows pagination with a three-page limit and rejects incomplete or mismatched archive responses.
 If archive retrieval fails, a missing team's unsettled estimate becomes unavailable without receiving a new fetch timestamp.
 
+### NFL, NBA and MLB PlayoffStatus collection
+
+A dedicated background worker collects NFL, NBA and MLB PlayoffStatus ratings ([ADR 0008](adr/0008-automatic-playoffstatus-collection.md)). It is on by default. `PlayoffRatings:PlayoffStatusCollectionEnabled=false` stops it; production Compose maps that setting to `PLAYOFFSTATUS_COLLECTION_ENABLED`. Development environments also need `EnableScraper=true`.
+
+Each league has one row in `playoffstatus_collection_state`. Before it sends a request, the worker claims the row and moves it 24 hours ahead. A league is therefore fetched at most once a day, including after a failure, a shutdown, a restart or a second backend instance. The worker checks the claims every hour. One attempt requests the league's two standings pages and its postseason page and updates its `playoffstatus` rows. The shared provider resilience handler can retry a page after a 408, 429, 5xx or connection failure, up to three more times within that attempt. MLB is claimed but not requested from November through March.
+
+These rows are stored only. Qualification display and scoring do not read NFL, NBA or MLB `playoffstatus` rows. The worker never requests NHL pages. The retained PlayoffStatus worker that the MoneyPuck paragraph above says must stay off is the NHL model worker, `PlayoffStatusNhlRefreshBackgroundService`; this collector does not change it.
+
+A 404 or another refusal outside 408, 429 and 5xx logs a Warning, as does a page without a readable standings table. A 408, 429 or 5xx response, a connection failure, the client deadline, a database failure and an own fault each send one Error. Cancellation at shutdown logs nothing. Apply the additive, repeatable `041_PlayoffStatusCollection.sql` before deploying the worker. It creates an empty table, so the first cycle after deployment fetches each league once.
+
 ## Final outcomes
 
 A confirmed final YES result means that the team qualified. A confirmed final NO result means that the team did not qualify.

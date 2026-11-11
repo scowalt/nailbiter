@@ -5,6 +5,7 @@ public sealed class PlayoffRatingsOptions
     public bool MoneyPuckSelectionEnabled { get; set; } = false;
     public bool MoneyPuckRefreshEnabled { get; set; } = false;
     public int[] MoneyPuckApprovedSeasons { get; set; } = [];
+    public bool PlayoffStatusCollectionEnabled { get; set; } = true;
 
     private bool MoneyPuckSeasonApproved(string sport, int season) =>
         sport == "nhl" && season == 2027 && MoneyPuckApprovedSeasons is not null && MoneyPuckApprovedSeasons.Contains(season);
