@@ -328,6 +328,18 @@ public sealed class NflPlayoffLeverageTests
     }
 
     [Theory]
+    [InlineData(1, true)]
+    [InlineData(59, true)]
+    [InlineData(10 * 60, false)]
+    public async Task Publisher_clock_slightly_ahead_of_ours_still_dates_a_current_response(int secondsAhead, bool accepted)
+    {
+        var game = Game();
+        var context = await Captured(game, new Handler { ServerDate = Now.AddSeconds(secondsAhead) });
+        Assert.Equal(accepted, context.NflPlayoffLeverage!.ScheduleVerified);
+        Assert.Equal(accepted, Score(game, context).Stakes.Value is not null);
+    }
+
+    [Theory]
     [InlineData("start")]
     [InlineData("roles")]
     [InlineData("later-game")]
