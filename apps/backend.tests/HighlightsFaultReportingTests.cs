@@ -432,6 +432,24 @@ public sealed class HighlightsFaultReportingTests(HighlightsFaultReportingTests.
     }
 
     [Fact]
+    public async Task Every_identity_own_fault_in_a_pass_is_its_own_error()
+    {
+        var games = await database.AddFinalGamesAsync("fault-identity-own-each", 2);
+        var requests = 0;
+        await using var app = new App(database.ConnectionString, services => services.Identity((_, _) =>
+        {
+            Interlocked.Increment(ref requests);
+            throw new InvalidOperationException(Leak);
+        }));
+
+        Assert.Equal("Processed", (await app.ProcessAsync(games)).Reason);
+
+        Assert.Equal(2, requests);
+        await AssertLoggedAsync(app, typeof(MlbHighlightsIdentityClient), LogLevel.Error, LogLevel.Error);
+        Assert.All(await app.SentEventsAsync(expected: 2), sent => Assert.Contains("System.InvalidOperationException", sent.Exceptions[0].Value));
+    }
+
+    [Fact]
     public async Task Identity_duplicate_team_is_reported_once()
     {
         var id = await database.AddCompletedGameAsync("fault-identity-duplicate-team");
