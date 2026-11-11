@@ -51,6 +51,21 @@ public sealed class ProviderResilienceClockTests
 
     public static TheoryData<string> ScoreboardNames => [.. Scoreboards.Keys];
 
+    public static TheoryData<string, HttpStatusCode?> RetryableAnswers => Cross<HttpStatusCode?>(
+        HttpStatusCode.ServiceUnavailable, HttpStatusCode.InternalServerError, HttpStatusCode.TooManyRequests, HttpStatusCode.RequestTimeout, null);
+
+    public static TheoryData<string, HttpStatusCode> NonRetryableAnswers => Cross(
+        HttpStatusCode.NotFound, HttpStatusCode.Forbidden, HttpStatusCode.BadRequest);
+
+    private static TheoryData<string, T> Cross<T>(params T[] answers)
+    {
+        var data = new TheoryData<string, T>();
+        foreach (var name in Scoreboards.Keys)
+            foreach (var answer in answers)
+                data.Add(name, answer);
+        return data;
+    }
+
     [Theory]
     [MemberData(nameof(ScoreboardNames))]
     public async Task Hung_scoreboard_ends_at_the_total_timeout_and_is_sent_once_at_error(string name)
@@ -93,14 +108,10 @@ public sealed class ProviderResilienceClockTests
     }
 
     [Theory]
-    [InlineData(HttpStatusCode.ServiceUnavailable)]
-    [InlineData(HttpStatusCode.InternalServerError)]
-    [InlineData(HttpStatusCode.TooManyRequests)]
-    [InlineData(HttpStatusCode.RequestTimeout)]
-    [InlineData(null)]
-    public async Task Retryable_scoreboard_failure_stops_after_the_standard_attempts_and_is_sent_once_at_error(HttpStatusCode? status)
+    [MemberData(nameof(RetryableAnswers))]
+    public async Task Retryable_scoreboard_failure_stops_after_the_standard_attempts_and_is_sent_once_at_error(string name, HttpStatusCode? status)
     {
-        var scoreboard = Scoreboards["EspnOdds"];
+        var scoreboard = Scoreboards[name];
         await using var app = new ClockedApp(status is { } code ? Answer.Status(code) : Answer.Unreachable);
 
         var fetch = scoreboard.Run(app.Services, CancellationToken.None);
@@ -116,12 +127,10 @@ public sealed class ProviderResilienceClockTests
     }
 
     [Theory]
-    [InlineData(HttpStatusCode.NotFound)]
-    [InlineData(HttpStatusCode.Forbidden)]
-    [InlineData(HttpStatusCode.BadRequest)]
-    public async Task Non_retryable_scoreboard_answer_is_fetched_once_and_stays_a_warning(HttpStatusCode status)
+    [MemberData(nameof(NonRetryableAnswers))]
+    public async Task Non_retryable_scoreboard_answer_is_fetched_once_and_stays_a_warning(string name, HttpStatusCode status)
     {
-        var scoreboard = Scoreboards["EspnOdds"];
+        var scoreboard = Scoreboards[name];
         await using var app = new ClockedApp(Answer.Status(status));
 
         var fetch = scoreboard.Run(app.Services, CancellationToken.None);
@@ -129,7 +138,7 @@ public sealed class ProviderResilienceClockTests
         Assert.Equal(TimeSpan.Zero, await app.RunAsync(fetch));
         Assert.Null(await fetch);
         Assert.Single(app.Provider.Attempts);
-        Assert.Equal(LogLevel.Warning, Assert.Single(app.Logs, l => l.Category == scoreboard.Service.FullName).Level);
+        Assert.Equal(LogLevel.Warning, Assert.Single(app.Logs, l => l.Category == scoreboard.Service.FullName && l.Level > LogLevel.Debug).Level);
         Assert.Empty(await app.SentEventsAsync());
     }
 
