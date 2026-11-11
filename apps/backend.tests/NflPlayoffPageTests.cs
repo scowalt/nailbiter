@@ -429,7 +429,7 @@ public sealed partial class NflPlayoffPageTests : IAsyncLifetime
         {
             (string Name, string Championship)[] postseasonTeams = [("Boston Celtics", "^"), ("New York Knicks", "X"), ("Los Angeles Lakers", ">50%"), ("Golden State Warriors", "<1%")];
             var postseasonRows = string.Join("", postseasonTeams.Select(t => $"<tr><td>{t.Name}</td><td></td><td></td><td></td><td></td><td>{t.Championship}</td></tr>"));
-            return $"<html><body><table><tr><th>header</th></tr><tr><th>header</th></tr>{postseasonRows}</table></body></html>";
+            return $"<html><head><title>2026 NBA Post Season Probabilities</title></head><body><table><tr><th>header</th></tr><tr><th>header</th></tr>{postseasonRows}</table></body></html>";
         }
         var rows = string.Join("", teams.Select((t, i) => $"<tr data-idx='{i}'><td><a>{t.Name}</a></td><td></td><td></td><td></td><td>{t.NoPlayoffs}</td></tr>"));
         return $"<html><body><table>{rows}</table></body></html>";

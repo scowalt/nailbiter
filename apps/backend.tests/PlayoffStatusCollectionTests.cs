@@ -49,6 +49,8 @@ public sealed class PlayoffStatusCollectionTests
         ("nfl", "BUF", 0.75, 0.12), ("nfl", "DAL", 0.75, 0.12)
     ];
 
+    private static readonly Func<Uri, Answer> Healthy = Serving(nfl: 2026, nba: 2026, mlb: 2026);
+
     [Fact]
     public async Task One_cycle_stores_rows_for_each_league()
     {
@@ -111,7 +113,7 @@ public sealed class PlayoffStatusCollectionTests
     [Fact]
     public async Task Mlb_offseason_is_claimed_without_requests()
     {
-        await using var app = await CollectorApp.StartAsync(Healthy);
+        await using var app = await CollectorApp.StartAsync(Serving(nfl: 2026, nba: 2027, mlb: 2026));
         app.Clock.SetUtcNow(new DateTimeOffset(2026, 12, 15, 12, 0, 0, TimeSpan.Zero));
         await app.StartWorkerAsync();
 
@@ -187,7 +189,7 @@ public sealed class PlayoffStatusCollectionTests
     public async Task Malformed_page_is_a_warning_without_an_event(string body)
     {
         await using var app = await CollectorApp.StartAsync(uri => uri.AbsolutePath.StartsWith("/nfl/", StringComparison.Ordinal)
-            ? new Reply(HttpStatusCode.OK, body) : Healthy(uri));
+            && uri.AbsolutePath.EndsWith("standings.html", StringComparison.Ordinal) ? new Reply(HttpStatusCode.OK, body) : Healthy(uri));
         await app.StartWorkerAsync();
 
         Assert.Equal(Poll, await app.NextWaitAsync());
@@ -249,25 +251,37 @@ public sealed class PlayoffStatusCollectionTests
         Assert.Equal(("23514", "ck_playoffstatus_collection_ticks"), (ticks.SqlState, ticks.ConstraintName));
     }
 
-    private static Answer Healthy(Uri uri)
+    private static Func<Uri, Answer> Serving(int nfl, int nba, int mlb) => Serving(new Dictionary<string, string>
     {
-        foreach (var (league, pages) in Pages)
+        ["nfl"] = SeasonTitle("nfl", nfl),
+        ["nba"] = SeasonTitle("nba", nba),
+        ["mlb"] = SeasonTitle("mlb", mlb)
+    });
+
+    private static Func<Uri, Answer> Serving(IReadOnlyDictionary<string, string> heads) => uri =>
+    {
+        foreach (var (league, head) in heads)
         {
+            var pages = Pages[league];
             if (uri.AbsolutePath == $"/{league}/{league}postseasonprob.html")
-                return new Reply(HttpStatusCode.OK, PostseasonPage(pages.SelectMany(p => p.Teams)));
+                return new Reply(HttpStatusCode.OK, PostseasonPage(head, pages.SelectMany(p => p.Teams)));
             if (pages.FirstOrDefault(p => p.Standings == uri.AbsolutePath).Teams is { } teams)
                 return new Reply(HttpStatusCode.OK, StandingsPage(teams));
         }
         throw new InvalidOperationException("Unexpected offline request: " + uri);
-    }
+    };
+
+    private static string SeasonTitle(string league, int season) => $"<title>{season} {league.ToUpperInvariant()} Post Season Probabilities</title>";
+
 
     private static string StandingsPage(IEnumerable<string> teams) =>
         "<html><body><table><tr><th>Team</th><th>W</th><th>L</th><th>Pct</th><th>No Playoffs</th></tr>"
         + string.Concat(teams.Select((team, i) => $"<tr data-idx=\"{i}\"><td><a href=\"#\">{team}</a></td><td>9</td><td>4</td><td>69</td><td>25%</td></tr>"))
         + "</table></body></html>";
 
-    private static string PostseasonPage(IEnumerable<string> teams) =>
-        "<html><body><table><tr><th colspan=\"6\">Postseason</th></tr><tr><th>Team</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th><th>Champion</th></tr>"
+    private static string PostseasonPage(string head, IEnumerable<string> teams) =>
+        $"<html><head>{head}</head><body><table>"
+        + "<tr><th colspan=\"6\">Postseason</th></tr><tr><th>Team</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th><th>Champion</th></tr>"
         + string.Concat(teams.Select(team => $"<tr><td><a href=\"#\">{team}</a></td><td>70%</td><td>45%</td><td>30%</td><td>20%</td><td>12%</td></tr>"))
         + "</table></body></html>";
 

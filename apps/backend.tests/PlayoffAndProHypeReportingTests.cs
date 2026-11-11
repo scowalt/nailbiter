@@ -47,6 +47,7 @@ public sealed class PlayoffAndProHypeReportingTests
     private const string BillsStandings = """
         <table><tr data-idx="0"><td><a>Buffalo Bills</a></td><td>7</td><td>2</td><td>0</td><td>4%</td></tr></table>
         """;
+    private static readonly DateTimeOffset PlayoffStatusNow = new(2026, 9, 15, 12, 0, 0, TimeSpan.Zero);
 
     private static readonly Dictionary<string, Func<PlayoffStatusService, CancellationToken, Task<int>>> PlayoffStatusRefreshes = new()
     {
@@ -87,7 +88,8 @@ public sealed class PlayoffAndProHypeReportingTests
     [MemberData(nameof(UnreadablePlayoffStatusPages))]
     public async Task Unreadable_or_refused_playoffstatus_page_is_a_warning_without_an_event(string sport, HttpStatusCode status, string body)
     {
-        await using var app = new ReportingApp(_ => new Reply(status, body));
+        await using var app = new ReportingApp(uri => status == HttpStatusCode.OK && uri.AbsolutePath.EndsWith("postseasonprob.html", StringComparison.Ordinal)
+            ? new Reply(status, PostseasonTitled(sport)) : new Reply(status, body), configure: PinPlayoffStatusClock);
 
         Assert.Equal(0, await RefreshPlayoffStatusAsync(app, sport, CancellationToken.None));
 
@@ -143,8 +145,12 @@ public sealed class PlayoffAndProHypeReportingTests
     [InlineData("nba")]
     public async Task Playoffstatus_own_fault_after_parsing_is_sent_once_at_error(string sport)
     {
-        await using var app = new ReportingApp(uri => new Reply(HttpStatusCode.OK, uri.AbsolutePath.EndsWith("standings.html", StringComparison.Ordinal) ? BillsStandings : ""),
-            configure: services => services.RemoveAll<ExcitementDbContext>());
+        await using var app = new ReportingApp(uri => new Reply(HttpStatusCode.OK, uri.AbsolutePath.EndsWith("standings.html", StringComparison.Ordinal) ? BillsStandings : PostseasonTitled(sport)),
+            configure: services =>
+            {
+                services.RemoveAll<ExcitementDbContext>();
+                PinPlayoffStatusClock(services);
+            });
 
         Assert.Equal(0, await RefreshPlayoffStatusAsync(app, sport, CancellationToken.None));
 
@@ -156,8 +162,8 @@ public sealed class PlayoffAndProHypeReportingTests
     {
         await using var database = await Database.StartAsync();
         await using var tableLock = await database.HoldLockAsync("LOCK TABLE team_ratings IN ACCESS EXCLUSIVE MODE");
-        await using var app = new ReportingApp(uri => new Reply(HttpStatusCode.OK, uri.AbsolutePath.EndsWith("standings.html", StringComparison.Ordinal) ? BillsStandings : ""),
-            connectionString: database.ConnectionString + LockTimeout);
+        await using var app = new ReportingApp(uri => new Reply(HttpStatusCode.OK, uri.AbsolutePath.EndsWith("standings.html", StringComparison.Ordinal) ? BillsStandings : PostseasonTitled("nfl")),
+            connectionString: database.ConnectionString + LockTimeout, configure: PinPlayoffStatusClock);
 
         Assert.Equal(0, await RefreshPlayoffStatusAsync(app, "nfl", CancellationToken.None));
 
@@ -314,6 +320,15 @@ public sealed class PlayoffAndProHypeReportingTests
         await app.WaitForLogAsync(typeof(ProHypeCaptureBackgroundService), ProHypeFailure);
         AssertSentOnceAtError(await app.SentEventsAsync(), typeof(ProHypeCaptureBackgroundService), ProHypeFailure, typeof(PostgresException));
         await AdvanceUntilAsync(clock, lifecycle.Captured(2));
+    }
+
+    private static string PostseasonTitled(string sport) =>
+        $"<html><head><title>{PlayoffStatusNow.Year} {sport.ToUpperInvariant()} Post Season Probabilities</title></head><body></body></html>";
+
+    private static void PinPlayoffStatusClock(IServiceCollection services)
+    {
+        services.RemoveAll<TimeProvider>();
+        services.AddSingleton<TimeProvider>(new FakeTimeProvider(PlayoffStatusNow));
     }
 
     private static async Task<int> RefreshPlayoffStatusAsync(ReportingApp app, string sport, CancellationToken ct)
