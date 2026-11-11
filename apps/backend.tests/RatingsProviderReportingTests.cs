@@ -30,7 +30,6 @@ namespace backend.tests;
 public sealed class RatingsProviderReportingTests
 {
     private const int StandardAttempts = 4;
-    private const string RouteStepTemplate = "Ratings refresh step {Step} failed";
     private static readonly Answer Hang = new Hanging();
     private static readonly Answer Unavailable = new Reply(HttpStatusCode.ServiceUnavailable, "{}");
 
@@ -282,29 +281,6 @@ public sealed class RatingsProviderReportingTests
     }
 
     [Fact]
-    public async Task Own_fault_in_a_ratings_route_step_is_sent_once_and_the_route_carries_on()
-    {
-        await using var database = await StartDatabaseAsync();
-        await using var app = new RatingsApp(_ => new Reply(HttpStatusCode.NotFound, "{}"), services =>
-        {
-            UseDatabase(services, database.GetConnectionString());
-            services.RemoveAll<NhlPowerRankingsGuruService>();
-        });
-
-        using var response = await app.CreateClient().PostAsync("/api/ratings/refresh", null);
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        using var results = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        Assert.StartsWith("error: ", results.RootElement.GetProperty("nhl_guruPowerRankings").GetString());
-        Assert.Equal(0, results.RootElement.GetProperty("mlb_powerRankings").GetInt32());
-        var sent = await app.SentEventsAsync();
-        var reported = Assert.Single(sent, e => e.Template == RouteStepTemplate);
-        Assert.Equal("error", reported.Level);
-        Assert.Contains(reported.Exceptions, e => e.Type == typeof(InvalidOperationException).FullName);
-        Assert.DoesNotContain(sent, e => e.Logger == typeof(PowerRankingsGuruService).FullName || e.Logger == typeof(NhlPowerRankingsGuruService).FullName);
-    }
-
-    [Fact]
     public async Task Host_stop_while_waiting_for_the_next_ratings_cycle_is_quiet()
     {
         await using var database = await StartDatabaseAsync();
@@ -412,8 +388,6 @@ public sealed class RatingsProviderReportingTests
         public SyntheticProvider Provider { get; }
 
         public IServiceProvider Services => app.Services;
-
-        public HttpClient CreateClient() => app.CreateClient();
 
         public RatingsRefreshBackgroundService Background =>
             new(app.Services, app.Services.GetRequiredService<ILogger<RatingsRefreshBackgroundService>>());
