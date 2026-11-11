@@ -1,9 +1,13 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using AngleSharp.Dom;
+using AngleSharp.Html.Dom;
 using AngleSharp.Html.Parser;
+using backend.Models;
 using backend.Data;
 using backend.Services.Espn;
 using Backend.Rendering;
+using Falco.Markup;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -25,8 +29,23 @@ public sealed class BroadcastNetworkTests : IAsyncLifetime
     {
         competition.TryGetProperty("broadcasts", out var broadcasts);
         competition.TryGetProperty("geoBroadcasts", out var geoBroadcasts);
-        return FormatHelpers.broadcastLabel([.. EspnBroadcasts.networks(broadcasts, geoBroadcasts)])?.Value;
+        return RenderedLabel([.. EspnBroadcasts.networks(broadcasts, geoBroadcasts)]);
     }
+
+    private static string? RenderedLabel(string[]? networks)
+    {
+        var game = new Game { Id = "unit", Sport = "mlb", HomeTeam = "Home", AwayTeam = "Away", HomeTeamAbbreviation = "HOM", AwayTeamAbbreviation = "AWY", BroadcastNetworks = networks };
+        var html = string.Concat(FormatHelpers.broadcastNodes(game).Select(XmlNodeRenderer.renderNode));
+        var listing = new HtmlParser().ParseDocument(html).QuerySelector(".nb-broadcast");
+        return listing is null ? null : Spoken(listing)["TV: ".Length..];
+    }
+
+    private static string Spoken(INode listing) => string.Concat(listing.Descendants().Select(node => node switch
+    {
+        IHtmlImageElement logo => logo.AlternativeText,
+        IText text => text.Data,
+        _ => "",
+    }));
 
     private async Task<AngleSharp.Dom.IDocument> Page(string path) =>
         await new HtmlParser().ParseDocumentAsync(await fixture.Host.Client.GetStringAsync(path));
@@ -61,7 +80,32 @@ public sealed class BroadcastNetworkTests : IAsyncLifetime
     [InlineData(new[] { "ESPN+", "Fixture A", "Fixture B" }, "ESPN+ +2")]
     [InlineData(new[] { " ", "TNT", "" }, "TNT")]
     public void Label_is_the_primary_network_plus_a_count_of_the_others(string[] networks, string? expected) =>
-        Assert.Equal(expected, FormatHelpers.broadcastLabel(networks)?.Value);
+        Assert.Equal(expected, RenderedLabel(networks));
+
+    [Theory]
+    [InlineData("ESPN+", "/logos/networks/espn-plus.svg")]
+    [InlineData("prime video", "/logos/networks/prime-video.svg")]
+    [InlineData("USA Net", "/logos/networks/usa-network.svg")]
+    [InlineData("Fixture Sports Northeast", null)]
+    public void Recognized_networks_render_their_logo_and_others_render_their_name(string network, string? logo)
+    {
+        var game = new Game { Id = "unit", Sport = "mlb", HomeTeam = "Home", AwayTeam = "Away", HomeTeamAbbreviation = "HOM", AwayTeamAbbreviation = "AWY", BroadcastNetworks = [network, "Fixture B"] };
+        var html = string.Concat(FormatHelpers.broadcastNodes(game).Select(XmlNodeRenderer.renderNode));
+        var listing = new HtmlParser().ParseDocument(html).QuerySelector(".nb-broadcast")!;
+        Assert.Equal(logo, listing.QuerySelector("img.network-logo")?.GetAttribute("src"));
+        Assert.Equal($"TV: {network} +1", Spoken(listing));
+    }
+
+    [Fact]
+    public async Task Every_network_logo_is_served_as_an_svg()
+    {
+        foreach (var url in Logos.networkLogos.Values.Distinct())
+        {
+            using var response = await fixture.Host.Client.GetAsync(url);
+            Assert.True(response.IsSuccessStatusCode, url);
+            Assert.Equal("image/svg+xml", response.Content.Headers.ContentType?.MediaType);
+        }
+    }
 
     [Fact]
     public async Task Collected_networks_persist_and_render_beside_the_start_time_on_home_league_and_game_pages()
@@ -79,16 +123,19 @@ public sealed class BroadcastNetworkTests : IAsyncLifetime
                 Assert.NotNull(card);
                 var rendered = card!.QuerySelector($"#broadcast-{id}");
                 if (label is null) Assert.Null(rendered);
-                else Assert.Equal($"TV: {label}", rendered!.TextContent);
+                else Assert.Equal($"TV: {label}", Spoken(rendered!));
                 Assert.DoesNotContain("televised", card.TextContent, StringComparison.OrdinalIgnoreCase);
             }
             using var detail = await Page($"/game/{id}");
-            Assert.Equal(label is null ? null : $"TV: {label}", detail.QuerySelector($"#broadcast-{id}")?.TextContent);
+            var detailListing = detail.QuerySelector($"#broadcast-{id}");
+            Assert.Equal(label is null ? null : $"TV: {label}", detailListing is null ? null : Spoken(detailListing));
         }
         Assert.Equal(["Prime Video"], (await Stored("synthetic-tv-national"))!);
         Assert.Null(await Stored("synthetic-tv-missing"));
         Assert.Contains("TV: ESPN+, Fixture Sports Northeast, Fixture Network South",
             home.QuerySelector("#broadcast-synthetic-tv-regional-extras")!.GetAttribute("title"));
+        Assert.Equal("Prime Video", home.QuerySelector("#broadcast-synthetic-tv-national img.network-logo")!.GetAttribute("alt"));
+        Assert.Null(home.QuerySelector("#broadcast-synthetic-tv-geo-fallback img"));
     }
 
     [Fact]

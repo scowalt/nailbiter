@@ -426,6 +426,16 @@
     white-space: nowrap;
   }
 
+  .network-logo {
+    display: inline-block;
+    height: 1.4em;
+    max-width: 6em;
+    padding: 0.15em 0.3em;
+    border-radius: 0.25rem;
+    background: var(--color-white);
+    vertical-align: middle;
+  }
+
   .visually-hidden {
     position: absolute;
     width: 1px;

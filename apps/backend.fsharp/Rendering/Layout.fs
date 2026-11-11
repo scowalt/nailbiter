@@ -6,7 +6,7 @@ open backend.GraphQL.Types
 module Layout =
 
     let private scriptReleaseVersion = "2026-11-10-snapshot-diff"
-    let private styleReleaseVersion = "2026-11-10-league-rows"
+    let private styleReleaseVersion = "2026-11-11-network-logos"
     let private stylesheets = [ "global"; "components"; "games"; "world-cup"; "motorsport" ]
     let private iconVersion = "swing-1"
 

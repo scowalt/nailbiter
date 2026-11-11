@@ -126,26 +126,20 @@ module FormatHelpers =
             Text.raw fallback
         ]
 
-    let broadcastLabel (networks: string[]) =
-        let usable =
-            if isNull networks then [||]
-            else networks |> Array.filter (String.IsNullOrWhiteSpace >> not) |> Array.map (fun n -> n.Trim())
-        match usable with
-        | [||] -> None
-        | [| only |] -> Some only
-        | many -> Some $"{many[0]} +{many.Length - 1}"
-
     let broadcastNodes (game: backend.Models.Game) =
-        match game.Status with
-        | "scheduled" | "in_progress" ->
-            match broadcastLabel game.BroadcastNetworks with
-            | Some label ->
-                let title = String.Join(", ", game.BroadcastNetworks |> Array.filter (String.IsNullOrWhiteSpace >> not))
-                [ Elem.span [ Attr.class' "nb-broadcast-sep"; Attr.create "aria-hidden" "true" ] [ Text.raw " · " ]
-                  Elem.span [ Attr.class' "nb-broadcast"; Attr.id $"broadcast-{game.Id}"; Attr.title $"TV: {title}" ] [
-                      Elem.span [ Attr.class' "visually-hidden" ] [ Text.raw "TV: " ]
-                      Text.enc label ] ]
-            | None -> []
+        let networks =
+            if isNull game.BroadcastNetworks then [||]
+            else game.BroadcastNetworks |> Array.filter (String.IsNullOrWhiteSpace >> not) |> Array.map (fun n -> n.Trim())
+        match game.Status, networks with
+        | ("scheduled" | "in_progress"), networks when networks.Length > 0 ->
+            let primary = networks[0]
+            [ Elem.span [ Attr.class' "nb-broadcast-sep"; Attr.create "aria-hidden" "true" ] [ Text.raw " · " ]
+              Elem.span [ Attr.class' "nb-broadcast"; Attr.id $"broadcast-{game.Id}"; Attr.title $"""TV: {String.Join(", ", networks)}""" ] [
+                  Elem.span [ Attr.class' "visually-hidden" ] [ Text.raw "TV: " ]
+                  match Logos.networkLogoUrl primary with
+                  | Some url -> Elem.img [ Attr.src url; Attr.alt primary; Attr.class' "network-logo" ]
+                  | None -> Text.enc primary
+                  if networks.Length > 1 then Text.raw $" +{networks.Length - 1}" ] ]
         | _ -> []
 
     let formatScheduledTimeFromIso (isoString: string) =
