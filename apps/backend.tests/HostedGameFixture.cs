@@ -16,6 +16,7 @@ internal sealed class HostedGameFixture : IAsyncLifetime
 {
     private readonly AppFactory entry = new();
     private readonly Action<IServiceCollection>? configureServices;
+    private readonly SharedPostgreSql? server;
     private TestDatabase? database;
     private WebApplicationFactory<Program>? app;
     private readonly string timingOwner = "case-" + Guid.NewGuid().ToString("N");
@@ -26,15 +27,18 @@ internal sealed class HostedGameFixture : IAsyncLifetime
     public HttpClient Client { get; private set; } = null!;
     public IServiceProvider Services => app!.Services;
 
-    public HostedGameFixture(DateTimeOffset? now = null, Action<IServiceCollection>? configureServices = null)
+    public HostedGameFixture(DateTimeOffset? now = null, Action<IServiceCollection>? configureServices = null, SharedPostgreSql? server = null)
     {
         Clock = new FakeTimeProvider(now ?? new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
         this.configureServices = configureServices;
+        this.server = server;
     }
 
     public async Task InitializeAsync()
     {
-        database = await FixtureTimings.MeasureAsync(timingOwner, "container", TestDatabase.StartContainerAsync);
+        database = server is null
+            ? await FixtureTimings.MeasureAsync(timingOwner, "container", TestDatabase.StartContainerAsync)
+            : await FixtureTimings.MeasureAsync(timingOwner, "database", server.CreateDatabaseAsync);
         var connectionString = database.ConnectionString;
         var hostStarted = Stopwatch.GetTimestamp();
         app = entry.WithWebHostBuilder(builder => builder.ConfigureServices(services =>
