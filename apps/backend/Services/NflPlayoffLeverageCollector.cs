@@ -74,7 +74,7 @@ public sealed class NflPlayoffLeverageCollector(HttpClient http, TimeProvider cl
         var published = response.Content.Headers.LastModified?.UtcDateTime;
         var serverDate = response.Headers.Date?.UtcDateTime;
         var valid = published.HasValue && NflPlayoffLeveragePolicy.Published(published.Value, now, now) &&
-            serverDate.HasValue && ProHypePolicy.Fresh(serverDate.Value, now, 1);
+            serverDate.HasValue && NflPlayoffLeveragePolicy.ServerDated(serverDate.Value, now);
         try { return new(new UTF8Encoding(false, true).GetString(buffer.ToArray()), published, valid); }
         catch (DecoderFallbackException) { return new("", published, false); }
     }

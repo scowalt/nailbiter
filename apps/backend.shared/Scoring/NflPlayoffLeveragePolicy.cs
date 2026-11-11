@@ -11,6 +11,7 @@ public static class NflPlayoffLeveragePolicy
     public const string ScheduleUrl = "https://www.playoffstatus.com/nfl/nflschedule.html";
     public static readonly TimeSpan PublicationMaxAge = TimeSpan.FromDays(7);
     public static readonly TimeSpan MaxKickoffDifference = TimeSpan.FromMinutes(30);
+    public static readonly TimeSpan PublisherClockSkew = TimeSpan.FromMinutes(1);
     private static readonly TimeZoneInfo Eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
     private const double SeedAndNoPlayoffCellRounding = 8 * .005;
 
@@ -24,6 +25,9 @@ public static class NflPlayoffLeveragePolicy
             DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(game.ScheduledStart, Eastern)) &&
         match.HomeGameId == game.Id && match.AwayGameId == game.Id &&
         match.HomeNextGameId == game.Id && match.AwayNextGameId == game.Id;
+
+    public static bool ServerDated(DateTime serverDate, DateTime now) =>
+        serverDate <= now + PublisherClockSkew && now - serverDate < TimeSpan.FromHours(1);
 
     public static bool Published(DateTime publication, DateTime observed, DateTime now) =>
         publication.Kind == DateTimeKind.Utc && publication != default && publication <= observed &&
