@@ -4,7 +4,6 @@ using System.Net;
 using System.Text.Json;
 using backend.Services;
 using backend.Services.Espn;
-using backend.Services.Highlights;
 using backend.Services.Kalshi;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -12,7 +11,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Http.Resilience;
-using Microsoft.Extensions.Options;
 using Polly.Timeout;
 using Sentry;
 using Sentry.AspNetCore;
@@ -29,12 +27,6 @@ public sealed class StalledProviderBodyReportingTests
     private const string Template = "Failed to refresh {Sport} standings from ESPN";
     private static readonly TimeSpan Guard = TimeSpan.FromSeconds(20);
     private static readonly DateTime LiveStart = new(2026, 11, 7, 0, 30, 0, DateTimeKind.Utc);
-
-    private static readonly string[] DeadlineBoundClients =
-    [
-        YouTubeHighlightsClient.HttpClientName, MlbHighlightsIdentityClient.HttpClientName,
-        nameof(NhlPowerRankingsGuruService), nameof(MoneyPuckService), nameof(NflPlayoffLeverageCollector)
-    ];
 
     [Fact]
     public async Task Stalled_standings_body_times_out_after_retries_and_is_sent_once_at_error()
@@ -88,8 +80,9 @@ public sealed class StalledProviderBodyReportingTests
     {
         await using var app = new StalledBodyApp();
 
-        Assert.Subset(app.ClientNames.ToHashSet(), DeadlineBoundClients.ToHashSet());
-        var providerClients = app.ClientNames.Except(DeadlineBoundClients).Order().ToArray();
+        var clientNames = HttpClientRegistrations.Names(app.Services);
+        Assert.Subset(clientNames.ToHashSet(), HttpClientRegistrations.DeadlineBound.ToHashSet());
+        var providerClients = clientNames.Except(HttpClientRegistrations.DeadlineBound).Order().ToArray();
         Assert.Contains(nameof(EspnStandingsService), providerClients);
         Assert.Contains(nameof(KalshiOddsService), providerClients);
         var clients = app.Services.GetRequiredService<IHttpClientFactory>();
@@ -147,22 +140,6 @@ public sealed class StalledProviderBodyReportingTests
         }
 
         public SyntheticProvider Provider { get; }
-
-        public IReadOnlySet<string> ClientNames
-        {
-            get
-            {
-                var registryType = typeof(IHttpClientFactory).Assembly.GetType("Microsoft.Extensions.DependencyInjection.HttpClientMappingRegistry", throwOnError: true)!;
-                var registry = app.Services.GetRequiredService(registryType);
-                var typed = (System.Collections.IDictionary)registryType.GetProperty("NamedClientRegistrations")!.GetValue(registry)!;
-                return app.Services.GetServices<IConfigureOptions<HttpClientFactoryOptions>>()
-                    .OfType<ConfigureNamedOptions<HttpClientFactoryOptions>>()
-                    .Select(o => o.Name)
-                    .Concat(typed.Keys.Cast<string>())
-                    .OfType<string>()
-                    .ToHashSet();
-            }
-        }
 
         public IServiceProvider Services => app.Services;
 
