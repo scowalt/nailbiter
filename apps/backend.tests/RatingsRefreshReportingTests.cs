@@ -47,10 +47,14 @@ public sealed class RatingsRefreshReportingTests
     [Fact]
     public async Task Provider_timeout_in_a_refresh_is_sent_once_at_error_and_not_treated_as_shutdown()
     {
-        await using var app = await RefreshApp.StartAsync(db => db.AddInterceptors(new ProviderTimeoutOnCollegeTeamsRead()));
+        var reads = new ProviderTimeoutThenHoldOnCollegeTeamsRead();
+        await using var app = await RefreshApp.StartAsync(db => db.AddInterceptors(reads));
 
         await app.Worker.StartAsync(CancellationToken.None);
-        var sent = await app.WaitForSentAsync(1);
+        await reads.FirstRead.WaitAsync(TimeSpan.FromSeconds(60));
+        app.Time.Advance(PlayoffRatingPolicy.refreshInterval);
+        await reads.NextCycleRead.WaitAsync(TimeSpan.FromSeconds(60));
+        var sent = await app.SentEventsAsync();
 
         var reported = Assert.Single(sent);
         Assert.Equal(("error", WorkerFailure), (reported.Level, reported.Message));
@@ -176,17 +180,28 @@ public sealed class RatingsRefreshReportingTests
         }
     }
 
-    private sealed class ProviderTimeoutOnCollegeTeamsRead : DbCommandInterceptor
+    private sealed class ProviderTimeoutThenHoldOnCollegeTeamsRead : DbCommandInterceptor
     {
+        private readonly TaskCompletionSource firstRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource nextCycleRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int reads;
+
+        public Task FirstRead => firstRead.Task;
+        public Task NextCycleRead => nextCycleRead.Task;
+
         public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
             DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
         {
-            if (command.CommandText.Contains("college_teams", StringComparison.Ordinal))
+            if (!command.CommandText.Contains("college_teams", StringComparison.Ordinal)) return result;
+            if (Interlocked.Increment(ref reads) == 1)
             {
+                firstRead.SetResult();
                 using var provider = new HttpClient(new HangingProvider()) { Timeout = TimeSpan.FromMilliseconds(100) };
                 await provider.GetAsync("https://provider.invalid/", cancellationToken);
             }
-            return result;
+            nextCycleRead.TrySetResult();
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            throw new UnreachableException();
         }
     }
 
