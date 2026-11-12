@@ -33,6 +33,11 @@ public sealed class MoneyPuckChallengeDetectionTests
     private const string ChallengeOptionsOnly =
         "<!DOCTYPE html><html><head></head><body><script>window._cf_chl_opt={cType:'managed'};</script></body></html>";
 
+    private const string OrchestrationScriptOnly =
+        "<!DOCTYPE html><html><head></head><body><script>var a=document.createElement('script');"
+        + "a.src='/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1?ray=0000000000000000';"
+        + "document.getElementsByTagName('head')[0].appendChild(a);</script></body></html>";
+
     [Fact]
     public async Task Cloudflare_javascript_detections_on_a_normal_predictions_page_collect_without_latching_or_reporting()
     {
@@ -49,6 +54,7 @@ public sealed class MoneyPuckChallengeDetectionTests
     [Theory]
     [InlineData(200, ManagedChallengePage)]
     [InlineData(200, ChallengeOptionsOnly)]
+    [InlineData(200, OrchestrationScriptOnly)]
     [InlineData(401, "")]
     [InlineData(403, ManagedChallengePage)]
     [InlineData(429, "")]
