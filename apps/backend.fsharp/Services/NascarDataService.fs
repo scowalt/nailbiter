@@ -234,6 +234,171 @@ type NascarDataService
                     return count
         }
 
+    member this.FindStaleRosterRaceAsync(year: int, now: DateTime, ct: CancellationToken) : Task<NascarRace option> =
+        task {
+            use scope = serviceProvider.CreateScope()
+            let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
+
+            let! latestFinal =
+                db.NascarRaces
+                    .Where(fun r -> r.Year = year && r.Status = "final")
+                    .OrderByDescending(fun r -> r.RaceNumber)
+                    .FirstOrDefaultAsync(ct)
+
+            let horizon = now.AddDays(7.0)
+
+            let! race =
+                if isNull latestFinal then
+                    db.NascarRaces
+                        .Where(fun r ->
+                            r.Year = year
+                            && (r.Status = "scheduled" || r.Status = "in_progress")
+                            && r.ScheduledStart <= horizon)
+                        .OrderBy(fun r -> r.RaceNumber)
+                        .FirstOrDefaultAsync(ct)
+                else
+                    Task.FromResult latestFinal
+
+            if isNull race then
+                return None
+            else
+                let! roster =
+                    db.NascarDrivers
+                        .Where(fun d -> d.Season = year)
+                        .ToDictionaryAsync((fun d -> d.EspnAthleteId), (fun d -> d.CarNumber), ct)
+
+                let! entrants =
+                    db.NascarRaceResults
+                        .Where(fun r -> r.RaceId = race.Id)
+                        .Select(fun r -> struct (r.EspnAthleteId, r.CarNumber))
+                        .ToListAsync(ct)
+
+                let known (struct (athleteId: string, carNumber: string)) =
+                    match roster.TryGetValue athleteId with
+                    | true, rosterCar -> isNull carNumber || rosterCar = carNumber
+                    | _ -> false
+
+                return if roster.Count > 0 && Seq.forall known entrants then None else Some race
+        }
+
+    member this.RefreshDriversAsync(race: NascarRace, ct: CancellationToken) : Task<int> =
+        task {
+            let! scoreboard = espnNascar.FetchScoreboardByDateAsync(race.ScheduledStart, ct = ct)
+
+            let entrants =
+                if isNull (box scoreboard) || isNull scoreboard.Events then
+                    []
+                else
+                    scoreboard.Events
+                    |> Seq.tryFind (fun e -> not (isNull (box e)) && e.Id = race.Id)
+                    |> Option.bind (fun e ->
+                        if isNull e.Competitions || e.Competitions.Count = 0 || isNull (box e.Competitions.[0]) then
+                            None
+                        else
+                            Option.ofObj e.Competitions.[0].Competitors)
+                    |> Option.map (fun competitors ->
+                        competitors
+                        |> Seq.filter (fun c ->
+                            not (isNull (box c))
+                            && not (String.IsNullOrEmpty c.Id)
+                            && not (isNull (box c.Athlete))
+                            && not (isNull c.Athlete.FullName)
+                            && not (isNull c.Athlete.DisplayName)
+                            && not (isNull c.Athlete.ShortName))
+                        |> Seq.distinctBy (fun c -> c.Id)
+                        |> List.ofSeq)
+                    |> Option.defaultValue []
+
+            if entrants.IsEmpty then
+                logger.LogWarning(
+                    "No NASCAR entrants for race {Id} on the scoreboard for {Date}",
+                    race.Id,
+                    race.ScheduledStart
+                )
+
+                return 0
+            else
+                let! core =
+                    if entrants |> List.forall (fun c -> isNull (box c.Vehicle)) then
+                        espnNascar.FetchCompetitorsAsync(race.Id, ct = ct)
+                    else
+                        Task.FromResult Unchecked.defaultof<EspnCoreCompetitorsResponse>
+
+                let coreVehicles =
+                    if isNull (box core) || isNull core.Items then
+                        dict []
+                    else
+                        core.Items
+                        |> Seq.filter (fun c -> not (isNull (box c)) && not (isNull (box c.Vehicle)))
+                        |> Seq.map (fun c ->
+                            let athleteId =
+                                if not (isNull (box c.Athlete)) && not (isNull c.Athlete.Id) then c.Athlete.Id else c.Id
+
+                            athleteId, (c.Vehicle.Number, c.Vehicle.Manufacturer, c.Vehicle.Team))
+                        |> Seq.filter (fun (athleteId, _) -> not (isNull athleteId))
+                        |> Seq.distinctBy fst
+                        |> dict
+
+                use scope = serviceProvider.CreateScope()
+                let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
+                let ids = entrants |> List.map (fun c -> c.Id) |> ResizeArray
+
+                let! stored =
+                    db.NascarDrivers
+                        .Where(fun d -> d.Season = race.Year && ids.Contains(d.EspnAthleteId))
+                        .ToDictionaryAsync((fun d -> d.EspnAthleteId), ct)
+
+                for c in entrants do
+                    let driver =
+                        match stored.TryGetValue c.Id with
+                        | true, driver -> driver
+                        | _ ->
+                            let driver =
+                                NascarDriver(
+                                    EspnAthleteId = c.Id,
+                                    FullName = c.Athlete.FullName,
+                                    DisplayName = c.Athlete.DisplayName,
+                                    ShortName = c.Athlete.ShortName,
+                                    Season = race.Year
+                                )
+
+                            db.NascarDrivers.Add(driver) |> ignore
+                            driver
+
+                    driver.FullName <- c.Athlete.FullName
+                    driver.DisplayName <- c.Athlete.DisplayName
+                    driver.ShortName <- c.Athlete.ShortName
+
+                    if not (isNull (box c.Athlete.Flag)) then
+                        driver.CountryFlagHref <- c.Athlete.Flag.Href
+
+                    let vehicle =
+                        if not (isNull (box c.Vehicle)) then
+                            Some(c.Vehicle.Number, c.Vehicle.Manufacturer, c.Vehicle.Team)
+                        else
+                            match coreVehicles.TryGetValue c.Id with
+                            | true, vehicle -> Some vehicle
+                            | _ -> None
+
+                    match vehicle with
+                    | Some(number, manufacturer, team) ->
+                        driver.CarNumber <- number
+                        driver.Manufacturer <- manufacturer
+                        driver.TeamName <- team
+                    | None -> ()
+
+                let! _ = db.SaveChangesAsync(ct)
+
+                logger.LogInformation(
+                    "Refreshed NASCAR drivers for {Year} from race {Id}: {Count} drivers",
+                    race.Year,
+                    race.Id,
+                    entrants.Length
+                )
+
+                return entrants.Length
+        }
+
     member this.RefreshRaceResultsAsync(year: int, ?ct: CancellationToken) : Task<int> =
         let ct = defaultArg ct CancellationToken.None
 
