@@ -311,6 +311,28 @@ public sealed class NflPlayoffLeverageTests
     }
 
     [Theory]
+    [InlineData(.01, .4)]
+    [InlineData(.03, null)]
+    public async Task Game_stakes_bounds_within_a_point_score_their_midpoint(double homeWinUpper, double? expected)
+    {
+        var game = Game(); var context = await Captured(game);
+        var evidence = context.NflPlayoffLeverage!;
+        evidence.HomeOdds = evidence.HomeOdds! with { WinLower = .01, WinUpper = homeWinUpper, LossLower = 0, LossUpper = .01, Seeds = null };
+        evidence.AwayOdds = evidence.AwayOdds! with { WinLower = 0, WinUpper = .01, LossLower = 0, LossUpper = .01, Seeds = null };
+        var result = Score(game, context);
+        if (expected is double stakes)
+        {
+            Assert.Equal(stakes, result.Stakes.Value!.Value, 8);
+            Assert.NotNull(result.Total);
+        }
+        else
+        {
+            Assert.Null(result.Stakes.Value);
+            Assert.Null(result.Total);
+        }
+    }
+
+    [Theory]
     [InlineData("missing-last-modified")]
     [InlineData("missing-date")]
     [InlineData("future-publication")]
