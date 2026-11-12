@@ -24,6 +24,12 @@ When you change any stylesheet, change `styleReleaseVersion` in `apps/backend.fs
 - `base` holds the element reset and page-wide element rules, such as `body`, `a` and the scrollbar.
 - `components` holds semantic classes.
 
+## Light and dark
+
+The site follows the operating system setting; there is no manual toggle. `:root` in the `theme` layer holds the dark palette. A `@media (prefers-color-scheme: light)` block in the same layer overrides the tokens that differ. Components use only tokens, so a new color needs a token with a value in both blocks. Use `--color-ink` for a tint that must contrast with the page, and `--color-white` only for a color that is white in both schemes. The win probability chart reads its axis colors from the tokens when it renders.
+
+Team colors from the server are chosen for contrast on the dark card, so they can be pale on the light theme.
+
 Do not use `!important` or raise specificity to win a conflict. Fix the rule order or the class design instead. Only third-party CSS may be unlayered.
 
 ## Class names

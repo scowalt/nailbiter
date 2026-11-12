@@ -2,6 +2,18 @@ import { Chart, registerables } from "chart.js";
 
 Chart.register(...registerables);
 
+const lightScheme = window.matchMedia("(prefers-color-scheme: light)");
+
+function themeColors() {
+  const style = getComputedStyle(document.documentElement);
+  const token = (name) => style.getPropertyValue(name).trim();
+  return {
+    legend: token("--color-text-secondary"),
+    tick: token("--color-text-muted"),
+    grid: token("--color-border"),
+  };
+}
+
 export class NbWinProbabilityChart extends HTMLElement {
   static observedAttributes = [
     "data",
@@ -13,6 +25,7 @@ export class NbWinProbabilityChart extends HTMLElement {
   ];
 
   connectedCallback() {
+    lightScheme.addEventListener("change", this.applyTheme);
     if (!this.canvas) {
       this.canvas = document.createElement("canvas");
     }
@@ -28,7 +41,20 @@ export class NbWinProbabilityChart extends HTMLElement {
     }
   }
 
+  applyTheme = () => {
+    if (!this.chart) return;
+    const colors = themeColors();
+    const { options } = this.chart;
+    options.plugins.legend.labels.color = colors.legend;
+    for (const axis of ["x", "y"]) {
+      options.scales[axis].ticks.color = colors.tick;
+      options.scales[axis].grid.color = colors.grid;
+    }
+    this.chart.update("none");
+  };
+
   disconnectedCallback() {
+    lightScheme.removeEventListener("change", this.applyTheme);
     queueMicrotask(() => {
       if (!this.isConnected && this.chart) {
         this.chart.destroy();
@@ -178,6 +204,7 @@ export class NbWinProbabilityChart extends HTMLElement {
       return;
     }
 
+    const colors = themeColors();
     this.chart = new Chart(this.canvas, {
       type: "line",
       data: {
@@ -193,7 +220,7 @@ export class NbWinProbabilityChart extends HTMLElement {
               hasThreeWayData ||
               hasTwoWayData ||
               this.hasAttribute("home-abbr"),
-            labels: { color: "#d4d4d8", usePointStyle: true, boxWidth: 8 },
+            labels: { color: colors.legend, usePointStyle: true, boxWidth: 8 },
           },
           tooltip: {
             callbacks: {
@@ -219,19 +246,19 @@ export class NbWinProbabilityChart extends HTMLElement {
         scales: {
           x: {
             display: true,
-            ticks: { color: "#71717a", maxTicksLimit: 6 },
-            grid: { color: "#27272a" },
+            ticks: { color: colors.tick, maxTicksLimit: 6 },
+            grid: { color: colors.grid },
           },
           y: {
             display: true,
             min: 0,
             max: 100,
             ticks: {
-              color: "#71717a",
+              color: colors.tick,
               callback: (v) => `${v}%`,
               stepSize: 25,
             },
-            grid: { color: "#27272a" },
+            grid: { color: colors.grid },
           },
         },
         interaction: { intersect: false, mode: "index" },

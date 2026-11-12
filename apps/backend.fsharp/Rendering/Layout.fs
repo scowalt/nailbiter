@@ -5,8 +5,8 @@ open backend.GraphQL.Types
 
 module Layout =
 
-    let private scriptReleaseVersion = "2026-11-10-snapshot-diff"
-    let private styleReleaseVersion = "2026-11-11-network-logos"
+    let private scriptReleaseVersion = "2026-11-12-light-theme"
+    let private styleReleaseVersion = "2026-11-12-light-theme"
     let private stylesheets = [ "global"; "components"; "games"; "world-cup"; "motorsport" ]
     let private iconVersion = "swing-1"
 
@@ -84,10 +84,13 @@ module Layout =
             match activeSport with
             | Some sport -> $"https://live.nailbiter.app{(LeagueConfig.getLeagueConfig sport).Path}"
             | None -> "https://live.nailbiter.app"
-        Elem.html [ Attr.lang "en"; cls "dark" ] [
+        Elem.html [ Attr.lang "en" ] [
             Elem.head [] [
                 Elem.meta [ Attr.charset "utf-8" ]
                 Elem.meta [ Attr.name "viewport"; Attr.content "width=device-width, initial-scale=1.0" ]
+                Elem.meta [ Attr.name "color-scheme"; Attr.content "dark light" ]
+                Elem.meta [ Attr.name "theme-color"; Attr.content "#09090b"; Attr.create "media" "(prefers-color-scheme: dark)" ]
+                Elem.meta [ Attr.name "theme-color"; Attr.content "#fafafa"; Attr.create "media" "(prefers-color-scheme: light)" ]
                 Elem.title [] [ Text.raw title ]
                 Elem.meta [ Attr.name "description"; Attr.content description ]
                 Elem.meta [ Attr.create "property" "og:title"; Attr.content title ]
