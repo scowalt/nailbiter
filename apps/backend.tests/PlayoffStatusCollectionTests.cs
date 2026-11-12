@@ -90,6 +90,7 @@ public sealed class PlayoffStatusCollectionTests
         cases.Add("nfl", "<title>2026-27 NFL Post Season Probabilities</title>");
         cases.Add("nfl", "<title>٢٠٢٦ NFL Post Season Probabilities</title>");
         cases.Add("nfl", "<title>2026 NFL Post Season Probabilities</title><title>2025 NFL Post Season Probabilities</title>");
+        cases.Add("nfl", "<title>2026 NFL Post Season Probabilities</title><title>2026 NFL Post Season Probabilities</title>");
         return cases;
     }
 
@@ -182,6 +183,24 @@ public sealed class PlayoffStatusCollectionTests
             (r.Sport, r.Season, r.PlayoffProbability!.Value, r.ChampionshipProbability!.Value, r.FetchedAt)));
         Assert.Equal(2, (await app.RatingsAsync()).Count);
         Assert.Equal(3, app.Provider.Requests.Count);
+        Assert.DoesNotContain(app.Logs, l => l.Category == typeof(PlayoffStatusService).FullName && l.Level >= LogLevel.Warning);
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Theory]
+    [InlineData("nfl")]
+    [InlineData("nba")]
+    [InlineData("mlb")]
+    public async Task Svg_title_in_the_postseason_body_does_not_hide_the_document_title(string league)
+    {
+        var serving = Serving(league, 2026);
+        await using var app = await CollectorApp.StartAsync(uri => uri.AbsolutePath.EndsWith("postseasonprob.html", StringComparison.Ordinal) && serving(uri) is Reply page
+            ? page with { Body = page.Body.Replace("<body>", "<body><svg><title>PlayoffStatus logo</title></svg>", StringComparison.Ordinal) }
+            : serving(uri));
+
+        Assert.Equal(2, await app.RefreshAsync(league));
+
+        Assert.All(await app.RatingsAsync(), r => Assert.Equal((league, 2026, 0.75), (r.Sport, r.Season, r.PlayoffProbability!.Value)));
         Assert.DoesNotContain(app.Logs, l => l.Category == typeof(PlayoffStatusService).FullName && l.Level >= LogLevel.Warning);
         Assert.Empty(await app.SentEventsAsync());
     }
