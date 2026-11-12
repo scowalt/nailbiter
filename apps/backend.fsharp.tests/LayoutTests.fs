@@ -12,8 +12,8 @@ let private pageContexts = None :: (Enum.GetValues<Sport>() |> Array.map Some |>
 let ``page uses one release version for local scripts`` () =
     let html = Layout.renderPage "Nailbiter" "Live games" None []
 
-    Assert.Contains("/js/nailbiter-components.js?v=2026-11-10-snapshot-diff", html)
-    Assert.Contains("/js/live-sync.js?v=2026-11-10-snapshot-diff", html)
+    Assert.Contains("/js/nailbiter-components.js?v=2026-11-12-light-theme", html)
+    Assert.Contains("/js/live-sync.js?v=2026-11-12-light-theme", html)
 
 [<Fact>]
 let ``page links the layered stylesheets in cascade order`` () =
@@ -24,8 +24,18 @@ let ``page links the layered stylesheets in cascade order`` () =
         |> Seq.toList
 
     Assert.Equal<string list>(
-        [ for name in [ "global"; "components"; "games"; "world-cup"; "motorsport" ] -> $"/css/{name}.css?v=2026-11-11-network-logos" ],
+        [ for name in [ "global"; "components"; "games"; "world-cup"; "motorsport" ] -> $"/css/{name}.css?v=2026-11-12-light-theme" ],
         sheets)
+
+[<Fact>]
+let ``every page follows the operating system light or dark setting`` () =
+    for activeSport in pageContexts do
+        let html = Layout.renderPage "Nailbiter" "Live games" activeSport []
+        let head = html.Split("</head>")[0]
+
+        Assert.Contains("name=\"color-scheme\" content=\"dark light\"", head)
+        Assert.Contains("content=\"#09090b\" media=\"(prefers-color-scheme: dark)\"", head)
+        Assert.Contains("content=\"#fafafa\" media=\"(prefers-color-scheme: light)\"", head)
 
 [<Fact>]
 let ``every page declares the same browser and home screen icons`` () =

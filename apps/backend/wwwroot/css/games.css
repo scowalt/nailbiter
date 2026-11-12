@@ -263,7 +263,7 @@
     padding-inline: 1rem;
     padding-block: 0.75rem;
     font-weight: 500;
-    color: var(--color-text-primary);
+    color: var(--color-white);
   }
 
   .highlights-watch-row {
@@ -481,7 +481,7 @@
     height: 1.5rem;
     width: 1.5rem;
     border-radius: 9999px;
-    box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-white) 20%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-ink) 20%, transparent);
   }
 
   .team-label {
@@ -652,7 +652,7 @@
     width: 1.5rem;
     flex-shrink: 0;
     border-radius: 9999px;
-    box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-white) 20%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-ink) 20%, transparent);
   }
 
   .league-team-label {

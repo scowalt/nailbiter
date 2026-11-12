@@ -481,7 +481,7 @@
     padding-block: 0.125rem;
     font-size: var(--text-xs);
     line-height: var(--text-xs-line-height);
-    color: var(--color-yellow-400);
+    color: var(--color-warning-text);
   }
 
   .f1-driver-card {
@@ -555,42 +555,42 @@
 
   .flag-badge.flag-green {
     background-color: color-mix(in oklab, var(--color-green-500) 20%, transparent);
-    color: var(--color-green-400);
+    color: var(--color-success-text);
   }
 
   .flag-badge.flag-caution {
     background-color: color-mix(in oklab, var(--color-yellow-500) 20%, transparent);
-    color: var(--color-yellow-400);
+    color: var(--color-warning-text);
   }
 
   .flag-badge.flag-red {
     background-color: color-mix(in oklab, var(--color-red-500) 20%, transparent);
-    color: var(--color-red-400);
+    color: var(--color-danger-text);
   }
 
   .flag-badge.flag-checkered {
-    background-color: color-mix(in oklab, var(--color-white) 20%, transparent);
-    color: var(--color-white);
+    background-color: color-mix(in oklab, var(--color-ink) 20%, transparent);
+    color: var(--color-text-primary);
   }
 
   .flag-badge.flag-white {
-    background-color: color-mix(in oklab, var(--color-white) 20%, transparent);
-    color: var(--color-gray-300);
+    background-color: color-mix(in oklab, var(--color-ink) 20%, transparent);
+    color: var(--color-text-secondary);
   }
 
   .mfg-badge.mfg-chevrolet {
     border-color: var(--color-yellow-500);
-    color: var(--color-yellow-400);
+    color: var(--color-warning-text);
   }
 
   .mfg-badge.mfg-ford {
     border-color: var(--color-blue-500);
-    color: var(--color-blue-400);
+    color: var(--color-info-text);
   }
 
   .mfg-badge.mfg-toyota {
     border-color: var(--color-red-500);
-    color: var(--color-red-400);
+    color: var(--color-danger-text);
   }
 
   .mfg-badge.mfg-other {

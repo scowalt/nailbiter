@@ -12,7 +12,7 @@ module ProbabilityBar =
     let divider probability =
         Elem.div [
             cls "probability-divider"
-            Attr.style $"left: {percent probability}; width: 2px; transform: translateX(-50%%); background: #fafafa; box-shadow: 0 0 0 1px #18181b"
+            Attr.style $"left: {percent probability}; width: 2px; transform: translateX(-50%%); background: var(--color-text-primary); box-shadow: 0 0 0 1px var(--color-bg-card)"
         ] []
 
     let render (compact: bool) (homeAbbr: string) (awayAbbr: string)
