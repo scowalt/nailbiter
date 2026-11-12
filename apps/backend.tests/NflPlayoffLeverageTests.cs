@@ -305,7 +305,7 @@ public sealed class NflPlayoffLeverageTests
         var context = await Captured(game, new Handler { Transform = (path, body) => path.EndsWith("packerswhatif.html") ? body.Replace(">18%</td>", ">&lt;1%</td>") : body });
         var odds = context.NflPlayoffLeverage!.AwayOdds!;
         Assert.Equal(.99, odds.WinLower); Assert.Equal(1, odds.WinUpper);
-        Assert.Null(Score(game, context).Stakes.Value);
+        Assert.Equal(34, Score(game, context).Stakes.Value!.Value, 8);
         context.NflPlayoffLeverage.HomeOdds = context.NflPlayoffLeverage.HomeOdds! with { WinLower = 1, WinUpper = 1, LossLower = 0, LossUpper = 0 };
         Assert.Equal(80, Score(game, context).Stakes.Value);
     }

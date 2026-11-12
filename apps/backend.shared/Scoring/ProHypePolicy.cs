@@ -13,6 +13,7 @@ internal sealed record ProHypeResult(ProMetric Stakes, ProMetric Quality, ProMet
 public static class ProHypePolicy
 {
     private sealed record StakesBounds(double? Lower, double? Upper, string Explanation);
+    private const double MaxStakesSpread = 1;
 
     public static bool Supports(string sport) => sport is "nfl" or "nba" or "nhl" or "mlb";
     public static string TeamKey(string sport, string abbreviation) => sport == "nhl" && abbreviation == "UTA" ? "UTAH" : abbreviation;
@@ -307,14 +308,14 @@ public static class ProHypePolicy
             }
             var h = Team(home, evidence.HomeProgress, game.HomeTeamAbbreviation, nflLeverage?.HomeOdds);
             var a = Team(away, evidence.AwayProgress, game.AwayTeamAbbreviation, nflLeverage?.AwayOdds);
-            double? exact = null;
+            double? value = null;
             if (h.Lower.HasValue && h.Upper.HasValue && a.Lower.HasValue && a.Upper.HasValue)
             {
                 var lower = Math.Max(h.Lower.Value, a.Lower.Value);
                 var upper = Math.Max(h.Upper.Value, a.Upper.Value);
-                if (lower == upper) exact = lower;
+                if (upper - lower <= MaxStakesSpread) value = (lower + upper) / 2;
             }
-            stakes = new(exact, h.Explanation + "; " + a.Explanation + ". " + contextNote);
+            stakes = new(value, h.Explanation + "; " + a.Explanation + ". " + contextNote);
         }
         else stakes = Missing("Unsupported or unknown competition phase. " + contextNote);
         return new(stakes, quality, closeness, Composite(game.Sport, stakes.Value, quality.Value, closeness.Value), nflLeverage);
