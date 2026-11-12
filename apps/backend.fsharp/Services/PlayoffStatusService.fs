@@ -592,6 +592,92 @@ type PlayoffStatusService
         }
         :> Task
 
+    member private this.PostseasonTitleSeasonAsync(html: string, sport: string, ct: CancellationToken) : Task<int option> =
+        task {
+            let context = BrowsingContext.New(Configuration.Default)
+            let! document = context.OpenAsync((fun req -> req.Content(html) |> ignore), ct)
+            let pattern = "^([0-9]{4})\\s+" + Regex.Escape(sport.ToUpperInvariant()) + "\\s+Post\\s+Season\\s+Probabilities$"
+
+            return
+                match document.QuerySelectorAll("head > title") |> Seq.toList with
+                | [ title ] ->
+                    let m = Regex.Match(title.TextContent.Trim(), pattern)
+                    if m.Success then Some(Int32.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)) else None
+                | _ -> None
+        }
+
+    member private this.StoreRatingsAsync
+        (
+            sport: string,
+            season: int,
+            allTeams: ResizeArray<PlayoffStatusTeamData>,
+            ct: CancellationToken
+        ) : Task<int> =
+        task {
+            if allTeams.Count = 0 then
+                logger.LogWarning("No teams parsed from PlayoffStatus for {Sport}", sport)
+                return 0
+            else
+                use scope = serviceProvider.CreateScope()
+
+                let db =
+                    scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
+
+                let mappings = PlayoffStatusTeamMappings.GetMappingForSport(sport)
+
+                if isNull mappings then
+                    logger.LogWarning("No team mappings for sport: {Sport}", sport)
+                    return 0
+                else
+                    let fetchedAt = timeProvider.GetUtcNow().UtcDateTime
+                    let mutable count = 0
+
+                    for team in allTeams do
+                        match mappings.TryGetValue(team.TeamName) with
+                        | true, abbr ->
+                            let! existing =
+                                db.TeamRatings.FirstOrDefaultAsync(
+                                    (fun r ->
+                                        r.Sport = sport
+                                        && r.TeamAbbreviation = abbr
+                                        && r.Season = season
+                                        && r.Source = "playoffstatus"),
+                                    ct
+                                )
+
+                            if not (isNull (box existing)) then
+                                existing.PlayoffProbability <- team.PlayoffProbability
+                                existing.ChampionshipProbability <- team.ChampionshipProbability
+                                existing.FetchedAt <- fetchedAt
+                            else
+                                let rating = TeamRating(Sport = sport, TeamAbbreviation = abbr, Source = "playoffstatus")
+                                rating.TeamName <- team.TeamName
+                                rating.PlayoffProbability <- team.PlayoffProbability
+                                rating.ChampionshipProbability <- team.ChampionshipProbability
+                                rating.Season <- season
+                                rating.FetchedAt <- fetchedAt
+                                db.TeamRatings.Add(rating) |> ignore
+
+                            count <- count + 1
+                        | _ ->
+                            logger.LogDebug(
+                                "Unmapped team from PlayoffStatus: {Team} ({Sport})",
+                                team.TeamName,
+                                sport
+                            )
+
+                    let! _ = db.SaveChangesAsync(ct)
+
+                    logger.LogInformation(
+                        "Refreshed {Sport} PlayoffStatus ratings for {Count} teams (season {Season})",
+                        sport.ToUpper(),
+                        count,
+                        season
+                    )
+
+                    return count
+        }
+
     member private this.RefreshRatingsAsync
         (
             sport: string,
@@ -599,90 +685,42 @@ type PlayoffStatusService
             ct: CancellationToken
         ) : Task<int> =
         task {
-            match PlayoffStatusMappings.standingsPages.TryGetValue(sport) with
-            | false, _ ->
+            match PlayoffStatusMappings.standingsPages.TryGetValue(sport), PlayoffStatusMappings.postseasonPages.TryGetValue(sport) with
+            | (false, _), _
+            | _, (false, _) ->
                 logger.LogWarning("Unsupported sport for PlayoffStatus: {Sport}", sport)
                 return 0
-            | true, standingsPaths ->
+            | (true, standingsPaths), (true, postseasonPath) ->
                 try
-                    let allTeams = ResizeArray<PlayoffStatusTeamData>()
+                    let! postseasonHtml = httpClient.GetStringAsync($"{baseUrl}{postseasonPath}", ct)
 
-                    for path in standingsPaths do
-                        let url = $"{baseUrl}{path}"
-                        let! html = httpClient.GetStringAsync(url, ct)
-                        let! teams = this.ParseStandingsTableAsync(html, sport, ct)
-                        allTeams.AddRange(teams)
-                        do! Task.Delay(100, ct)
-
-                    match PlayoffStatusMappings.postseasonPages.TryGetValue(sport) with
-                    | true, postseasonPath ->
-                        let url = $"{baseUrl}{postseasonPath}"
-                        let! html = httpClient.GetStringAsync(url, ct)
-                        do! this.EnrichWithChampionshipOddsAsync(html, sport, allTeams, ct)
-                    | _ -> ()
-
-                    if allTeams.Count = 0 then
-                        logger.LogWarning("No teams parsed from PlayoffStatus for {Sport}", sport)
+                    match! this.PostseasonTitleSeasonAsync(postseasonHtml, sport, ct) with
+                    | None ->
+                        logger.LogError(
+                            "Rejected {Sport} PlayoffStatus ratings: the postseason page title shows no recognizable season (expected {Season})",
+                            sport,
+                            season
+                        )
                         return 0
-                    else
-                        use scope = serviceProvider.CreateScope()
+                    | Some pageSeason when pageSeason <> season ->
+                        logger.LogWarning(
+                            "Rejected {Sport} PlayoffStatus ratings: the postseason page shows season {PageSeason}, not {Season}",
+                            sport,
+                            pageSeason,
+                            season
+                        )
+                        return 0
+                    | Some _ ->
+                        let allTeams = ResizeArray<PlayoffStatusTeamData>()
 
-                        let db =
-                            scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
+                        for path in standingsPaths do
+                            do! Task.Delay(100, ct)
+                            let! html = httpClient.GetStringAsync($"{baseUrl}{path}", ct)
+                            let! teams = this.ParseStandingsTableAsync(html, sport, ct)
+                            allTeams.AddRange(teams)
 
-                        let mappings = PlayoffStatusTeamMappings.GetMappingForSport(sport)
-
-                        if isNull mappings then
-                            logger.LogWarning("No team mappings for sport: {Sport}", sport)
-                            return 0
-                        else
-                            let fetchedAt = timeProvider.GetUtcNow().UtcDateTime
-                            let mutable count = 0
-
-                            for team in allTeams do
-                                match mappings.TryGetValue(team.TeamName) with
-                                | true, abbr ->
-                                    let! existing =
-                                        db.TeamRatings.FirstOrDefaultAsync(
-                                            (fun r ->
-                                                r.Sport = sport
-                                                && r.TeamAbbreviation = abbr
-                                                && r.Season = season
-                                                && r.Source = "playoffstatus"),
-                                            ct
-                                        )
-
-                                    if not (isNull (box existing)) then
-                                        existing.PlayoffProbability <- team.PlayoffProbability
-                                        existing.ChampionshipProbability <- team.ChampionshipProbability
-                                        existing.FetchedAt <- fetchedAt
-                                    else
-                                        let rating = TeamRating(Sport = sport, TeamAbbreviation = abbr, Source = "playoffstatus")
-                                        rating.TeamName <- team.TeamName
-                                        rating.PlayoffProbability <- team.PlayoffProbability
-                                        rating.ChampionshipProbability <- team.ChampionshipProbability
-                                        rating.Season <- season
-                                        rating.FetchedAt <- fetchedAt
-                                        db.TeamRatings.Add(rating) |> ignore
-
-                                    count <- count + 1
-                                | _ ->
-                                    logger.LogDebug(
-                                        "Unmapped team from PlayoffStatus: {Team} ({Sport})",
-                                        team.TeamName,
-                                        sport
-                                    )
-
-                            let! _ = db.SaveChangesAsync(ct)
-
-                            logger.LogInformation(
-                                "Refreshed {Sport} PlayoffStatus ratings for {Count} teams (season {Season})",
-                                sport.ToUpper(),
-                                count,
-                                season
-                            )
-
-                            return count
+                        do! this.EnrichWithChampionshipOddsAsync(postseasonHtml, sport, allTeams, ct)
+                        return! this.StoreRatingsAsync(sport, season, allTeams, ct)
                 with
                 | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
                 | :? System.Net.Http.HttpRequestException as e when not (ProviderFailure.Is e) ->

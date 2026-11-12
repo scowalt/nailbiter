@@ -32,6 +32,9 @@ public sealed class PlayoffStatusCollectionTests
 {
     private const string RefreshFailure = "Failed to refresh {Sport} ratings from PlayoffStatus";
     private const string CollectionFailure = "PlayoffStatus {League} collection failed";
+    private const string SeasonMismatch = "Rejected {Sport} PlayoffStatus ratings: the postseason page shows season {PageSeason}, not {Season}";
+    private const string SeasonUnrecognized = "Rejected {Sport} PlayoffStatus ratings: the postseason page title shows no recognizable season (expected {Season})";
+    private static readonly DateTime PreviousFetch = new(2026, 1, 2, 3, 0, 0, DateTimeKind.Utc);
     private static readonly TimeSpan Poll = TimeSpan.FromHours(1);
     private static readonly TimeSpan Interval = TimeSpan.FromHours(24);
 
@@ -48,6 +51,48 @@ public sealed class PlayoffStatusCollectionTests
         ("nba", "BOS", 0.75, 0.12), ("nba", "LAL", 0.75, 0.12),
         ("nfl", "BUF", 0.75, 0.12), ("nfl", "DAL", 0.75, 0.12)
     ];
+
+    private static readonly Func<Uri, Answer> Healthy = Serving(nfl: 2026, nba: 2026, mlb: 2026);
+
+    public static TheoryData<string, string, int> MatchingSeasons() => new()
+    {
+        { "nfl", "2026-03-01", 2025 },
+        { "nfl", "2026-09-01", 2026 },
+        { "nba", "2026-09-30", 2026 },
+        { "nba", "2026-10-01", 2027 },
+        { "mlb", "2026-04-01", 2026 },
+        { "mlb", "2026-10-31", 2026 }
+    };
+
+    public static TheoryData<string, string, int, int> DifferentSeasons() => new()
+    {
+        { "nfl", "2026-03-01", 2025, 2026 },
+        { "nfl", "2026-08-31", 2025, 2026 },
+        { "nfl", "2026-09-01", 2026, 2025 },
+        { "nba", "2026-09-30", 2026, 2027 },
+        { "nba", "2026-10-01", 2027, 2026 },
+        { "mlb", "2026-04-01", 2026, 2025 },
+        { "mlb", "2026-10-31", 2026, 2027 }
+    };
+
+    public static TheoryData<string, string?> UnrecognizedTitles()
+    {
+        var cases = new TheoryData<string, string?>();
+        foreach (var league in new[] { "nfl", "nba", "mlb" })
+        {
+            var name = league.ToUpperInvariant();
+            cases.Add(league, null);
+            cases.Add(league, $"<title>{name} Post Season Probabilities</title>");
+            cases.Add(league, $"<title>2026 {(league == "nfl" ? "NBA" : "NFL")} Post Season Probabilities</title>");
+        }
+        cases.Add("nfl", "");
+        cases.Add("nfl", "<title>AFC Playoff Picture</title>");
+        cases.Add("nfl", "<title>2026-27 NFL Post Season Probabilities</title>");
+        cases.Add("nfl", "<title>٢٠٢٦ NFL Post Season Probabilities</title>");
+        cases.Add("nfl", "<title>2026 NFL Post Season Probabilities</title><title>2025 NFL Post Season Probabilities</title>");
+        cases.Add("nfl", "<title>2026 NFL Post Season Probabilities</title><title>2026 NFL Post Season Probabilities</title>");
+        return cases;
+    }
 
     [Fact]
     public async Task One_cycle_stores_rows_for_each_league()
@@ -111,7 +156,7 @@ public sealed class PlayoffStatusCollectionTests
     [Fact]
     public async Task Mlb_offseason_is_claimed_without_requests()
     {
-        await using var app = await CollectorApp.StartAsync(Healthy);
+        await using var app = await CollectorApp.StartAsync(Serving(nfl: 2026, nba: 2027, mlb: 2026));
         app.Clock.SetUtcNow(new DateTimeOffset(2026, 12, 15, 12, 0, 0, TimeSpan.Zero));
         await app.StartWorkerAsync();
 
@@ -123,6 +168,121 @@ public sealed class PlayoffStatusCollectionTests
         Assert.All(await app.StatesAsync(), s => Assert.Equal(app.Clock.GetUtcNow().Add(Interval).UtcTicks, s.NextAttemptAtTicks));
         Assert.Equal(3, (await app.StatesAsync()).Count);
         Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Theory]
+    [MemberData(nameof(MatchingSeasons))]
+    public async Task Postseason_title_in_our_season_stores_the_league(string league, string date, int season)
+    {
+        await using var app = await CollectorApp.StartAsync(Serving(league, season), start: At(date));
+        await app.SeedPreviousAsync(league, season);
+
+        Assert.Equal(2, await app.RefreshAsync(league));
+
+        Assert.All(await app.RatingsAsync(), r => Assert.Equal((league, season, 0.75, 0.12, app.Clock.GetUtcNow().UtcDateTime),
+            (r.Sport, r.Season, r.PlayoffProbability!.Value, r.ChampionshipProbability!.Value, r.FetchedAt)));
+        Assert.Equal(2, (await app.RatingsAsync()).Count);
+        Assert.Equal(3, app.Provider.Requests.Count);
+        Assert.DoesNotContain(app.Logs, l => l.Category == typeof(PlayoffStatusService).FullName && l.Level >= LogLevel.Warning);
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Theory]
+    [InlineData("nfl")]
+    [InlineData("nba")]
+    [InlineData("mlb")]
+    public async Task Svg_title_in_the_postseason_body_does_not_hide_the_document_title(string league)
+    {
+        var serving = Serving(league, 2026);
+        await using var app = await CollectorApp.StartAsync(uri => uri.AbsolutePath.EndsWith("postseasonprob.html", StringComparison.Ordinal) && serving(uri) is Reply page
+            ? page with { Body = page.Body.Replace("<body>", "<body><svg><title>PlayoffStatus logo</title></svg>", StringComparison.Ordinal) }
+            : serving(uri));
+
+        Assert.Equal(2, await app.RefreshAsync(league));
+
+        Assert.All(await app.RatingsAsync(), r => Assert.Equal((league, 2026, 0.75), (r.Sport, r.Season, r.PlayoffProbability!.Value)));
+        Assert.DoesNotContain(app.Logs, l => l.Category == typeof(PlayoffStatusService).FullName && l.Level >= LogLevel.Warning);
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Theory]
+    [MemberData(nameof(DifferentSeasons))]
+    public async Task Postseason_title_in_another_season_keeps_the_previous_rows_with_a_warning(string league, string date, int season, int pageSeason)
+    {
+        await using var app = await CollectorApp.StartAsync(Serving(league, pageSeason), start: At(date));
+        var previous = await app.SeedPreviousAsync(league, season);
+
+        Assert.Equal(0, await app.RefreshAsync(league));
+
+        Assert.Equal(previous, Snapshot(await app.RatingsAsync()));
+        Assert.Equal(new[] { $"/{league}/{league}postseasonprob.html" }, app.Provider.Requests.Select(u => u.AbsolutePath));
+        var warning = Assert.Single(app.Logs, l => l.Category == typeof(PlayoffStatusService).FullName && l.Level >= LogLevel.Warning);
+        Assert.Equal((LogLevel.Warning, SeasonMismatch, null), (warning.Level, warning.Template, warning.Exception));
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Theory]
+    [MemberData(nameof(UnrecognizedTitles))]
+    public async Task Postseason_title_without_a_recognizable_season_is_sent_once_at_error(string league, string? head)
+    {
+        await using var app = await CollectorApp.StartAsync(uri => uri.AbsolutePath.EndsWith("postseasonprob.html", StringComparison.Ordinal) && head is null
+            ? new Reply(HttpStatusCode.OK, "") : Serving(league, head ?? "")(uri));
+        var previous = await app.SeedPreviousAsync(league, 2026);
+
+        Assert.Equal(0, await app.RefreshAsync(league));
+
+        Assert.Equal(previous, Snapshot(await app.RatingsAsync()));
+        Assert.Equal(new[] { $"/{league}/{league}postseasonprob.html" }, app.Provider.Requests.Select(u => u.AbsolutePath));
+        var reported = Assert.Single(await app.SentEventsAsync());
+        Assert.Equal((typeof(PlayoffStatusService).FullName, "error", SeasonUnrecognized), (reported.Logger, reported.Level, reported.Template));
+        Assert.Empty(reported.Exceptions);
+        Assert.Equal(LogLevel.Error, Assert.Single(app.Logs, l => l.Category == typeof(PlayoffStatusService).FullName && l.Level >= LogLevel.Warning).Level);
+    }
+
+    [Theory]
+    [InlineData("2026-03-31")]
+    [InlineData("2026-11-01")]
+    public async Task Mlb_offseason_months_send_no_request_whatever_the_title(string date)
+    {
+        await using var app = await CollectorApp.StartAsync(Serving("mlb", 2025), start: At(date));
+
+        Assert.Equal(0, await app.RefreshAsync("mlb"));
+
+        Assert.Empty(app.Provider.Requests);
+        Assert.Empty(await app.RatingsAsync());
+        Assert.DoesNotContain(app.Logs, l => l.Category == typeof(PlayoffStatusService).FullName && l.Level >= LogLevel.Warning);
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Fact]
+    public async Task Season_rejections_still_advance_the_daily_claim_and_an_unreadable_title_errors_once_per_attempt()
+    {
+        await using var app = await CollectorApp.StartAsync(Serving(new Dictionary<string, string>
+        {
+            ["nfl"] = SeasonTitle("nfl", 2025),
+            ["nba"] = "",
+            ["mlb"] = SeasonTitle("mlb", 2026)
+        }));
+        await app.StartWorkerAsync();
+
+        Assert.Equal(Poll, await app.NextWaitAsync());
+
+        Assert.Equal(new[] { "mlb" }, (await app.RatingsAsync()).Select(r => r.Sport).Distinct());
+        Assert.All(await app.StatesAsync(), s => Assert.Equal(app.Clock.GetUtcNow().Add(Interval).UtcTicks, s.NextAttemptAtTicks));
+        Assert.Equal(3, (await app.StatesAsync()).Count);
+        Assert.Equal(5, app.Provider.Requests.Count);
+        var reported = Assert.Single(await app.SentEventsAsync());
+        Assert.Equal(("error", SeasonUnrecognized), (reported.Level, reported.Template));
+        Assert.Equal(new[] { (LogLevel.Warning, SeasonMismatch), (LogLevel.Error, SeasonUnrecognized) },
+            app.Logs.Where(l => l.Category == typeof(PlayoffStatusService).FullName && l.Level >= LogLevel.Warning).Select(l => (l.Level, l.Template)));
+
+        await app.AdvanceCyclesAsync(23);
+        Assert.Equal(5, app.Provider.Requests.Count);
+        Assert.Single(await app.SentEventsAsync());
+
+        await app.AdvanceCyclesAsync(1);
+        Assert.Equal(10, app.Provider.Requests.Count);
+        Assert.Equal(2, (await app.SentEventsAsync()).Count);
     }
 
     [Fact]
@@ -187,7 +347,7 @@ public sealed class PlayoffStatusCollectionTests
     public async Task Malformed_page_is_a_warning_without_an_event(string body)
     {
         await using var app = await CollectorApp.StartAsync(uri => uri.AbsolutePath.StartsWith("/nfl/", StringComparison.Ordinal)
-            ? new Reply(HttpStatusCode.OK, body) : Healthy(uri));
+            && uri.AbsolutePath.EndsWith("standings.html", StringComparison.Ordinal) ? new Reply(HttpStatusCode.OK, body) : Healthy(uri));
         await app.StartWorkerAsync();
 
         Assert.Equal(Poll, await app.NextWaitAsync());
@@ -249,25 +409,45 @@ public sealed class PlayoffStatusCollectionTests
         Assert.Equal(("23514", "ck_playoffstatus_collection_ticks"), (ticks.SqlState, ticks.ConstraintName));
     }
 
-    private static Answer Healthy(Uri uri)
+    private static Func<Uri, Answer> Serving(int nfl, int nba, int mlb) => Serving(new Dictionary<string, string>
     {
-        foreach (var (league, pages) in Pages)
+        ["nfl"] = SeasonTitle("nfl", nfl),
+        ["nba"] = SeasonTitle("nba", nba),
+        ["mlb"] = SeasonTitle("mlb", mlb)
+    });
+
+    private static Func<Uri, Answer> Serving(string league, int pageSeason) => Serving(league, SeasonTitle(league, pageSeason));
+
+    private static Func<Uri, Answer> Serving(string league, string head) => Serving(new Dictionary<string, string> { [league] = head });
+
+    private static Func<Uri, Answer> Serving(IReadOnlyDictionary<string, string> heads) => uri =>
+    {
+        foreach (var (league, head) in heads)
         {
+            var pages = Pages[league];
             if (uri.AbsolutePath == $"/{league}/{league}postseasonprob.html")
-                return new Reply(HttpStatusCode.OK, PostseasonPage(pages.SelectMany(p => p.Teams)));
+                return new Reply(HttpStatusCode.OK, PostseasonPage(head, pages.SelectMany(p => p.Teams)));
             if (pages.FirstOrDefault(p => p.Standings == uri.AbsolutePath).Teams is { } teams)
                 return new Reply(HttpStatusCode.OK, StandingsPage(teams));
         }
         throw new InvalidOperationException("Unexpected offline request: " + uri);
-    }
+    };
+
+    private static string SeasonTitle(string league, int season) => $"<title>{season} {league.ToUpperInvariant()} Post Season Probabilities</title>";
+
+    private static DateTimeOffset At(string date) => DateTimeOffset.Parse(date + "T12:00:00Z", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static (string, string, int, double?, double?, DateTime)[] Snapshot(IEnumerable<TeamRating> ratings) =>
+        ratings.Select(r => (r.Sport, r.TeamAbbreviation, r.Season, r.PlayoffProbability, r.ChampionshipProbability, r.FetchedAt)).ToArray();
 
     private static string StandingsPage(IEnumerable<string> teams) =>
         "<html><body><table><tr><th>Team</th><th>W</th><th>L</th><th>Pct</th><th>No Playoffs</th></tr>"
         + string.Concat(teams.Select((team, i) => $"<tr data-idx=\"{i}\"><td><a href=\"#\">{team}</a></td><td>9</td><td>4</td><td>69</td><td>25%</td></tr>"))
         + "</table></body></html>";
 
-    private static string PostseasonPage(IEnumerable<string> teams) =>
-        "<html><body><table><tr><th colspan=\"6\">Postseason</th></tr><tr><th>Team</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th><th>Champion</th></tr>"
+    private static string PostseasonPage(string head, IEnumerable<string> teams) =>
+        $"<html><head>{head}</head><body><table>"
+        + "<tr><th colspan=\"6\">Postseason</th></tr><tr><th>Team</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th><th>Champion</th></tr>"
         + string.Concat(teams.Select(team => $"<tr><td><a href=\"#\">{team}</a></td><td>70%</td><td>45%</td><td>30%</td><td>20%</td><td>12%</td></tr>"))
         + "</table></body></html>";
 
@@ -279,7 +459,7 @@ public sealed class PlayoffStatusCollectionTests
 
     private sealed record SentEvent(string? Logger, string? Level, string? Template, (string? Type, string? Value)[] Exceptions);
 
-    private sealed record LoggedEntry(string Category, LogLevel Level, Exception? Exception);
+    private sealed record LoggedEntry(string Category, LogLevel Level, Exception? Exception, string? Template);
 
     private sealed class CollectorApp : IAsyncDisposable
     {
@@ -293,15 +473,16 @@ public sealed class PlayoffStatusCollectionTests
         private readonly bool enabled;
         private WebApplicationFactory<Program> app = null!;
 
-        private CollectorApp(Func<Uri, Answer> answer, Action<IServiceCollection>? configure, Action<DbContextOptionsBuilder>? configureDb, bool enabled)
+        private CollectorApp(Func<Uri, Answer> answer, Action<IServiceCollection>? configure, Action<DbContextOptionsBuilder>? configureDb, bool enabled, DateTimeOffset start)
         {
+            Clock = new(start);
             Provider = new SyntheticProvider(answer);
             this.configure = configure;
             this.configureDb = configureDb;
             this.enabled = enabled;
         }
 
-        public LoopClock Clock { get; } = new(new DateTimeOffset(2026, 9, 15, 12, 0, 0, TimeSpan.Zero));
+        public LoopClock Clock { get; }
 
         public SyntheticProvider Provider { get; }
 
@@ -310,9 +491,9 @@ public sealed class PlayoffStatusCollectionTests
         public PlayoffStatusCollectionBackgroundService Worker => workers[^1];
 
         public static async Task<CollectorApp> StartAsync(Func<Uri, Answer> answer, Action<IServiceCollection>? configure = null,
-            Action<DbContextOptionsBuilder>? configureDb = null, bool enabled = true)
+            Action<DbContextOptionsBuilder>? configureDb = null, bool enabled = true, DateTimeOffset? start = null)
         {
-            var collector = new CollectorApp(answer, configure, configureDb, enabled);
+            var collector = new CollectorApp(answer, configure, configureDb, enabled, start ?? new DateTimeOffset(2026, 9, 15, 12, 0, 0, TimeSpan.Zero));
             await collector.database.StartAsync();
             collector.app = collector.CreateFactory();
             using var scope = collector.app.Services.CreateScope();
@@ -356,6 +537,33 @@ public sealed class PlayoffStatusCollectionTests
             using var scope = app.Services.CreateScope();
             return await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().TeamRatings.AsNoTracking()
                 .Where(r => r.Source == "playoffstatus").OrderBy(r => r.Sport).ThenBy(r => r.TeamAbbreviation).ToListAsync();
+        }
+
+        public async Task<int> RefreshAsync(string league)
+        {
+            using var scope = app.Services.CreateScope();
+            var service = scope.ServiceProvider.GetRequiredService<PlayoffStatusService>();
+            return await (league switch
+            {
+                "nfl" => service.RefreshNflRatingsAsync(CancellationToken.None),
+                "nba" => service.RefreshNbaRatingsAsync(CancellationToken.None),
+                _ => service.RefreshMlbRatingsAsync(CancellationToken.None)
+            });
+        }
+
+        public async Task<(string, string, int, double?, double?, DateTime)[]> SeedPreviousAsync(string league, int season)
+        {
+            using (var scope = app.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+                db.TeamRatings.AddRange(Expected.Where(e => e.League == league).Select(e => new TeamRating
+                {
+                    Sport = league, TeamAbbreviation = e.Team, Source = "playoffstatus", Season = season,
+                    PlayoffProbability = 0.4, ChampionshipProbability = 0.05, FetchedAt = PreviousFetch
+                }));
+                await db.SaveChangesAsync();
+            }
+            return Snapshot(await RatingsAsync());
         }
 
         public async Task<List<PlayoffStatusCollectionState>> StatesAsync()
@@ -546,7 +754,8 @@ public sealed class PlayoffStatusCollectionTests
             public bool IsEnabled(LogLevel logLevel) => true;
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-                entries.Enqueue(new LoggedEntry(category, logLevel, exception));
+                entries.Enqueue(new LoggedEntry(category, logLevel, exception,
+                    (state as IEnumerable<KeyValuePair<string, object?>>)?.FirstOrDefault(p => p.Key == "{OriginalFormat}").Value as string));
         }
     }
 
