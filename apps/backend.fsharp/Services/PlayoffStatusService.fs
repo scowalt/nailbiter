@@ -599,7 +599,7 @@ type PlayoffStatusService
             let pattern = "^([0-9]{4})\\s+" + Regex.Escape(sport.ToUpperInvariant()) + "\\s+Post\\s+Season\\s+Probabilities$"
 
             return
-                match document.QuerySelectorAll("title") |> Seq.toList with
+                match document.QuerySelectorAll("head > title") |> Seq.toList with
                 | [ title ] ->
                     let m = Regex.Match(title.TextContent.Trim(), pattern)
                     if m.Success then Some(Int32.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)) else None
