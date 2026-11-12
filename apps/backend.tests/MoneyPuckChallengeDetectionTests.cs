@@ -52,6 +52,23 @@ public sealed class MoneyPuckChallengeDetectionTests
     }
 
     [Theory]
+    [InlineData("/cdn-cgi/challenge-platform/h/g/scripts/jsd/000000000000/main.js")]
+    [InlineData("/cdn-cgi/challenge-platform/h/b/scripts/jsd/000000000000/main.js")]
+    [InlineData("/cdn-cgi/challenge-platform/h/b/scripts/invisible.js")]
+    public async Task Cloudflare_scripts_on_a_normal_predictions_page_collect_without_latching_or_reporting(string script)
+    {
+        await using var app = await ReportingApp.StartAsync();
+        app.Harness.Handler.Page = app.Harness.Handler.Page.Replace("</body>", $"<script src=\"{script}\"></script></body>");
+
+        var result = await app.RefreshAsync();
+
+        Assert.Equal((32, 32), (result.Qualification, result.Rankings));
+        Assert.Equal(32, (await app.Harness.RowsAsync()).Count);
+        Assert.False(await app.DeniedAsync());
+        Assert.Empty(await app.SentEventsAsync());
+    }
+
+    [Theory]
     [InlineData(200, ManagedChallengePage)]
     [InlineData(200, ChallengeOptionsOnly)]
     [InlineData(200, OrchestrationScriptOnly)]
