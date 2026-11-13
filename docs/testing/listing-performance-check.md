@@ -7,7 +7,8 @@ against an explicit budget. It has two modes:
 - **Fixture mode** runs the real app in process against a disposable
   TimescaleDB with a synthetic, production-shaped workload. It also checks the
   database work each page does. Its query-work rules are deterministic and are
-  the hard gate. Its timings are informational unless you set a budget.
+  the hard gate. Both budget options are still required. When only the
+  query-work rules matter, set the budgets high, as the automated tests do.
 - **Explicit-URL mode** sends a small, capped number of GET requests to an app
   that is already running. It has no database code and no provider code.
 
@@ -71,6 +72,7 @@ it.
 | 5 | `content` | A 2xx HTML page failed a content rule. |
 | 6 | `query-work` | Fixture mode only. A page broke a deterministic database-work rule. |
 | 7 | `budget` | All requests succeeded, but a page's measured median TTFB or completion exceeded its budget. |
+| 130 | — | Interrupted by Ctrl-C (SIGINT) or SIGTERM. One `cancelled:` line is printed to stderr and no report is written. Fixture mode still removes its container. |
 
 Content rules in both modes: the body starts with `<!DOCTYPE html>`, contains
 `</html>` (so a cut-off body fails), and carries the page marker (`home-schedule page` for
@@ -116,7 +118,7 @@ Controls:
 |---|---|
 | Clock | `FakeTimeProvider`; nothing advances it. |
 | App background workers | `AppFactory` removes every hosted service from the F# services assembly plus the college football and highlights workers, and turns off scraping, pro-hype capture, Sentry and OpenTelemetry. |
-| TimescaleDB jobs | The server runs with `timescaledb.max_background_workers=0` and telemetry off. |
+| TimescaleDB jobs | The server runs with `timescaledb.max_background_workers=0` and telemetry off. The report reads both settings back from the server. |
 | Provider requests | Every `IHttpClientFactory` client gets a handler that rejects the request. The report counts attempts, and any attempt is a `query-work` failure. |
 | Container | Named `nailbiter-listing-check-<guid>` and disposed in a `finally` block on success and failure. If the process is killed, the Testcontainers reaper (Ryuk) removes it. |
 
@@ -130,6 +132,9 @@ Core command interceptor recording SQL and parameters:
 - `EXPLAIN` of that read names each relation once. A second scan of the odds
   history, through a self-join, subquery or repeated union, names the same
   chunks twice.
+- That plan also names the chunk that holds the newest snapshot of each
+  listed game. A plan with no relation names, for example a read moved into a
+  function that `EXPLAIN` cannot see into, fails this rule instead of passing.
 - Exactly one excitement history read when the page has live or final games,
   and none otherwise. Its game ids are exactly the page's live and final games:
   no scheduled game, and none missing.
@@ -158,7 +163,7 @@ The JSON report (schema `nailbiter.listing-check/1`) has these fields:
 | `pages` | Per path: measured count, `ttfb` and `completion` min, median and max in ms, and `withinBudget`. Only measured, successful samples count. |
 | `samples` | Every request: path, `warmup` or `measured`, round, status, TTFB, completion, bytes, failure class and detail. |
 | `failures` | Class, path and message for each failure. |
-| `fixture` | `null` in URL mode. Otherwise `workload` (image, TimescaleDB version, telemetry level, chunk counts, games by status, snapshot counts, clock), `controls`, `startup` phase times in ms, and `queryWork` per path. |
+| `fixture` | `null` in URL mode. Otherwise `workload` (image, TimescaleDB version, telemetry level and background workers as read from the server, chunk counts, games by status, snapshot counts, clock), `controls`, `startup` phase times in ms, and `queryWork` per path. |
 
 The report never contains request or response headers, cookies, credentials or
 page text. Content failures name the broken rule and at most an element id.
