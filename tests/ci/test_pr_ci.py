@@ -33,8 +33,11 @@ def pull(state='OPEN', head=SHA, draft=False, merge_commit=None, auto=None, queu
     return {'number': NUMBER, 'url': f'https://github.com/{REPO}/pull/{NUMBER}', 'state': state, 'isDraft': draft, 'headRefOid': head, 'baseRefName': 'main', 'mergeable': mergeable, 'mergeStateStatus': 'CLEAN', 'mergeCommit': {'oid': merge_commit} if merge_commit else None, 'autoMergeRequest': auto, 'mergeQueueEntry': queue}
 
 
-def run(run_id, status='completed', conclusion='success', workflow=1, name='CI', sha=SHA, created='2026-11-12T10:00:00Z'):
-    return {'id': run_id, 'name': name, 'workflow_id': workflow, 'event': 'pull_request', 'status': status, 'conclusion': conclusion if status == 'completed' else None, 'head_sha': sha, 'run_attempt': 1, 'run_number': run_id, 'created_at': created, 'html_url': f'https://github.com/{REPO}/actions/runs/{run_id}'}
+REQUIRED_JOBS = ['Validate', 'Build and scan backend image']
+
+
+def run(run_id, status='completed', conclusion='success', workflow=1, name='CI', sha=SHA, created='2026-11-12T10:00:00Z', event='pull_request'):
+    return {'id': run_id, 'name': name, 'workflow_id': workflow, 'event': event, 'status': status, 'conclusion': conclusion if status == 'completed' else None, 'head_sha': sha, 'run_attempt': 1, 'run_number': run_id, 'created_at': created, 'html_url': f'https://github.com/{REPO}/actions/runs/{run_id}'}
 
 
 AUTO = {'enabledAt': '2026-11-12T10:05:00Z', 'mergeMethod': 'SQUASH'}
@@ -53,8 +56,9 @@ def http(status, body):
 
 
 class FakeGitHub:
-    def __init__(self, pulls, runs=None, api=None, merge=(0, ''), after_merge=None, graphql_denied=False):
+    def __init__(self, pulls, runs=None, api=None, merge=(0, ''), after_merge=None, graphql_denied=False, jobs=None):
         self.pulls = list(pulls)
+        self.jobs = jobs or {}
         self.runs = {sha: list(sequence) for sha, sequence in (runs or {SHA: [[run(1)]]}).items()}
         self.api = {f'repos/{REPO}': (200, SETTINGS), f'repos/{REPO}/rules/branches/main': (200, RULES), f'repos/{REPO}/rulesets': (200, RULESETS), f'repos/{REPO}/rulesets/77': (200, RULESET_DETAIL), f'repos/{REPO}/branches/main/protection': NOT_FOUND} | (api or {})
         self.merge = merge
@@ -75,15 +79,22 @@ class FakeGitHub:
         if argv[:2] == ['api', 'graphql']:
             if self.graphql_denied:
                 return Process(1, json.dumps({'errors': [{'type': 'FORBIDDEN', 'message': 'Resource not accessible by personal access token'}]}), 'GraphQL: Resource not accessible by personal access token (repository.pullRequest)\n')
-            return Process(0, json.dumps({'data': {'repository': {'pullRequest': self.next(self.pulls)}}}), '')
+            current = self.next(self.pulls)
+            return current if isinstance(current, Process) else Process(0, json.dumps({'data': {'repository': {'pullRequest': current}}}), '')
         if argv[0] == 'api':
             target = urlsplit(next(argument for argument in argv[1:] if argument.startswith('repos/')))
+            override = self.api.get('runs' if target.path == f'repos/{REPO}/actions/runs' else target.path)
+            if isinstance(override, Process):
+                return override
             if target.path == f'repos/{REPO}/actions/runs':
                 if 'runs' in self.api:
                     return http(*self.api['runs'])
                 sha = parse_qs(target.query)['head_sha'][0]
                 runs = self.next(self.runs[sha]) if sha in self.runs else []
                 return http(200, {'total_count': len(runs), 'workflow_runs': runs})
+            if target.path.startswith(f'repos/{REPO}/actions/runs/') and target.path.endswith('/jobs') and target.path not in self.api:
+                names = self.jobs.get(int(target.path.split('/')[-2]), REQUIRED_JOBS)
+                return http(200, {'total_count': len(names), 'jobs': [{'id': index, 'name': name, 'status': 'completed', 'conclusion': 'success'} for index, name in enumerate(names)]})
             return http(*self.api.get(target.path, NOT_FOUND))
         raise AssertionError(f'unexpected gh invocation {argv}')
 
@@ -92,6 +103,10 @@ class FakeGitHub:
 
     def mutating_calls(self):
         return [call for call in self.calls if call[:2] == ['pr', 'merge'] or (call[0] == 'api' and any(flag in call for flag in ['-X', '--method'])) or any('mutation' in argument for argument in call)]
+
+
+def raw(status, text):
+    return Process(0 if status < 400 else 1, f'HTTP/2.0 {status} OK\r\nContent-Type: application/json\r\n\r\n{text}', '')
 
 
 class Clock:
@@ -366,6 +381,140 @@ class ToolTests(unittest.TestCase):
                 self.assertEqual(result['result'], 'error')
                 self.assertIn('not accessible', result['reason'])
                 self.assertEqual(fake.merges(), [])
+
+    def test_malformed_json_from_gh_is_an_error_not_a_traceback(self):
+        cases = {
+            'graphql body': FakeGitHub([Process(0, '{not json')]),
+            'graphql without data': FakeGitHub([Process(0, json.dumps({'data': None}))]),
+            'pull request without fields': FakeGitHub([Process(0, json.dumps({'data': {'repository': {'pullRequest': {'number': NUMBER}}}}))]),
+            'runs body': FakeGitHub([pull()], api={'runs': raw(200, '<html>oops')}),
+            'runs without workflow_runs': FakeGitHub([pull()], api={'runs': (200, {'message': 'x'})}),
+            'run without fields': FakeGitHub([pull()], api={'runs': (200, {'workflow_runs': [{'id': 1}]})}),
+            'jobs body': FakeGitHub([pull()], api={f'repos/{REPO}/actions/runs/1/jobs': raw(200, 'garbage')}),
+        }
+        for label, fake in cases.items():
+            with self.subTest(label):
+                code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge')
+                self.assertEqual(result['result'], 'error')
+                self.assertEqual(code, 3)
+                self.assertFalse(result['mutated'])
+                self.assertEqual(fake.merges(), [])
+
+    def test_malformed_policy_bodies_are_unknown(self):
+        fake = FakeGitHub([pull()], api={f'repos/{REPO}': raw(200, 'garbage'), f'repos/{REPO}/rules/branches/main': raw(200, '[1, 2]'), f'repos/{REPO}/rulesets': (200, [{'name': 'no id'}])})
+        code, result = self.invoke(fake, 'policy')
+        self.assertEqual(result['policy']['auto_merge'], 'unknown')
+        self.assertIsNone(result['policy']['merge_methods'])
+        self.assertIsNone(result['policy']['required_checks'])
+        self.assertEqual(result['policy']['protection'], 'unknown')
+
+    def test_an_unreadable_readback_after_merging_reports_the_merge_call(self):
+        for label, readback in [('malformed', Process(0, '{not json')), ('denied', Process(1, '', 'GraphQL: Resource not accessible by personal access token\n'))]:
+            with self.subTest(label):
+                fake = FakeGitHub([pull()], after_merge=[readback])
+                code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge')
+                self.assertEqual(result['result'], 'error')
+                self.assertTrue(result['mutated'])
+                self.assertIn('gh pr merge was called', result['reason'])
+                self.assertIn('outcome is unknown', result['reason'])
+                self.assertIn('outcome is unknown', self.err.splitlines()[-1])
+                self.assertEqual(len(fake.merges()), 1)
+
+    def test_runs_of_one_workflow_from_different_events_both_count(self):
+        runs = [run(1, conclusion='failure', event='push', created='2026-11-12T10:00:00Z'), run(2, created='2026-11-12T10:00:01Z')]
+        fake = FakeGitHub([pull()], runs={SHA: [runs]})
+        code, result = self.invoke(fake, 'status', str(NUMBER))
+        self.assertEqual(result['result'], 'failed')
+        self.assertEqual(sorted(entry['id'] for entry in result['ci']['runs']), [1, 2])
+
+    def test_required_checks_without_an_actions_job_stay_pending(self):
+        fake = FakeGitHub([pull()], runs={SHA: [[run(9, workflow=9, name='PR Title')]]}, jobs={9: ['Check title']})
+        code, result = self.invoke(fake, 'status', str(NUMBER))
+        self.assertEqual(result['result'], 'pending')
+        self.assertIn('Validate', result['reason'])
+        self.assertEqual(result['ci']['required_checks'], {'Validate': None, 'Build and scan backend image': None})
+
+    def test_waiting_ends_when_every_required_check_has_a_passing_job(self):
+        sequence = [[run(9, workflow=9, name='PR Title')], [run(9, workflow=9, name='PR Title'), run(10, status='in_progress')], [run(9, workflow=9, name='PR Title'), run(10)]]
+        fake = FakeGitHub([pull()], runs={SHA: sequence}, jobs={9: ['Check title'], 10: ['Validate', 'Build and scan backend image', 'Release production']})
+        code, result = self.invoke(fake, 'wait', str(NUMBER), '--sha', SHA)
+        self.assertEqual(result['result'], 'passed')
+        self.assertEqual(result['ci']['required_checks'], {'Validate': 10, 'Build and scan backend image': 10})
+        self.assertTrue(result['ci']['complete'])
+
+    def test_passed_without_readable_required_checks_is_incomplete(self):
+        fake = FakeGitHub([pull()], api={f'repos/{REPO}/rules/branches/main': FORBIDDEN})
+        code, result = self.invoke(fake, 'status', str(NUMBER))
+        self.assertEqual(result['result'], 'passed')
+        self.assertFalse(result['ci']['complete'])
+        self.assertIsNone(result['ci']['required_checks'])
+        self.assertIn('incomplete', result['reason'])
+
+    def test_status_names_a_draft(self):
+        fake = FakeGitHub([pull(draft=True)])
+        code, result = self.invoke(fake, 'status', str(NUMBER))
+        self.assertIn('draft', result['reason'])
+        self.assertIn('draft', self.err.splitlines()[-1])
+
+    def test_policy_with_every_read_denied_is_an_error(self):
+        for denied in [FORBIDDEN, NOT_FOUND]:
+            with self.subTest(denied=denied):
+                fake = FakeGitHub([pull()], api={f'repos/{REPO}': denied, f'repos/{REPO}/rules/branches/main': denied, f'repos/{REPO}/rulesets': denied, f'repos/{REPO}/branches/main/protection': denied})
+                code, result = self.invoke(fake, 'policy')
+                self.assertEqual(code, 3)
+                self.assertEqual(result['policy']['protection'], 'unknown')
+                self.assertTrue(self.err.splitlines()[-1].startswith('error'))
+
+    def test_merge_refuses_when_the_user_can_bypass_the_ruleset(self):
+        for bypass in ['always', 'pull_requests_only', 'exempt']:
+            with self.subTest(bypass=bypass):
+                fake = FakeGitHub([pull()], api={f'repos/{REPO}/rulesets/77': (200, RULESET_DETAIL | {'current_user_can_bypass': bypass, 'bypass_actors': [{'actor_type': 'RepositoryRole', 'actor_id': 5}]})}, after_merge=[pull(state='MERGED', merge_commit=MERGE_SHA)])
+                code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge')
+                self.assertEqual(result['result'], 'blocked')
+                self.assertIn('bypass', result['reason'])
+                self.assertEqual(result['policy']['bypass'], 'possible')
+                self.assertEqual(fake.merges(), [])
+
+    def test_merge_refuses_when_the_bypass_state_is_unknown(self):
+        for api in [{f'repos/{REPO}/rulesets/77': FORBIDDEN}, {f'repos/{REPO}/rules/branches/main': FORBIDDEN}, {f'repos/{REPO}/rulesets/77': (200, RULESET_DETAIL | {'current_user_can_bypass': None})}]:
+            with self.subTest(api=api):
+                fake = FakeGitHub([pull()], api=api, after_merge=[pull(state='MERGED', merge_commit=MERGE_SHA)])
+                code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge')
+                self.assertEqual(result['result'], 'blocked')
+                self.assertIn('bypass', result['reason'])
+                self.assertEqual(result['policy']['bypass'], 'unknown')
+                self.assertEqual(fake.merges(), [])
+
+    def test_a_ruleset_nobody_can_bypass_allows_the_merge(self):
+        fake = FakeGitHub([pull()], after_merge=[pull(state='MERGED', merge_commit=MERGE_SHA)])
+        code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge')
+        self.assertEqual(result['result'], 'merged')
+        self.assertEqual(result['policy']['bypass'], 'never')
+
+    def test_a_run_awaiting_approval_is_blocked_not_passed(self):
+        fake = FakeGitHub([pull()], runs={SHA: [[run(1, conclusion='action_required')]]})
+        code, result = self.invoke(fake, 'status', str(NUMBER))
+        self.assertEqual(result['result'], 'blocked')
+
+    def test_every_failing_conclusion_is_failed(self):
+        for conclusion in ['failure', 'timed_out', 'startup_failure', 'stale']:
+            with self.subTest(conclusion=conclusion):
+                fake = FakeGitHub([pull()], runs={SHA: [[run(1, conclusion=conclusion)]]})
+                code, result = self.invoke(fake, 'status', str(NUMBER))
+                self.assertEqual(result['result'], 'failed')
+
+    def test_auto_merge_with_unknown_support_is_blocked(self):
+        fake = FakeGitHub([pull()], api={f'repos/{REPO}': FORBIDDEN}, after_merge=[pull(auto=AUTO)])
+        code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge', '--auto')
+        self.assertEqual(result['result'], 'blocked')
+        self.assertEqual(result['policy']['auto_merge'], 'unknown')
+        self.assertEqual(fake.merges(), [])
+
+    def test_a_denied_ruleset_list_is_null_not_empty(self):
+        fake = FakeGitHub([pull()], api={f'repos/{REPO}/rulesets': FORBIDDEN})
+        code, result = self.invoke(fake, 'policy')
+        self.assertIsNone(result['policy']['rulesets'])
+        self.assertEqual(result['policy']['access']['rulesets'], 403)
 
 
 class CommandLineTests(unittest.TestCase):
