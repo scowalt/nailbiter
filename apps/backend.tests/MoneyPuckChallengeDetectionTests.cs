@@ -63,6 +63,17 @@ public sealed class MoneyPuckChallengeDetectionTests
     }
 
     [Fact]
+    public async Task Challenge_phrase_in_an_inline_svg_title_on_a_normal_predictions_page_collects_without_latching_or_reporting()
+    {
+        await using var app = await ReportingApp.StartAsync();
+        app.Harness.Handler.Page = app.Harness.Handler.Page
+            .Replace("<html><body>", "<html><head><title>NHL Playoff Predictions | MoneyPuck</title></head><body>")
+            .Replace("</main>", "<svg role=\"img\"><title>Access denied</title><path d=\"M0 0h1v1H0z\"/></svg></main>");
+
+        await app.AssertCollectedWithoutReportingAsync(await app.RefreshAsync());
+    }
+
+    [Fact]
     public async Task Challenge_phrase_in_a_normal_simulations_csv_row_collects_without_latching_or_reporting()
     {
         await using var app = await ReportingApp.StartAsync();
