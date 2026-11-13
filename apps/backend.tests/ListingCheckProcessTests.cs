@@ -49,10 +49,12 @@ public sealed class ListingCheckProcessTests
             Assert.Equal(0, kill(-run.Id, Sigterm));
             await run.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(60));
 
+            var streamsClosed = TimeSpan.FromSeconds(10);
             Assert.Equal(["cancelled: interrupted before the report was written (exit 130)"],
-                (await stderr).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-            Assert.Equal(130, run.ExitCode);
-            Assert.DoesNotContain("outcome", await stdout);
+                (await stderr.WaitAsync(streamsClosed)).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            Assert.DoesNotContain("outcome", await stdout.WaitAsync(streamsClosed));
+            Assert.True(run.ExitCode is 130 or 143,
+                $"dotnet run should relay the app's exit 130, or exit 143 when its own copy of the SIGTERM lands after the app has exited; it exited {run.ExitCode}");
         }
         finally
         {
