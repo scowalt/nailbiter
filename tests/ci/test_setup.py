@@ -2,6 +2,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import socket
 import subprocess
 import tempfile
@@ -144,7 +145,11 @@ class ToolchainPreflightTests(unittest.TestCase):
         for tool in SYSTEM_TOOLS:
             (self.system / tool).symlink_to(shutil.which(tool))
 
-    def run_setup(self, tools, shell_tools=None, mise=True, script='scripts/setup.sh', env=()):
+    def run_setup(self, tools, shell_tools=None, mise=True, script='scripts/setup.sh', env=(), timeout=120):
+        command = self.setup_command(tools, shell_tools, mise, script, env)
+        return subprocess.run(command, cwd=self.root, capture_output=True, text=True, timeout=timeout)
+
+    def setup_command(self, tools, shell_tools=None, mise=True, script='scripts/setup.sh', env=()):
         tool_dir = self.bin / 'tools'
         for name, body in tools.items():
             write_executable(tool_dir / name, body)
@@ -157,7 +162,7 @@ class ToolchainPreflightTests(unittest.TestCase):
             body = mise if isinstance(mise, str) else f'[ "$1" = env ] && printf "export PATH=%s\\n" "{tool_dir}:{self.system}"\nexit 0\n'
             write_executable(self.bin / 'mise' / 'mise', body)
             path = f'{self.bin / "mise"}:{path}'
-        return subprocess.run(['env', '-i', f'HOME={self.root}', f'PATH={path}', *env, 'bash', script], cwd=self.root, capture_output=True, text=True, timeout=120)
+        return ['env', '-i', f'HOME={self.root}', f'PATH={path}', *env, 'bash', script]
 
     def assertNotReady(self, result, *lines):
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
@@ -225,6 +230,20 @@ class ToolchainPreflightTests(unittest.TestCase):
                             "fail  cannot read the 'python' pin in .mise.toml",
                             "fail  cannot read the '[tools.gitleaks]' pin in .mise.toml",
                             'fix: write each pin as name = "1.2.3" under [tools]')
+
+    def test_single_quoted_pins_are_read(self):
+        (self.root / '.mise.toml').write_text(f"[tools]\nbun = '{PINS['bun']}'\n'asdf:mise-plugins/mise-dotnet-core' = '{SDK}'\n")
+        result = self.run_setup(pinned_tool_shims() | {'bun': says('1.3.11')})
+        self.assertNotReady(result, f'does not provide bun {PINS["bun"]}')
+        self.assertIn(f'ok    .NET SDK {SDK}', result.stdout)
+
+    def test_dotted_keys_and_arrays_are_pins_it_cannot_read(self):
+        (self.root / '.mise.toml').write_text(f'[tools]\nbun.version = "{PINS["bun"]}"\nuv = ["0.11.32"]\n')
+        result = self.run_setup(pinned_tool_shims())
+        self.assertNotReady(result,
+                            "fail  cannot read the 'bun.version' pin in .mise.toml",
+                            "fail  cannot read the 'uv' pin in .mise.toml")
+        self.assertNotIn('not installed', result.stdout)
 
     def test_mise_config_without_pins_is_not_ready(self):
         (self.root / '.mise.toml').write_text('[env]\nX = "1"\n')
@@ -350,6 +369,43 @@ class ToolchainPreflightTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn('did not finish before the provisioning deadline. The worktree is kept', result.stdout)
         self.assertEqual(processes_in(self.root), [])
+
+    def test_bb_hook_does_not_report_a_deadline_that_setup_beat(self):
+        bun = '[ "$1" = install ] && [ "$3" = . ] && { sleep 4.2; exit 0; }\n' + says(PINS['bun'])
+        command = self.setup_command(pinned_tool_shims() | {'bun': bun}, script='.bb-env-setup.sh', env=['NAILBITER_SETUP_DEADLINE=5'])
+        time.sleep((0.85 - time.time() % 1) % 1)
+        started = time.monotonic()
+        result = subprocess.run(command, cwd=self.root, capture_output=True, text=True, timeout=120)
+        elapsed = time.monotonic() - started
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertLess(elapsed, 5, result.stdout)
+        self.assertIn('READY (0 warning(s))', result.stdout)
+        self.assertNotIn('deadline', result.stdout)
+
+    def test_cancelling_the_bb_hook_stops_setup(self):
+        bun = '[ "$1" = install ] && { : > "$HOME/hanging"; exec sleep 300; }\n' + says(PINS['bun'])
+        command = self.setup_command(pinned_tool_shims() | {'bun': bun}, script='.bb-env-setup.sh')
+        hook = subprocess.Popen(command, cwd=self.root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        self.addCleanup(hook.kill)
+        deadline = time.monotonic() + 20
+        while not (self.root / 'hanging').exists():
+            self.assertLess(time.monotonic(), deadline, 'setup never reached bun install')
+            time.sleep(0.05)
+        os.killpg(hook.pid, signal.SIGTERM)
+        hook.wait(10)
+        deadline = time.monotonic() + 3
+        while processes_in(self.root) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual(processes_in(self.root), [])
+
+    def test_bb_hook_without_setsid_still_stops_setup_at_its_deadline(self):
+        (self.system / 'setsid').unlink()
+        bun = '[ "$1" = install ] && exec sleep 300\n' + says(PINS['bun'])
+        started = time.monotonic()
+        result = self.run_setup(pinned_tool_shims() | {'bun': bun}, script='.bb-env-setup.sh', env=['NAILBITER_SETUP_DEADLINE=5'], timeout=40)
+        self.assertLess(time.monotonic() - started, 20)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn('did not finish before the provisioning deadline. The worktree is kept', result.stdout)
 
     def test_bb_hook_stops_processes_that_setup_leaves_running(self):
         dotnet = '[ "$1" = restore ] && { sleep 300 </dev/null >/dev/null 2>&1 & exit 0; }\n' + says(SDK)
