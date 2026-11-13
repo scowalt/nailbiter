@@ -1,0 +1,314 @@
+#!/usr/bin/env python3
+import argparse
+import contextlib
+from dataclasses import dataclass, field
+from datetime import datetime
+import enum
+import fcntl
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+from xml.etree import ElementTree
+from xml.sax.saxutils import quoteattr
+
+ROOT = Path(__file__).resolve().parents[1]
+LOGS = ROOT / 'obj' / 'test-backend'
+KEPT_RUNS = 10
+MESSAGE_LINES = 60
+STACK_LINES = 8
+TRX = '{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}'
+INVALID_FILTER = 'Incorrect format for TestCaseFilter'
+FAILED_OUTCOMES = {'Failed', 'Error', 'Timeout', 'Aborted'}
+FAILED_COUNTERS = ('failed', 'error', 'timeout', 'aborted')
+
+
+@dataclass(frozen=True)
+class Suite:
+    name: str
+    project: str
+
+
+SUITES = (
+    Suite('fsharp', 'apps/backend.fsharp.tests/backend.fsharp.tests.fsproj'),
+    Suite('csharp', 'apps/backend.tests/backend.tests.csproj'),
+)
+
+
+class Exit(enum.IntEnum):
+    PASSED = 0
+    TESTS_FAILED = 1
+    INVALID_SELECTION = 2
+    BUILD_FAILED = 3
+    NO_TESTS = 4
+    TOOLCHAIN = 5
+
+
+SUITE_EXIT_PRIORITY = (Exit.TESTS_FAILED, Exit.INVALID_SELECTION, Exit.NO_TESTS)
+LABELS = {
+    Exit.PASSED: 'passed',
+    Exit.TESTS_FAILED: 'FAILED',
+    Exit.INVALID_SELECTION: 'invalid filter',
+    Exit.NO_TESTS: 'no tests matched',
+}
+
+
+@dataclass
+class Failure:
+    name: str
+    message: str
+    stack: str
+
+
+@dataclass
+class SuiteResult:
+    suite: Suite
+    outcome: Exit
+    log: Path
+    passed: int = 0
+    failed: int = 0
+    skipped: int = 0
+    failures: list[Failure] = field(default_factory=list)
+    detail: str = ''
+
+
+class Stopped(Exception):
+    pass
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        prog='scripts/test-backend',
+        description='Build the selected backend test suites once, then run them without another build.',
+        epilog='Exit codes: 0 passed, 1 tests failed, 2 invalid selection, 3 restore or build failed, 4 no tests matched, 5 toolchain unavailable.',
+    )
+    parser.add_argument('suite', nargs='?', default='all', choices=['all', *(suite.name for suite in SUITES)], help='suite to run (default: all)')
+    parser.add_argument('--filter', help='dotnet test --filter expression, passed to every selected suite')
+    parser.add_argument('--configuration', default='Release', choices=['Release', 'Debug'], help='build configuration (default: Release, as CI)')
+    return parser.parse_args()
+
+
+def relative(path):
+    return path.relative_to(ROOT)
+
+
+def toolchain_environment():
+    environment = {**os.environ, 'MISE_AUTO_INSTALL': '0'}
+    try:
+        mise = subprocess.run(['mise', 'env', '--json'], cwd=ROOT, env=environment, capture_output=True, text=True, timeout=60)
+    except FileNotFoundError:
+        return None, 'mise is not on PATH; run scripts/setup.sh'
+    except subprocess.TimeoutExpired:
+        return None, 'mise env did not answer within 60 seconds; run scripts/setup.sh'
+    if mise.returncode != 0:
+        return None, f'mise could not load .mise.toml; run scripts/setup.sh\n{mise.stderr.strip()}'
+    try:
+        environment.update(json.loads(mise.stdout))
+    except json.JSONDecodeError:
+        return None, f'mise env --json did not print JSON; run scripts/setup.sh\n{mise.stdout.strip()[:500]}'
+    environment.update(DOTNET_CLI_TELEMETRY_OPTOUT='1', DOTNET_NOLOGO='1')
+    if not shutil.which('dotnet', path=environment.get('PATH')):
+        return None, 'dotnet is not installed for this worktree; run scripts/setup.sh'
+    return environment, ''
+
+
+def alive(pid):
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def lock_holder(handle):
+    deadline = time.monotonic() + 2
+    while True:
+        handle.seek(0)
+        holder = handle.read().strip()
+        pid = re.search(r'\(pid (\d+),', holder)
+        if pid and alive(int(pid[1])):
+            return holder
+        if time.monotonic() > deadline:
+            return 'another invocation'
+        time.sleep(0.1)
+
+
+def hold_worktree_lock(description):
+    LOGS.mkdir(parents=True, exist_ok=True)
+    handle = open(LOGS / 'lock', 'a+')
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print(f'waiting for {lock_holder(handle)} to finish in this worktree', flush=True)
+        fcntl.flock(handle, fcntl.LOCK_EX)
+    handle.seek(0)
+    handle.truncate()
+    handle.write(f'{description} (pid {os.getpid()}, started {datetime.now():%H:%M:%S})\n')
+    handle.flush()
+    return handle
+
+
+def new_run_directory():
+    runs = LOGS / 'runs'
+    run = runs / f'{datetime.now():%Y%m%d-%H%M%S}-{os.getpid()}'
+    run.mkdir(parents=True)
+    for old in sorted(runs.iterdir())[:-KEPT_RUNS]:
+        shutil.rmtree(old, ignore_errors=True)
+    return run
+
+
+def run_logged(command, log, environment):
+    with open(log, 'w') as output:
+        process = subprocess.Popen(command, cwd=ROOT, env=environment, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            return process.wait()
+        except BaseException:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+            raise
+
+
+def build(suites, configuration, run, environment):
+    solution = run / 'backend-tests.slnx'
+    projects = ''.join(f'  <Project Path={quoteattr(str(ROOT / suite.project))} />\n' for suite in suites)
+    solution.write_text(f'<Solution>\n{projects}</Solution>\n')
+    log = run / 'build.log'
+    command = [
+        'dotnet', 'build', str(solution),
+        '--configuration', configuration,
+        '-p:ShouldUnsetParentConfigurationAndPlatform=false',
+        '-tl:off', '-v:normal',
+    ]
+    print(f'build    {" + ".join(suite.name for suite in suites)} ({configuration})', flush=True)
+    if run_logged(command, log, environment) == 0:
+        return True
+    lines = log.read_text(errors='replace').splitlines()
+    errors = list(dict.fromkeys(re.sub(r'^\d+>', '', line.strip()) for line in lines if re.search(r':\s*error\s+[A-Z]+\d+', line)))
+    print('\n'.join(errors[:40] or lines[-20:]))
+    print(f'build    FAILED  log: {relative(log)}')
+    return False
+
+
+def text(element, path):
+    found = element.find(path)
+    return (found.text or '').strip() if found is not None else ''
+
+
+def read_results(result, trx, output):
+    if INVALID_FILTER in output:
+        result.outcome = Exit.INVALID_SELECTION
+        result.detail = next(line.strip() for line in output.splitlines() if INVALID_FILTER in line)
+        return
+    try:
+        run = ElementTree.parse(trx).getroot()
+    except (OSError, ElementTree.ParseError):
+        result.outcome = Exit.TESTS_FAILED
+        result.detail = 'the test run wrote no results; read its log'
+        return
+    tests = list(run.iter(f'{TRX}UnitTestResult'))
+    info = f'{TRX}Output/{TRX}ErrorInfo/{TRX}'
+    result.failures = [Failure(test.get('testName', '?'), text(test, f'{info}Message'), text(test, f'{info}StackTrace')) for test in tests if test.get('outcome') in FAILED_OUTCOMES]
+    result.passed = sum(test.get('outcome') == 'Passed' for test in tests)
+    result.failed = len(result.failures)
+    result.skipped = sum(test.get('outcome') == 'NotExecuted' for test in tests)
+    reported = sum(int(counters.get(name, 0)) for counters in run.iter(f'{TRX}Counters') for name in FAILED_COUNTERS)
+    if reported != result.failed:
+        result.outcome = Exit.TESTS_FAILED
+        result.detail = f'TRX counters report {reported} failed tests, but it lists {result.failed}; read its log'
+
+
+def run_suite(suite, args, run, environment):
+    log = run / f'{suite.name}.log'
+    trx = f'{suite.name}.trx'
+    command = [
+        'dotnet', 'test', str(ROOT / suite.project), '--no-build',
+        '--configuration', args.configuration,
+        '--results-directory', str(run),
+        '--logger', f'trx;LogFileName={trx}',
+    ]
+    if args.filter:
+        command += ['--filter', args.filter]
+    print(f'test     {suite.name}  log: {relative(log)}', flush=True)
+    code = run_logged(command, log, environment)
+    output = log.read_text(errors='replace')
+    result = SuiteResult(suite, Exit.PASSED, log)
+    read_results(result, run / trx, output)
+    if result.outcome == Exit.PASSED:
+        if result.failed or code != 0:
+            result.outcome = Exit.TESTS_FAILED
+            if not result.failed:
+                result.detail = f'dotnet test exited {code} without a failed test; read its log'
+        elif result.passed == 0:
+            result.outcome = Exit.NO_TESTS
+            result.detail = 'no test ran; check the filter' + ('' if args.suite == suite.name else ', or run one suite: scripts/test-backend <suite> --filter ...')
+    if result.outcome == Exit.TESTS_FAILED and not result.failures:
+        print('\n'.join(output.splitlines()[-30:]))
+    return result
+
+
+def report(results):
+    for result in results:
+        for failure in result.failures:
+            print(f'\nFAILED {failure.name}')
+            for line in failure.message.splitlines()[:MESSAGE_LINES]:
+                print(f'  {line}')
+            for line in [line.strip() for line in failure.stack.splitlines() if line.strip()][:STACK_LINES]:
+                print(f'    {line}')
+    print()
+    for result in results:
+        counts = f'{result.passed} passed, {result.failed} failed, {result.skipped} skipped'
+        print(f'{result.suite.name:<8} {LABELS[result.outcome]:<16} {counts}  log: {relative(result.log)}')
+        if result.detail:
+            print(f'         {result.detail}')
+
+
+def stop(signum, frame):
+    raise Stopped(signum)
+
+
+def main():
+    args = parse_args()
+    suites = [suite for suite in SUITES if args.suite in ('all', suite.name)]
+    environment, problem = toolchain_environment()
+    if environment is None:
+        print(f'test-backend: {problem}', file=sys.stderr)
+        return Exit.TOOLCHAIN
+    signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGHUP, stop)
+    selection = ' '.join(['scripts/test-backend', args.suite, f'--configuration {args.configuration}'] + ([f'--filter {args.filter}'] if args.filter else []))
+    lock = hold_worktree_lock(selection)
+    run = new_run_directory()
+    print(f'{selection}\nlogs     {relative(run)}', flush=True)
+    if not build(suites, args.configuration, run, environment):
+        return Exit.BUILD_FAILED
+    results = []
+    for suite in suites:
+        results.append(run_suite(suite, args, run, environment))
+        if results[-1].outcome == Exit.INVALID_SELECTION:
+            break
+    report(results)
+    lock.close()
+    outcomes = {result.outcome for result in results}
+    return next((code for code in SUITE_EXIT_PRIORITY if code in outcomes), Exit.PASSED)
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(130)
+    except Stopped as stopped:
+        sys.exit(128 + stopped.args[0])

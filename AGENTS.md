@@ -23,6 +23,7 @@ The live application is one .NET 10 host: C# in `apps/backend`, F# in `apps/back
 ## Context pointers
 
 - In a new checkout or worktree, run `scripts/setup.sh` before building and fix every `fail` line it prints. `docs/development-setup.md` explains its checks, warnings and the BB provisioning hook.
+- Run backend tests with `scripts/test-backend`, not bare `dotnet test`; `docs/testing/backend-test-command.md` explains selection and exit codes.
 - Before domain/policy work, read `GLOSSARY.md` and the relevant `docs/adr/` decisions, and follow `docs/agents/domain.md`.
 - Before issue operations, read `docs/agents/issue-tracker.md`; before triage, read `docs/agents/triage-labels.md`.
 - Before provider or odds changes, read `docs/live-odds.md` and `docs/sportsbook-sources.md`. `docs/README.md` indexes the other policy, runbook and test documents.
