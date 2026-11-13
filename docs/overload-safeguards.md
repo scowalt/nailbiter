@@ -46,13 +46,13 @@ It also makes sure that a separate migration connection retains `statement_timeo
 Run the tests with Docker available:
 
 ```bash
-dotnet test apps/backend.tests/backend.tests.csproj --configuration Release
+scripts/test-backend csharp
 ```
 
 If the rootless Docker environment cannot start Ryuk, disable that cleanup helper for the local test run:
 
 ```bash
-TESTCONTAINERS_RYUK_DISABLED=true dotnet test apps/backend.tests/backend.tests.csproj --configuration Release
+TESTCONTAINERS_RYUK_DISABLED=true scripts/test-backend csharp
 ```
 
 The tests dispose their PostgreSQL containers during normal completion.

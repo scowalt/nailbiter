@@ -33,6 +33,7 @@ Each document below is the authoritative source for its topic. [AGENTS.md](../AG
 
 ## Testing
 
+- [testing/backend-test-command.md](testing/backend-test-command.md): `scripts/test-backend`, the one command for backend test suites, its selection and its exit codes.
 - [testing/shared-postgresql-fixture.md](testing/shared-postgresql-fixture.md): the shared PostgreSQL server for hosted game tests.
 - [testing/ci-backend-shards.md](testing/ci-backend-shards.md): how CI splits the C# suite across parallel jobs.
 - [testing/ryuk-host-port-stress.md](testing/ryuk-host-port-stress.md): the Testcontainers Ryuk host-port probe.

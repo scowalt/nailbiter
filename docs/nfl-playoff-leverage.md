@@ -55,9 +55,8 @@ The [synthetic fixture contract](../apps/backend.tests/Fixtures/NflPlayoffLevera
 ```sh
 python scripts/test-fixtures/generate.py --check
 python -m unittest discover -s tests/fixtures -v
-mise exec -- dotnet test apps/backend.tests/backend.tests.csproj -c Release --filter FullyQualifiedName~NflPlayoffLeverage
-mise exec -- dotnet test apps/backend.tests/backend.tests.csproj -c Release
-mise exec -- dotnet test apps/backend.fsharp.tests/backend.fsharp.tests.fsproj -c Release
+scripts/test-backend csharp --filter FullyQualifiedName~NflPlayoffLeverage
+scripts/test-backend
 ```
 
 `NFL_LEVERAGE_ARTIFACT_DIR`, if used, must point outside the checkout for the controlled rendered page. It is not a running app or live data. Any temporary browser preview must use Portless/private Tailscale and owned cleanup. Passing tests does not prove current publisher fields, independent real schedule agreement, source accuracy, recurring access, public reuse rights or production delivery.

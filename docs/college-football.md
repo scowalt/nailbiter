@@ -77,9 +77,7 @@ Imported games have `IsHistoricalImport`; candle samples have `IsHistorical` and
 `CollegeFootballTests.cs` exercises PostgreSQL persistence, provider-shaped HTTP fixtures, collection, the dry-run/import path, migration repeatability, SSR pages, SSE fragments, and score exclusion. `CollegePolicyTests.cs` covers alias/name matching, long/neutral-site codes, quote quality, classification and overtime. Existing F# and backend tests provide other-sport regression coverage.
 
 ```bash
-dotnet build apps/backend/backend.csproj --configuration Release
-dotnet test apps/backend.fsharp.tests/backend.fsharp.tests.fsproj --configuration Release
-dotnet test apps/backend.tests/backend.tests.csproj --configuration Release
+scripts/test-backend
 ```
 
 On a rootless Docker machine, Testcontainers' cleanup container must mount the same socket as the daemon. Set `DOCKER_HOST` and `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE` to that machine's actual rootless socket for the test process; do not disable cleanup or change the shared daemon. Tests use in-process ASP.NET TestServer, not a browser-accessible development server.

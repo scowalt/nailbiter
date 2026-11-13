@@ -89,10 +89,8 @@ All public fixture values, game IDs, NHL responses, HTML, ranks, odds and clocks
 Run sequentially from repository root (no provider or production access):
 
 ```sh
-mise exec asdf:mise-plugins/mise-dotnet-core@10.0.401 -- dotnet test apps/backend.tests/backend.tests.csproj --filter 'FullyQualifiedName~MoneyPuckDailyRefresh|FullyQualifiedName~MoneyPuckQualification|FullyQualifiedName~NflPlayoffPageTests|FullyQualifiedName~MoneyPuckTests|FullyQualifiedName~ProHypeTests'
-mise exec asdf:mise-plugins/mise-dotnet-core@10.0.401 -- dotnet test apps/backend.tests/backend.tests.csproj
-mise exec asdf:mise-plugins/mise-dotnet-core@10.0.401 -- dotnet test apps/backend.fsharp.tests/backend.fsharp.tests.fsproj
-mise exec asdf:mise-plugins/mise-dotnet-core@10.0.401 -- dotnet build apps/backend/backend.csproj --configuration Release
+scripts/test-backend csharp --filter 'FullyQualifiedName~MoneyPuckDailyRefresh|FullyQualifiedName~MoneyPuckQualification|FullyQualifiedName~NflPlayoffPageTests|FullyQualifiedName~MoneyPuckTests|FullyQualifiedName~ProHypeTests'
+scripts/test-backend
 ```
 
 ## Outstanding live-source readiness evidence
