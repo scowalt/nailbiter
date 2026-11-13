@@ -89,9 +89,10 @@ public sealed class MoneyPuckChallengeDetectionTests
     }
 
     [Theory]
-    [InlineData(200)]
-    [InlineData(503)]
-    public async Task Cloudflare_challenge_header_latches_and_reports_one_error(int status)
+    [InlineData(200, "challenge")]
+    [InlineData(503, "challenge")]
+    [InlineData(200, "block, challenge")]
+    public async Task Cloudflare_challenge_header_latches_and_reports_one_error(int status, string mitigated)
     {
         await using var app = await ReportingApp.StartAsync();
         var page = app.Harness.Handler.Page;
@@ -99,7 +100,7 @@ public sealed class MoneyPuckChallengeDetectionTests
         {
             if (request.RequestUri!.AbsoluteUri != MoneyPuckQualificationHandler.PageUrl) return Task.FromResult<HttpResponseMessage?>(null);
             var response = new HttpResponseMessage((HttpStatusCode)status) { Content = new StringContent(page) };
-            response.Headers.Add("cf-mitigated", "challenge");
+            response.Headers.Add("cf-mitigated", mitigated);
             return Task.FromResult<HttpResponseMessage?>(response);
         };
 
