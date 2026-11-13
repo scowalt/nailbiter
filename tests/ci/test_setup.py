@@ -382,6 +382,33 @@ class ToolchainPreflightTests(unittest.TestCase):
         self.assertIn('READY (0 warning(s))', result.stdout)
         self.assertNotIn('deadline', result.stdout)
 
+    def test_bb_hook_does_not_report_a_deadline_when_a_process_setup_left_outlives_it(self):
+        pkill = shutil.which('pkill')
+        (self.system / 'pkill').unlink()
+        write_executable(self.system / 'pkill', f'sleep 1.5\nexec {pkill} "$@"\n')
+        bun = '[ "$1" = install ] && [ "$3" = . ] && { sleep 300 </dev/null >/dev/null 2>&1 & sleep 1; exit 0; }\n' + says(PINS['bun'])
+        result = self.run_setup(pinned_tool_shims() | {'bun': bun}, script='.bb-env-setup.sh', env=['NAILBITER_SETUP_DEADLINE=2'])
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn('READY (0 warning(s))', result.stdout)
+        self.assertNotIn('deadline', result.stdout)
+        self.assertEqual(processes_in(self.root), [])
+
+    def test_terminating_only_the_bb_hook_stops_setup_and_its_watchdog(self):
+        bun = '[ "$1" = install ] && { : > "$HOME/hanging"; exec sleep 300; }\n' + says(PINS['bun'])
+        command = self.setup_command(pinned_tool_shims() | {'bun': bun}, script='.bb-env-setup.sh')
+        hook = subprocess.Popen(command, cwd=self.root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        self.addCleanup(hook.kill)
+        deadline = time.monotonic() + 20
+        while not (self.root / 'hanging').exists():
+            self.assertLess(time.monotonic(), deadline, 'setup never reached bun install')
+            time.sleep(0.05)
+        os.kill(hook.pid, signal.SIGTERM)
+        hook.wait(10)
+        deadline = time.monotonic() + 3
+        while processes_in(self.root) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        self.assertEqual(processes_in(self.root), [])
+
     def test_cancelling_the_bb_hook_stops_setup(self):
         bun = '[ "$1" = install ] && { : > "$HOME/hanging"; exec sleep 300; }\n' + says(PINS['bun'])
         command = self.setup_command(pinned_tool_shims() | {'bun': bun}, script='.bb-env-setup.sh')
