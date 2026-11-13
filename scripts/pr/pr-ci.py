@@ -85,7 +85,7 @@ class Response:
 
 
 def shaped(record, fields, what):
-    if not isinstance(record, dict) or any(not isinstance(record.get(key), kind) for key, kind in fields.items()):
+    if not isinstance(record, dict) or any(key not in record or not isinstance(record[key], kind) for key, kind in fields.items()):
         raise GitHubError(f'{what} had an unexpected shape')
     return record
 
@@ -187,7 +187,7 @@ class Ci:
         if runs_passed and missing:
             parts.append(f"no Actions job yet for required checks: {', '.join(missing)}")
         unsuccessful = [
-            f"{name} {job['conclusion']}"
+            f"{name} {job['conclusion'] or 'not finished'}"
             for name, jobs in (self.required or {}).items() for job in jobs
             if job['conclusion'] not in PASSING_CONCLUSIONS
         ]
@@ -273,18 +273,42 @@ def bypass_state(values):
     return 'unknown' if 'unknown' in values else 'never'
 
 
-def required_contexts(applied):
-    if applied is None:
-        return None
+def ruleset_contexts(applied):
     contexts = []
     for rule in applied:
         if rule.get('type') != 'required_status_checks':
             continue
         for check in (rule.get('parameters') or {}).get('required_status_checks', []):
             context = check.get('context') if isinstance(check, dict) else None
-            if isinstance(context, str) and context not in contexts:
+            if isinstance(context, str):
                 contexts.append(context)
     return contexts
+
+
+def legacy_contexts(legacy):
+    if legacy.status != 200:
+        return []
+    if not isinstance(legacy.body, dict):
+        return None
+    checks = legacy.body.get('required_status_checks')
+    if checks is None:
+        return []
+    if not isinstance(checks, dict):
+        return None
+    contexts = checks.get('contexts', [])
+    entries = checks.get('checks', [])
+    if not isinstance(contexts, list) or not all(isinstance(context, str) for context in contexts):
+        return None
+    if not isinstance(entries, list) or not all(isinstance(entry, dict) and isinstance(entry.get('context'), str) for entry in entries):
+        return None
+    return contexts + [entry['context'] for entry in entries]
+
+
+def required_contexts(applied, legacy):
+    legacy_required = legacy_contexts(legacy)
+    if applied is None or legacy_required is None:
+        return None
+    return list(dict.fromkeys(ruleset_contexts(applied) + legacy_required))
 
 
 def describe_ruleset(entry, known, applied_ids, applied):
@@ -328,7 +352,7 @@ def discover_policy(gh, branch):
         'branch': branch,
         'protection': protection,
         'rules': [rule.get('type') for rule in applied] if applied is not None else None,
-        'required_checks': required_contexts(applied),
+        'required_checks': required_contexts(applied, legacy),
         'rulesets': rulesets,
         'legacy_protection': {'http_status': legacy.status, 'meaning': LEGACY_MEANINGS.get(legacy.status, legacy.error)},
         'merge_methods': {method: readable_settings.get(setting) for method, setting in MERGE_METHOD_SETTINGS.items()} if readable_settings else None,
