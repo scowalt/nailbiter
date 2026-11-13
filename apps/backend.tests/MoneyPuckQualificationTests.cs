@@ -159,9 +159,9 @@ public sealed class MoneyPuckQualificationTests
     [InlineData(2, 403, "")]
     [InlineData(3, 429, "")]
     [InlineData(4, 200, "<html><title>Just a moment...</title><div id='cf-chl-widget'>Checking your browser</div></html>")]
-    [InlineData(5, 200, "Please verify you are human: CAPTCHA")]
-    [InlineData(6, 200, "Access denied")]
-    [InlineData(2, 200, "Enable JavaScript and cookies to continue")]
+    [InlineData(5, 200, "<html><head><title>Please verify you are human: CAPTCHA</title></head></html>")]
+    [InlineData(6, 200, "<html><head><title>Access denied</title></head></html>")]
+    [InlineData(2, 200, "<html><head><title>Enable JavaScript and cookies to continue</title></head></html>")]
     public async Task Denial_or_challenge_stops_attempt_and_blocks_callers_for_24_hours_without_changing_evidence(int stopAt, int status, string body)
     {
         await using var h = new MoneyPuckQualificationHarness();

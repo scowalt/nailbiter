@@ -38,6 +38,63 @@ public sealed class MoneyPuckChallengeDetectionTests
         + "a.src='/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1?ray=0000000000000000';"
         + "document.getElementsByTagName('head')[0].appendChild(a);</script></body></html>";
 
+    private const string JustAMomentTitleOnly =
+        "<!DOCTYPE html><html><head><title>Just a moment...</title></head><body></body></html>";
+
+    private const string AttentionRequiredTitleOnly =
+        "<!DOCTYPE html><html><head><title>Attention Required! | Cloudflare</title></head><body></body></html>";
+
+    private const string AccessDeniedTitleOnly =
+        "<!DOCTYPE html><html><head><title>Access denied | moneypuck.com used Cloudflare to restrict access</title></head><body></body></html>";
+
+    [Theory]
+    [InlineData("A reader said the captcha on a ticket site kept failing.")]
+    [InlineData("The arena app asks fans to verify you are human before they vote.")]
+    [InlineData("Checking your browser history for old box scores is not required.")]
+    [InlineData("Just a moment in the third period changed the series.")]
+    [InlineData("Access denied to the press box was the coach's call.")]
+    [InlineData("Enable JavaScript and cookies to use the interactive bracket.")]
+    public async Task Challenge_phrases_in_normal_predictions_page_prose_collect_without_latching_or_reporting(string prose)
+    {
+        await using var app = await ReportingApp.StartAsync();
+        app.Harness.Handler.Page = app.Harness.Handler.Page.Replace("</main>", $"<p>{prose}</p></main>");
+
+        await app.AssertCollectedWithoutReportingAsync(await app.RefreshAsync());
+    }
+
+    [Fact]
+    public async Task Challenge_phrase_in_a_normal_simulations_csv_row_collects_without_latching_or_reporting()
+    {
+        await using var app = await ReportingApp.StartAsync();
+        var lines = app.Harness.Handler.Csv.TrimEnd().Split('\n');
+        app.Harness.Handler.Csv = string.Join('\n', lines.Select((line, i) => i switch
+        {
+            0 => line + ",note",
+            1 => line + ",Access denied to the press box",
+            _ => line + ",",
+        })) + "\n";
+
+        await app.AssertCollectedWithoutReportingAsync(await app.RefreshAsync());
+    }
+
+    [Theory]
+    [InlineData(200)]
+    [InlineData(503)]
+    public async Task Cloudflare_challenge_header_latches_and_reports_one_error(int status)
+    {
+        await using var app = await ReportingApp.StartAsync();
+        var page = app.Harness.Handler.Page;
+        app.Harness.Handler.Override = (request, _) =>
+        {
+            if (request.RequestUri!.AbsoluteUri != MoneyPuckQualificationHandler.PageUrl) return Task.FromResult<HttpResponseMessage?>(null);
+            var response = new HttpResponseMessage((HttpStatusCode)status) { Content = new StringContent(page) };
+            response.Headers.Add("cf-mitigated", "challenge");
+            return Task.FromResult<HttpResponseMessage?>(response);
+        };
+
+        await app.AssertLatchedWithOneErrorAsync(await app.RefreshAsync());
+    }
+
     [Fact]
     public async Task Cloudflare_javascript_detections_on_a_normal_predictions_page_collect_without_latching_or_reporting()
     {
@@ -63,6 +120,9 @@ public sealed class MoneyPuckChallengeDetectionTests
     [InlineData(200, ManagedChallengePage)]
     [InlineData(200, ChallengeOptionsOnly)]
     [InlineData(200, OrchestrationScriptOnly)]
+    [InlineData(200, JustAMomentTitleOnly)]
+    [InlineData(200, AttentionRequiredTitleOnly)]
+    [InlineData(200, AccessDeniedTitleOnly)]
     [InlineData(401, "")]
     [InlineData(403, ManagedChallengePage)]
     [InlineData(429, "")]
