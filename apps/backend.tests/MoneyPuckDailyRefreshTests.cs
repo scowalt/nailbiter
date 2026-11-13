@@ -69,7 +69,7 @@ public sealed class MoneyPuckDailyRefreshTests
     [InlineData(1, 401, "")]
     [InlineData(2, 403, "")]
     [InlineData(3, 429, "")]
-    [InlineData(2, 200, "Please verify you are human: CAPTCHA")]
+    [InlineData(2, 200, "<html><head><title>Please verify you are human: CAPTCHA</title></head></html>")]
     public async Task Ranking_denial_stops_the_cycle_and_blocks_both_inputs_until_backoff_expires_across_restart(int stopAt, int status, string body)
     {
         await using var h = new MoneyPuckQualificationHarness();

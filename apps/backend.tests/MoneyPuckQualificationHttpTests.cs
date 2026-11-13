@@ -59,7 +59,7 @@ public sealed class MoneyPuckQualificationHttpTests
         Assert.Equal(32, await h.Service.RefreshNhlRatingsAsync(default));
         var original = await h.RowsAsync();
         h.Clock.Now = h.Clock.Now.AddHours(24);
-        h.Handler.Override = (_, _) => Task.FromResult<HttpResponseMessage?>(new(HttpStatusCode.OK) { Content = new StringContent("Access denied CAPTCHA" + new string('x', 4096)) });
+        h.Handler.Override = (_, _) => Task.FromResult<HttpResponseMessage?>(new(HttpStatusCode.OK) { Content = new StringContent("<html><head><title>Access denied</title></head><body>" + new string('x', 4096)) });
         Assert.Equal(0, await h.Service.RefreshNhlRatingsAsync(default));
         Assert.Equal(original.Select(r => r.PlayoffEvidenceJson), (await h.RowsAsync()).Select(r => r.PlayoffEvidenceJson));
         h.Clock.Now = h.Clock.Now.AddHours(24).AddTicks(-1);
