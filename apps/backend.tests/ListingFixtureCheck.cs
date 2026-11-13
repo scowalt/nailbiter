@@ -10,7 +10,7 @@ using Npgsql;
 namespace backend.tests;
 
 internal sealed record QueryWork(string Path, int LatestReads, int ExcitementReads, int ExcitementGames, int RelationScans,
-    int DistinctRelations, IReadOnlyList<string> DuplicateRelations, int ChunkScans, double? PlanningMs);
+    int DistinctRelations, IReadOnlyList<string> DuplicateRelations, int ChunkScans, IReadOnlyList<string> NewestSnapshotChunks, double? PlanningMs);
 
 internal sealed record FixtureControls(bool AppFactoryWorkersRemoved, int TimescaleBackgroundWorkers, string ProviderHttp, int ProviderRequestsAttempted);
 
@@ -96,12 +96,16 @@ internal static class ListingFixtureCheck
             .Concat(manifest.On("/").Select(game => game.Id).Where(id => c.Sql.Contains($"'{id}'", StringComparison.Ordinal)))).ToHashSet();
         var (relations, planningMs) = latest.Count == 1 ? await ExplainAsync(host.Services, latest[0]) : ([], null);
         var duplicates = relations.GroupBy(name => name).Where(group => group.Count() > 1).Select(group => group.Key).ToList();
+        var newestChunks = await NewestSnapshotChunksAsync(host.Services, manifest.On(path).Select(game => game.Id).ToArray());
+        var unread = newestChunks.Except(relations).ToList();
         var unexpected = readIds.Except(expectedIds).Order().ToList();
         var missing = expectedIds.Except(readIds).Order().ToList();
         (bool Broken, string Rule)[] rules =
         [
             (latest.Count != 1, $"expected 1 latest-odds read, saw {latest.Count}"),
             (duplicates.Count > 0, $"latest-odds plan scans {duplicates.Count} relations more than once, e.g. {string.Join(", ", duplicates.Take(3))}"),
+            (newestChunks.Count == 0, "listed games have no newest snapshot chunk to look for in the latest-odds plan"),
+            (unread.Count > 0, $"latest-odds plan does not show a scan of {string.Join(", ", unread)}, which holds the newest snapshots"),
             (excitement.Count != (expectedIds.Count > 0 ? 1 : 0), $"expected {(expectedIds.Count > 0 ? 1 : 0)} excitement history read, saw {excitement.Count}"),
             (unexpected.Count > 0, $"excitement read includes games without live or final status: {string.Join(", ", unexpected)}"),
             (missing.Count > 0, $"excitement read misses live or final games: {string.Join(", ", missing)}"),
@@ -109,7 +113,23 @@ internal static class ListingFixtureCheck
         ];
         failures.AddRange(rules.Where(rule => rule.Broken).Select(rule => new Failure(FailureKind.QueryWork, path, rule.Rule)));
         return new(path, latest.Count, excitement.Count, readIds.Count, relations.Count, relations.Distinct().Count(), duplicates,
-            relations.Count(name => name.Contains("_hyper_", StringComparison.Ordinal)), planningMs);
+            relations.Count(name => name.Contains("_hyper_", StringComparison.Ordinal)), newestChunks, planningMs);
+    }
+
+    private static async Task<List<string>> NewestSnapshotChunksAsync(IServiceProvider services, string[] gameIds)
+    {
+        using var scope = services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+        await db.Database.OpenConnectionAsync();
+        await using var command = new NpgsqlCommand("""
+            SELECT DISTINCT chunk.relname FROM (SELECT DISTINCT ON (game_id) tableoid FROM odds_snapshots WHERE game_id = ANY (@ids)
+                ORDER BY game_id, timestamp DESC, id DESC) newest JOIN pg_class chunk ON chunk.oid = newest.tableoid ORDER BY 1
+            """, (NpgsqlConnection)db.Database.GetDbConnection());
+        command.Parameters.AddWithValue("ids", gameIds);
+        var chunks = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync()) chunks.Add(reader.GetString(0));
+        return chunks;
     }
 
     private static async Task<(List<string> Relations, double? PlanningMs)> ExplainAsync(IServiceProvider services, CapturedCommand captured)
