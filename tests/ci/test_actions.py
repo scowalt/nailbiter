@@ -65,6 +65,13 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(release_bun['with']['bun-version'], tools['bun'])
         self.assertNotIn('GH_TOKEN', self.jobs['release']['env'])
 
+    def test_bun_projects_have_no_npm_lockfile(self):
+        tracked = [Path(path) for path in subprocess.check_output(['git', 'ls-files', '-z'], cwd=ROOT, text=True).split('\0') if path]
+        projects = {path.parent for path in tracked if path.name == 'bun.lock'}
+        self.assertIn(Path('apps/www'), projects)
+        npm_locks = [str(path) for path in tracked if path.name in {'package-lock.json', 'npm-shrinkwrap.json'} and path.parent in projects]
+        self.assertEqual(npm_locks, [])
+
     def test_validate_gates_on_every_validation_job(self):
         validate = self.jobs['validate']
         self.assertEqual(validate['needs'], ['checks', 'backend-tests'])
