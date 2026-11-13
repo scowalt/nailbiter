@@ -6,7 +6,7 @@ cd "$root" || exit 1
 caller_path=$PATH
 failures=0
 warnings=0
-export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
+export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 MISE_AUTO_INSTALL=0
 
 report() {
   printf '%-5s %s\n' "$1" "$2"
@@ -45,7 +45,7 @@ pinned_tools() {
 }
 
 version_line() {
-  (cd apps/backend && PATH=$1 timeout -k 5 20 "$2" --version 2>&1 | head -n1)
+  (cd apps/backend && PATH=$1 timeout -k 5 20 "$2" --version 2>/dev/null | sed -n 1p)
 }
 
 pin_satisfied() {
@@ -57,18 +57,18 @@ pin_satisfied() {
 }
 
 check_tool() {
-  local tool=$1 pin=$2 label=$3 found bare
+  local tool=$1 pin=$2 label=$3 found bare version
   found=$(command -v "$tool") || {
     report fail "$label is not installed" "mise install"
     return
   }
-  if ! pin_satisfied "$tool" "$(version_line "$PATH" "$tool")" "$pin"; then
+  if ! version=$(version_line "$PATH" "$tool") || ! pin_satisfied "$tool" "$version" "$pin"; then
     report fail "$found does not provide $label" "mise install"
     return
   fi
   report ok "$label"
   bare=$(PATH=$caller_path command -v "$tool")
-  if [[ -z $bare ]] || ! pin_satisfied "$tool" "$(version_line "$caller_path" "$tool")" "$pin"; then
+  if [[ -z $bare ]] || ! version=$(version_line "$caller_path" "$tool") || ! pin_satisfied "$tool" "$version" "$pin"; then
     report warn "'$tool' in your own shell is ${bare:-missing}, not $label" \
       "run it as 'mise exec -- $tool ...', or activate mise in your shell profile so its tools come first"
   fi

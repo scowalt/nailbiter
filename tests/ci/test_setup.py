@@ -200,6 +200,15 @@ class ToolchainPreflightTests(unittest.TestCase):
         result = self.run_setup(tools)
         self.assertNotReady(result, f'does not provide uv {PINS["uv"]}', 'fix: mise install')
 
+    def test_version_printed_on_stderr_is_not_trusted(self):
+        bun = f'echo "mise bun@{PINS["bun"]} [1/3] install" >&2\n' + says('1.3.11')
+        result = self.run_setup(pinned_tool_shims() | {'bun': bun})
+        self.assertNotReady(result, f'does not provide bun {PINS["bun"]}', 'fix: mise install')
+
+    def test_tool_whose_version_check_fails_is_not_ready(self):
+        result = self.run_setup(pinned_tool_shims() | {'bun': says(f'bun {PINS["bun"]}', 1)})
+        self.assertNotReady(result, f'does not provide bun {PINS["bun"]}', 'fix: mise install')
+
     def test_dotnet_without_the_global_json_sdk_is_not_ready(self):
         tools = pinned_tool_shims() | {'dotnet': says('A compatible .NET SDK was not found.', 155)}
         result = self.run_setup(tools)

@@ -22,7 +22,7 @@ Each install or restore step stops after 150 seconds, the browser check after 60
 
 ## What it never does
 
-It never runs `mise install`, `mise use`, `mise trust` or `git config --global`. It never downloads a toolchain, switches a branch, changes another worktree, writes refs, pushes or opens a pull request. When a pinned tool or the .NET SDK is missing, the fix line says `mise install`. Run it from the repository root. It installs the versions in `.mise.toml`, including the .NET SDK, without changing any global default.
+It never runs `mise install`, `mise use`, `mise trust` or `git config --global`. It never downloads a toolchain, switches a branch, changes another worktree, writes refs, pushes or opens a pull request. It runs every command with `MISE_AUTO_INSTALL=0`. Otherwise a mise shim on `PATH` installs a missing pinned version the first time setup asks for its version. When a pinned tool or the .NET SDK is missing, the fix line says `mise install`. Run it from the repository root. It installs the versions in `.mise.toml`, including the .NET SDK, without changing any global default.
 
 `.mise.toml` contains only `[tools]`, so mise resolves it in a new worktree path without `mise trust`. This was measured with mise 2026.7.13. If the file ever needs trust, the script reports mise's error and says to review the file and run `mise trust`.
 
