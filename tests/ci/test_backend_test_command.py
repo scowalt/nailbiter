@@ -1,4 +1,5 @@
 import contextlib
+from datetime import datetime
 import json
 import os
 from pathlib import Path
@@ -52,7 +53,7 @@ project = Path(argv[1]).stem
 journal(cmd='test', phase='start', project=project)
 if scenario.get('test_sleep'):
     import subprocess
-    host = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'])
+    host = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)', os.environ['FAKE_JOURNAL']])
     journal(cmd='testhost', phase='spawn', host=host.pid)
     time.sleep(scenario['test_sleep'])
 tests = scenario['suites'][project]
@@ -67,7 +68,6 @@ else:
     chosen = tests
 logger = next(argv[i + 1] for i, arg in enumerate(argv) if arg == '--logger' and argv[i + 1].startswith('trx'))
 trx = Path(option('--results-directory')) / re.search(r'LogFileName=([^;]+)', logger).group(1)
-trx.parent.mkdir(parents=True, exist_ok=True)
 rows = []
 counts = {'Passed': 0, 'Failed': 0, 'Error': 0, 'NotExecuted': 0}
 for name, result in chosen.items():
@@ -127,10 +127,54 @@ def make_worktree(parent, name):
     return worktree
 
 
+def sandbox(test, prefix):
+    temp = Path(tempfile.mkdtemp(prefix=prefix))
+    test.addCleanup(shutil.rmtree, temp, ignore_errors=True)
+    test.addCleanup(stop_processes_under, temp)
+    return temp
+
+
+def processes_under(temp):
+    marker = str(temp)
+    for process in Path('/proc').glob('[0-9]*'):
+        with contextlib.suppress(OSError):
+            if int(process.name) != os.getpid() and (marker.encode() in (process / 'cmdline').read_bytes() or os.readlink(process / 'cwd').startswith(marker)):
+                yield int(process.name)
+
+
+def stop_processes_under(temp):
+    deadline = time.monotonic() + 10
+    while (pids := list(processes_under(temp))) and time.monotonic() < deadline:
+        for pid in pids:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(pid, signal.SIGKILL)
+        time.sleep(0.1)
+
+
+def trx_finish(trx):
+    finish = re.search(r'<Times [^>]*finish="([^"]+)"', trx.read_text()).group(1)
+    return datetime.fromisoformat(finish).astimezone().replace(tzinfo=None)
+
+
+def msbuild_start(log):
+    started = re.match(r'Build started (.+)\.', log.read_text()).group(1)
+    for layout in ('%m/%d/%Y %I:%M:%S %p', '%m/%d/%Y %H:%M:%S'):
+        with contextlib.suppress(ValueError):
+            return datetime.strptime(started, layout)
+    raise AssertionError(f'unrecognised MSBuild start time {started!r}')
+
+
+class SandboxedTestCase(unittest.TestCase):
+    def run(self, result=None):
+        try:
+            return super().run(result)
+        finally:
+            self.doCleanups()
+
+
 class Harness:
     def __init__(self, test, scenario):
-        self.temp = Path(tempfile.mkdtemp(prefix='nailbiter-test-backend-'))
-        test.addCleanup(shutil.rmtree, self.temp, ignore_errors=True)
+        self.temp = sandbox(test, 'nailbiter-test-backend-')
         self.bin = self.temp / 'bin'
         write_executable(self.bin / 'dotnet', FAKE_DOTNET)
         write_executable(self.bin / 'mise', FAKE_MISE)
@@ -206,7 +250,7 @@ def option(argv, name):
     return argv[argv.index(name) + 1]
 
 
-class SelectionAndBuildTests(unittest.TestCase):
+class SelectionAndBuildTests(SandboxedTestCase):
     def test_one_build_of_every_selected_suite_then_tests_without_building(self):
         harness = Harness(self, {'suites': PASSING})
         code, output = harness.run()
@@ -318,6 +362,13 @@ class SelectionAndBuildTests(unittest.TestCase):
         self.assertEqual(code, EXIT['tests failed'], output)
         self.assertRegex(output, r'csharp\s+FAILED\s+2 passed, 1 failed, 0 skipped')
 
+    def test_trx_counters_that_disagree_with_the_listed_failures_fail_the_run(self):
+        harness = Harness(self, {'suites': PASSING, 'runs': {'backend.tests': {'counters': {'failed': 1, 'aborted': 1}, 'exit': 0}}})
+        code, output = harness.run('csharp')
+        self.assertEqual(code, EXIT['tests failed'], output)
+        self.assertRegex(output, r'csharp\s+FAILED\s+2 passed, 0 failed, 0 skipped')
+        self.assertIn('TRX counters report 2 failed tests, but it lists 0', output)
+
     def test_a_selection_whose_tests_are_all_skipped_ran_no_test(self):
         harness = Harness(self, {'suites': {**PASSING, 'backend.tests': {'HostTests.Waits': 'skip'}}})
         code, output = harness.run('csharp')
@@ -364,7 +415,7 @@ class SelectionAndBuildTests(unittest.TestCase):
             self.assertFalse([arg for arg in entry['argv'] if re.search(r'^-(v|verbosity):(d|detailed|diag|diagnostic)$', arg)], 'detailed and diagnostic verbosity print the environment')
 
 
-class ConcurrencyTests(unittest.TestCase):
+class ConcurrencyTests(SandboxedTestCase):
     def test_a_second_invocation_in_one_worktree_waits_for_the_first(self):
         harness = Harness(self, {'suites': PASSING, 'build_sleep': 1.5})
         first = harness.start('fsharp', tag='first')
@@ -489,10 +540,9 @@ def write_real_fixture(worktree):
 
 
 @unittest.skipIf(dotnet_sdk_root() is None, 'needs a .NET 10 SDK on PATH')
-class RealToolchainTests(unittest.TestCase):
+class RealToolchainTests(SandboxedTestCase):
     def test_concurrent_suites_share_one_build_of_their_library(self):
-        temp = Path(tempfile.mkdtemp(prefix='nailbiter-test-backend-real-'))
-        self.addCleanup(shutil.rmtree, temp, ignore_errors=True)
+        temp = sandbox(self, 'nailbiter-test-backend-real-')
         worktree = make_worktree(temp, 'worktree')
         write_real_fixture(worktree)
         write_executable(temp / 'bin/mise', FAKE_MISE)
@@ -513,8 +563,12 @@ class RealToolchainTests(unittest.TestCase):
         self.assertRegex(outputs[0], r'fsharp\s+passed\s+1 passed, 0 failed')
         self.assertRegex(outputs[1], r'csharp\s+passed\s+1 passed, 0 failed')
         self.assertIn('waiting for scripts/test-backend fsharp', outputs[1])
-        build_logs = [path.read_text() for path in (worktree / 'obj/test-backend/runs').glob('*/build.log')]
-        self.assertEqual(len(build_logs), 2)
+        runs = {next(run.glob('*.trx')).stem: run for run in (worktree / 'obj/test-backend/runs').iterdir()}
+        self.assertEqual(sorted(runs), ['csharp', 'fsharp'])
+        holder_finished = trx_finish(runs['fsharp'] / 'fsharp.trx')
+        waiter_build_started = msbuild_start(runs['csharp'] / 'build.log')
+        self.assertGreaterEqual(waiter_build_started, holder_finished.replace(microsecond=0), 'the waiting run built before the holder had finished its tests')
+        build_logs = [(run / 'build.log').read_text() for run in runs.values()]
         compiles = [len(re.findall(r'^\s*\S*/csc\s.*/out:obj/Release/net10\.0/Shared\.dll', log, re.MULTILINE)) for log in build_logs]
         self.assertEqual(sum(compiles), 1, 'the shared library compiles once across both invocations')
         logs = '\n'.join(path.read_text() for path in (worktree / 'obj/test-backend/runs').glob('*/*.log'))
