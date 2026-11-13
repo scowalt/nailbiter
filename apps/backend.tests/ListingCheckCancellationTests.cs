@@ -12,7 +12,7 @@ public sealed class ListingCheckCancellationTests
         using var cancellation = new CancellationTokenSource();
         var error = new StringWriter();
 
-        var exit = await ListingCheckCommand.RunAsync(token =>
+        var exit = await ListingCheckCommand.RunAsync((_, _) =>
         {
             cancellation.Cancel();
             throw new ObjectDisposedException("IServiceProvider");
@@ -20,6 +20,23 @@ public sealed class ListingCheckCancellationTests
 
         Assert.Equal(130, exit);
         Assert.Equal(["cancelled: interrupted before the report was written (exit 130)"], error.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    [Fact]
+    public async Task An_interrupt_after_the_report_was_written_keeps_the_reported_outcome()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var error = new StringWriter();
+
+        var exit = await ListingCheckCommand.RunAsync((_, onReported) =>
+        {
+            onReported(7);
+            cancellation.Cancel();
+            throw new ObjectDisposedException("IServiceProvider");
+        }, error, cancellation);
+
+        Assert.Equal(7, exit);
+        Assert.Equal(["cancelled: interrupted during cleanup after the report was written (exit 7)"], error.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries));
     }
 
     [Fact]
@@ -43,7 +60,7 @@ public sealed class ListingCheckCancellationTests
         using var cancellation = new CancellationTokenSource();
         var error = new StringWriter();
 
-        var exit = await ListingCheckCommand.RunAsync(_ => throw new InvalidOperationException("boom"), error, cancellation);
+        var exit = await ListingCheckCommand.RunAsync((_, _) => throw new InvalidOperationException("boom"), error, cancellation);
 
         Assert.Equal(1, exit);
         Assert.Contains("InvalidOperationException: boom", error.ToString());
@@ -54,6 +71,6 @@ public sealed class ListingCheckCancellationTests
     {
         using var cancellation = new CancellationTokenSource();
 
-        Assert.Equal(7, await ListingCheckCommand.RunAsync(_ => Task.FromResult(7), new StringWriter(), cancellation));
+        Assert.Equal(7, await ListingCheckCommand.RunAsync((_, _) => Task.FromResult(7), new StringWriter(), cancellation));
     }
 }

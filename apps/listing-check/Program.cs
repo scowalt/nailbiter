@@ -9,6 +9,7 @@ internal static class Program
             await Console.Error.WriteLineAsync(ListingCheckCommand.Usage);
             return (int)FailureKind.InvalidConfig;
         }
-        return await ListingCheckCommand.RunUntilInterruptedAsync(token => ListingCheckCommand.RunUrlAsync(rest, Console.Out, token));
+        return await ListingCheckCommand.RunUntilInterruptedAsync((token, onReported) =>
+            ListingCheckCommand.RunUrlAsync(rest, Console.Out, token, onReported));
     }
 }

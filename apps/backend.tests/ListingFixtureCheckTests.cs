@@ -21,16 +21,19 @@ public sealed class ListingFixtureCheckTests(ITestOutputHelper output)
         var fixtureText = new StringWriter();
         var urlText = new StringWriter();
         var urlExit = -1;
+        int? reported = null;
         try
         {
             var exit = await ListingFixtureCheck.RunAsync(Split($"{Settings} --report {reportPath}"), fixtureText, async (address, cancellationToken) =>
                 urlExit = await ListingCheckCommand.RunUrlAsync(
-                    Split($"--base-url {address} --path / --path /nhl?date=2026-10-13 {Settings}"), urlText, cancellationToken));
+                    Split($"--base-url {address} --path / --path /nhl?date=2026-10-13 {Settings}"), urlText, cancellationToken),
+                onReported: code => reported = code);
             output.WriteLine(fixtureText.ToString());
             output.WriteLine(urlText.ToString());
 
             Assert.Equal(0, exit);
             Assert.Equal(0, urlExit);
+            Assert.Equal(0, reported);
             using var report = JsonDocument.Parse(await File.ReadAllTextAsync(reportPath));
             var fixture = report.RootElement.GetProperty("fixture");
             var workload = fixture.GetProperty("workload");

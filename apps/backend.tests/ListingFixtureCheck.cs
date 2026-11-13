@@ -25,7 +25,7 @@ internal static class ListingFixtureCheck
 
     public static async Task<int> RunAsync(IReadOnlyList<string> args, TextWriter output,
         Func<Uri, CancellationToken, Task>? whileServing = null, CancellationToken cancellationToken = default,
-        Action<IServiceCollection>? configureServices = null)
+        Action<IServiceCollection>? configureServices = null, Action<int>? onReported = null)
     {
         if (!CheckOptions.TryParse(CheckMode.Fixture, args, out var parsed, out var invalid))
             return await ListingCheckCommand.RejectAsync(output, invalid);
@@ -164,6 +164,7 @@ internal static class ListingCheckEntryPoint
         var arguments = rest.Select((arg, i) => i > 0 && rest[i - 1] == "--report" && !arg.StartsWith("--", StringComparison.Ordinal)
             ? Path.GetFullPath(arg) : arg).ToArray();
         Directory.SetCurrentDirectory(AppContext.BaseDirectory);
-        return await ListingCheckCommand.RunUntilInterruptedAsync(token => ListingFixtureCheck.RunAsync(arguments, Console.Out, cancellationToken: token));
+        return await ListingCheckCommand.RunUntilInterruptedAsync((token, onReported) =>
+            ListingFixtureCheck.RunAsync(arguments, Console.Out, cancellationToken: token, onReported: onReported));
     }
 }

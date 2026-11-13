@@ -75,7 +75,8 @@ public static class ListingCheckCommand
     public const string Usage = "usage: listing-check url --base-url <origin> [--path <listing path>]... --ttfb-budget-ms <ms> "
         + "--completion-budget-ms <ms> [--samples 1-5] [--warmup 0-2] [--request-timeout-ms <ms>] [--report <file>] [--allow-remote-host]";
 
-    public static async Task<int> RunUrlAsync(IReadOnlyList<string> args, TextWriter output, CancellationToken cancellationToken)
+    public static async Task<int> RunUrlAsync(IReadOnlyList<string> args, TextWriter output, CancellationToken cancellationToken,
+        Action<int>? onReported = null)
     {
         if (!CheckOptions.TryParse(CheckMode.Url, args, out var options, out var failure)) return await RejectAsync(output, failure);
         var start = CheckStart.Now();
@@ -88,7 +89,7 @@ public static class ListingCheckCommand
 
     public const int Interrupted = 130;
 
-    public static async Task<int> RunUntilInterruptedAsync(Func<CancellationToken, Task<int>> run)
+    public static async Task<int> RunUntilInterruptedAsync(Func<CancellationToken, Action<int>, Task<int>> run)
     {
         using var cancellation = new CancellationTokenSource();
         using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, context => Interrupt(cancellation, context));
@@ -102,11 +103,11 @@ public static class ListingCheckCommand
         cancellation.Cancel();
     }
 
-    public static async Task<int> RunAsync(Func<CancellationToken, Task<int>> run, TextWriter error, CancellationTokenSource cancellation)
+    public static async Task<int> RunAsync(Func<CancellationToken, Action<int>, Task<int>> run, TextWriter error, CancellationTokenSource cancellation)
     {
         try
         {
-            return await run(cancellation.Token);
+            return await run(cancellation.Token, _ => { });
         }
         catch (Exception) when (cancellation.IsCancellationRequested)
         {

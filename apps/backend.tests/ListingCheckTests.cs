@@ -112,6 +112,12 @@ public sealed class ListingCheckTests : IAsyncLifetime
         Assert.False(File.Exists(reportPath));
     }
 
-    private static Task<int> RunAsync(TextWriter output, string arguments) =>
-        ListingCheckCommand.RunUrlAsync(arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries), output, CancellationToken.None);
+    private static async Task<int> RunAsync(TextWriter output, string arguments)
+    {
+        int? reported = null;
+        var exit = await ListingCheckCommand.RunUrlAsync(arguments.Split(' ', StringSplitOptions.RemoveEmptyEntries), output, CancellationToken.None,
+            code => reported = code);
+        Assert.Equal(exit == (int)FailureKind.InvalidConfig ? null : exit, reported);
+        return exit;
+    }
 }
