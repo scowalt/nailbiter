@@ -76,7 +76,7 @@ public sealed class ListingCheckProcessTests
         }
         finally
         {
-            if (!run.HasExited) kill(-run.Id, Sigkill);
+            kill(-run.Id, Sigkill);
         }
     }
 
