@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import contextlib
 from dataclasses import dataclass, field
 from datetime import datetime
 import enum
@@ -22,6 +23,7 @@ MESSAGE_LINES = 60
 STACK_LINES = 8
 TRX = '{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}'
 INVALID_FILTER = 'Incorrect format for TestCaseFilter'
+FAILED_OUTCOMES = {'Failed', 'Error', 'Timeout', 'Aborted'}
 
 
 @dataclass(frozen=True)
@@ -103,7 +105,10 @@ def toolchain_environment():
         return None, 'mise env did not answer within 60 seconds; run scripts/setup.sh'
     if mise.returncode != 0:
         return None, f'mise could not load .mise.toml; run scripts/setup.sh\n{mise.stderr.strip()}'
-    environment.update(json.loads(mise.stdout))
+    try:
+        environment.update(json.loads(mise.stdout))
+    except json.JSONDecodeError:
+        return None, f'mise env --json did not print JSON; run scripts/setup.sh\n{mise.stdout.strip()[:500]}'
     environment.update(DOTNET_CLI_TELEMETRY_OPTOUT='1', DOTNET_NOLOGO='1')
     if not shutil.which('dotnet', path=environment.get('PATH')):
         return None, 'dotnet is not installed for this worktree; run scripts/setup.sh'
@@ -142,11 +147,13 @@ def run_logged(command, log, environment):
         try:
             return process.wait()
         except BaseException:
-            os.killpg(process.pid, signal.SIGTERM)
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGTERM)
             try:
                 process.wait(timeout=10)
             except subprocess.TimeoutExpired:
-                os.killpg(process.pid, signal.SIGKILL)
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(process.pid, signal.SIGKILL)
                 process.wait()
             raise
 
@@ -189,14 +196,17 @@ def read_results(result, trx, output):
         result.detail = 'the test run wrote no results; read its log'
         return
     counters = run.find(f'{TRX}ResultSummary/{TRX}Counters')
-    total = int(counters.get('total', 0))
+    if counters is None:
+        result.outcome = Exit.TESTS_FAILED
+        result.detail = 'the test run wrote no result counts; read its log'
+        return
     result.passed = int(counters.get('passed', 0))
-    result.failed = int(counters.get('failed', 0))
-    result.skipped = total - result.passed - result.failed
+    result.skipped = int(counters.get('notExecuted', 0))
     for test in run.iter(f'{TRX}UnitTestResult'):
-        if test.get('outcome') == 'Failed':
+        if test.get('outcome') in FAILED_OUTCOMES:
             info = f'{TRX}Output/{TRX}ErrorInfo/{TRX}'
             result.failures.append(Failure(test.get('testName', '?'), text(test, f'{info}Message'), text(test, f'{info}StackTrace')))
+    result.failed = max(len(result.failures), sum(int(counters.get(name, 0)) for name in ('failed', 'error', 'timeout', 'aborted')))
 
 
 def run_suite(suite, args, run, environment):
@@ -263,7 +273,11 @@ def main():
     print(f'{selection}\nlogs     {relative(run)}', flush=True)
     if not build(suites, args.configuration, run, environment):
         return Exit.BUILD_FAILED
-    results = [run_suite(suite, args, run, environment) for suite in suites]
+    results = []
+    for suite in suites:
+        results.append(run_suite(suite, args, run, environment))
+        if results[-1].outcome == Exit.INVALID_SELECTION:
+            break
     report(results)
     lock.close()
     outcomes = {result.outcome for result in results}
