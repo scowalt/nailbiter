@@ -2,15 +2,17 @@
 
 Nailbiter helps viewers choose sports events to watch, using pregame hype and live excitement scores. The live service is at [nailbiter.app](https://nailbiter.app).
 
-This is the canonical public repository for development, issues/PRs, CI and production delivery on GitHub Actions. The repository handoff completed on 2026-11-03 with a [verified backend and marketing release](https://github.com/scowalt/nailbiter/actions/runs/41571691550). The original repository remains a private historical archive, not an active development or deployment dependency. See [deployment and operational boundaries](docs/deployment.md).
+This is the canonical public repository for development, issues/PRs, CI and production delivery on GitHub Actions. The original repository remains a private historical archive, not an active development or deployment dependency. See [deployment and operational boundaries](docs/deployment.md). Agents start at [AGENTS.md](AGENTS.md); [docs/README.md](docs/README.md) indexes the other documents.
 
 ## Components
 
-- `apps/backend`: .NET 10 host, server-rendered HTML, SSE and static assets, including the plain layered CSS described in [Styling](docs/styling.md).
-- `apps/backend.fsharp`: service and rendering logic; `apps/backend.shared`: shared models/policies.
+- `apps/backend`: .NET 10 C# host, HTTP routes, Datastar/SSE streams and static assets, including the plain layered CSS described in [Styling](docs/styling.md).
+- `apps/backend.fsharp`: F# game-data services and Falco.Markup rendering; `apps/backend.shared`: shared EF Core models, scoring and policies.
+- `apps/backend.fsharp.tests` and `apps/backend.tests`: F# unit tests and PostgreSQL integration tests; `apps/backend.browser-fixture`: isolated host for [browser fixture](tests/browser-fixture/README.md) checks.
 - `apps/web-components`: independently built browser components, including Chart.js.
 - `apps/www`: independently built Astro marketing site, deployed to Cloudflare Workers.
 - `apps/analysis`: offline Python analysis code.
+- `alloy`: Grafana Alloy telemetry configuration that `docker-compose.yml` mounts; `opentofu`: infrastructure configuration, governed by [its README](opentofu/README.md).
 - `scripts/ci` and `.github/workflows`: validation, artifact publication and single-controller release contracts.
 
 Runtime versions live in `.mise.toml`; the .NET SDK pin must agree with `apps/backend/global.json`. Install the pinned tools with Mise. Keep locked Bun installs; no production credentials are needed to compile or run the offline tests.
@@ -52,10 +54,29 @@ The marketing site runs independently from the backend. On a shared headless dev
 
 ```sh
 cd apps/www
-PORTLESS_TAILSCALE=1 portless
+portless run --tailscale astro dev
 ```
 
-For backend development, set `ConnectionStrings__DefaultConnection` to your isolated development database. Do not start the production Compose stack against existing production-named volumes just to run tests. Explicitly disable collection and telemetry (the preserved application defaults are not an offline-development profile). From the repository root:
+The local URL works. The Tailscale URL returns HTTP 403 until [#146](https://github.com/scowalt/nailbiter/issues/146) is fixed.
+
+For backend development, set `ConnectionStrings__DefaultConnection` to your isolated development database. Do not start the production Compose stack against existing production-named volumes just to run tests. The application does not create its tables. Apply every `apps/backend/Migrations/*.sql` file in name order, as `scripts/ci/deploy-backend.sh` does in production, or the pages return HTTP 500. To create a throwaway database with the TimescaleDB image that `docker-compose.yml` pins, from the repository root:
+
+```sh
+image=$(grep -o 'timescale/timescaledb:[^"[:space:]]*' docker-compose.yml)
+db=$(docker run -d --rm -e POSTGRES_PASSWORD=devonly -e POSTGRES_DB=excitement_score -p 127.0.0.1::5432 "$image")
+until docker exec "$db" pg_isready -q -h 127.0.0.1 -U postgres; do sleep 1; done
+for migration in apps/backend/Migrations/*.sql; do
+  case "$(basename "$migration")" in
+    0[0-1][0-9]_*|020_*) stop=0 ;;
+    *) stop=1 ;;
+  esac
+  docker exec -i "$db" psql -q -v ON_ERROR_STOP=$stop -U postgres -d excitement_score < "$migration" || { echo "Failed: $migration"; break; }
+done
+port=$(docker port "$db" 5432 | head -n 1 | cut -d: -f2)
+export ConnectionStrings__DefaultConnection="Host=127.0.0.1;Port=$port;Database=excitement_score;Username=postgres;Password=devonly"
+```
+
+Like the deploy script, the loop lets the legacy migrations up to `020_` report errors and continue, and it stops at the first error in a later migration. `docker stop "$db"` stops and removes the database. Explicitly disable collection and telemetry (the preserved application defaults are not an offline-development profile). From the repository root:
 
 ```sh
 : "${ConnectionStrings__DefaultConnection:?Set an isolated development database first}"
@@ -75,6 +96,6 @@ League logos are retained for referential identification, not endorsement or own
 
 ## Delivery boundary
 
-GitHub Actions validates PRs on hosted runners without production credentials and is the production release controller. Releases require `PRODUCTION_RELEASES_ENABLED=true`, protected `main` and the main-only `production` environment. Operators may pause releases during explicitly approved maintenance; the legacy publisher remains inactive. The release promotes the scanned image and tested marketing artifact for the same source revision, never a rebuild of moving `main`.
+GitHub Actions validates PRs on hosted runners without production credentials and is the production release controller. [The deployment runbook](docs/deployment.md) is authoritative for release requirements, approval and rollback boundaries.
 
-No production, DNS, database, backup, provider activation or migration action should be inferred from a source/documentation edit. [The deployment runbook](docs/deployment.md) is authoritative for release approval and rollback boundaries.
+No production, DNS, database, backup, provider activation or migration action should be inferred from a source/documentation edit.

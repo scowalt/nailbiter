@@ -1,7 +1,7 @@
 # Issue tracker: GitHub
 
 The canonical target for issues and specs is `scowalt/nailbiter`.
-During migration, verify the target exists and GitHub writes are explicitly authorized before using the commands below. Existing private issue/PR numbers are not automatically numbers in the new repository.
+Run the commands that write to GitHub only when the task explicitly authorizes GitHub writes. Issue and PR numbers from the private historical repository are not numbers in this repository.
 Use the `gh` CLI from the canonical clone; elsewhere, pass
 `--repo scowalt/nailbiter`.
 
