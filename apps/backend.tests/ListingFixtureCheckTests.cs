@@ -1,5 +1,10 @@
+using System.Data.Common;
 using System.Text.Json;
+using backend.Data;
 using ListingCheck;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -45,6 +50,61 @@ public sealed class ListingFixtureCheckTests(ITestOutputHelper output)
         finally
         {
             File.Delete(reportPath);
+        }
+    }
+
+    [Theory]
+    [InlineData(SecondHistoryScan, null)]
+    [InlineData(OpaqueFunction, CreateOpaqueFunction)]
+    public async Task Query_work_fails_when_the_latest_odds_read_scans_history_twice_or_hides_its_plan(string replacement, string? setup)
+    {
+        var text = new StringWriter();
+        var reportPath = Path.Combine(Path.GetTempPath(), $"listing-fixture-{Guid.NewGuid():N}.json");
+        try
+        {
+            var exit = await ListingFixtureCheck.RunAsync(
+                Split($"--samples 1 --warmup 0 --ttfb-budget-ms 10000 --completion-budget-ms 20000 --request-timeout-ms 30000 --report {reportPath}"),
+                text, configureServices: services => services.AddDbContext<ExcitementDbContext>(options =>
+                    options.AddInterceptors(new LatestOddsRewrite(replacement, setup))));
+            output.WriteLine(text.ToString());
+
+            Assert.Equal(6, exit);
+            using var report = JsonDocument.Parse(await File.ReadAllTextAsync(reportPath));
+            var failures = report.RootElement.GetProperty("failures").EnumerateArray().ToList();
+            Assert.Equal(ListingWorkload.Paths, failures.Select(failure => failure.GetProperty("path").GetString()).Distinct());
+            Assert.All(failures, failure => Assert.Equal("query-work", failure.GetProperty("kind").GetString()));
+        }
+        finally
+        {
+            File.Delete(reportPath);
+        }
+    }
+
+    private const string LatestOddsRead = "SELECT DISTINCT ON (game_id) * FROM odds_snapshots WHERE game_id = ANY (";
+    private const string SecondHistoryScan = "SELECT DISTINCT ON (game_id) o.* FROM odds_snapshots o "
+        + "WHERE o.timestamp = (SELECT max(h.timestamp) FROM odds_snapshots h WHERE h.game_id = o.game_id) AND o.game_id = ANY (";
+    private const string OpaqueFunction = "SELECT * FROM odds_snapshots_latest(";
+    private const string CreateOpaqueFunction = """
+        CREATE OR REPLACE FUNCTION odds_snapshots_latest(ids text[]) RETURNS SETOF odds_snapshots LANGUAGE plpgsql AS $$
+        BEGIN
+            RETURN QUERY SELECT DISTINCT ON (game_id) * FROM odds_snapshots WHERE game_id = ANY (ids) ORDER BY game_id, timestamp DESC, id DESC;
+        END $$
+        """;
+
+    private sealed class LatestOddsRewrite(string replacement, string? setup) : DbCommandInterceptor
+    {
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (!command.CommandText.Contains(LatestOddsRead, StringComparison.Ordinal)) return result;
+            if (setup is not null)
+            {
+                await using var create = command.Connection!.CreateCommand();
+                create.CommandText = setup;
+                await create.ExecuteNonQueryAsync(cancellationToken);
+            }
+            command.CommandText = command.CommandText.Replace(LatestOddsRead, replacement, StringComparison.Ordinal);
+            return result;
         }
     }
 

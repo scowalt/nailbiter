@@ -24,7 +24,8 @@ internal static class ListingFixtureCheck
     public const string ContainerPrefix = "nailbiter-listing-check-";
 
     public static async Task<int> RunAsync(IReadOnlyList<string> args, TextWriter output,
-        Func<Uri, CancellationToken, Task>? whileServing = null, CancellationToken cancellationToken = default)
+        Func<Uri, CancellationToken, Task>? whileServing = null, CancellationToken cancellationToken = default,
+        Action<IServiceCollection>? configureServices = null)
     {
         if (!CheckOptions.TryParse(CheckMode.Fixture, args, out var parsed, out var invalid))
             return await ListingCheckCommand.RejectAsync(output, invalid);
@@ -46,7 +47,11 @@ internal static class ListingFixtureCheck
             .WithCommand(ListingWorkload.ServerSettings).Build(),
             ListingWorkload.PrepareTemplateAsync);
         var host = new HostedGameFixture(ListingWorkload.Now,
-            services => services.AddDbContext<ExcitementDbContext>(o => o.AddInterceptors(recorder)).AddLogging(logging => logging.ClearProviders()),
+            services =>
+            {
+                configureServices?.Invoke(services);
+                services.AddDbContext<ExcitementDbContext>(o => o.AddInterceptors(recorder)).AddLogging(logging => logging.ClearProviders());
+            },
             server, listenOnLoopback: true);
         try
         {
