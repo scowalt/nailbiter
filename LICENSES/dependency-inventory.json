@@ -220,7 +220,7 @@
     {
       "ecosystem": "npm",
       "name": "@cloudflare/workerd-linux-64",
-      "version": "1.20260925.1",
+      "version": "1.20260926.1",
       "declared_license": "Apache-2.0",
       "notices": []
     },
@@ -3125,7 +3125,7 @@
     {
       "ecosystem": "npm",
       "name": "miniflare",
-      "version": "5.20260925.0-alpha",
+      "version": "5.20260926.0-alpha",
       "declared_license": "MIT",
       "notices": []
     },
@@ -4797,14 +4797,14 @@
     {
       "ecosystem": "npm",
       "name": "workerd",
-      "version": "1.20260925.1",
+      "version": "1.20260926.1",
       "declared_license": "Apache-2.0",
       "notices": []
     },
     {
       "ecosystem": "npm",
       "name": "wrangler",
-      "version": "4.141.0",
+      "version": "4.142.0",
       "declared_license": "MIT OR Apache-2.0",
       "notices": []
     },
