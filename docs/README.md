@@ -7,6 +7,7 @@ Each document below is the authoritative source for its topic. [AGENTS.md](../AG
 - [agents/domain.md](agents/domain.md): use the glossary and flag ADR conflicts.
 - [agents/issue-tracker.md](agents/issue-tracker.md): GitHub issue commands and wayfinding.
 - [agents/triage-labels.md](agents/triage-labels.md): triage role labels.
+- [development-setup.md](development-setup.md): `scripts/setup.sh`, its readiness checks for a new checkout or worktree, and the BB provisioning hook.
 - [styling.md](styling.md): plain layered CSS conventions.
 
 ## Delivery and operations
