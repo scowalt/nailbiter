@@ -28,8 +28,12 @@ type internal MoneyPuckHttpClient(httpClient: HttpClient, timeProvider: TimeProv
                          else now.Add(header.Delta.Value))
                 else None
             gate.LatchDenial(?retryAfter = retryAfter)
+        let cloudflareChallenge =
+            match response.Headers.TryGetValues("cf-mitigated") with
+            | true, values -> values |> Seq.exists (fun value -> value.Trim().Equals("challenge", StringComparison.OrdinalIgnoreCase))
+            | _ -> false
         if response.StatusCode = HttpStatusCode.Unauthorized || response.StatusCode = HttpStatusCode.Forbidden
-           || response.StatusCode = HttpStatusCode.TooManyRequests then
+           || response.StatusCode = HttpStatusCode.TooManyRequests || cloudflareChallenge then
             latchDenial ()
             raise (HttpRequestException("MoneyPuck access denied; collection paused until refusal backoff expires"))
         response.EnsureSuccessStatusCode() |> ignore
@@ -44,7 +48,7 @@ type internal MoneyPuckHttpClient(httpClient: HttpClient, timeProvider: TimeProv
                 body.Write(buffer, 0, count)
                 if body.Length > int64 maxBytes then finished <- true
         let bytes = body.ToArray()
-        if Regex.IsMatch(Encoding.UTF8.GetString(bytes), @"cf-chl-|captcha|verify (?:that )?you are human|checking your browser|just a moment|access denied|_cf_chl_opt|challenge-platform/h/[^/]+/orchestrate/|enable javascript and cookies", RegexOptions.IgnoreCase) then
+        if Regex.IsMatch(Encoding.UTF8.GetString(bytes), @"cf-chl-|_cf_chl_opt|challenge-platform/h/[^/]+/orchestrate/|<title[^>]*>[^<]*(?:just a moment|attention required|checking your browser|verify (?:that )?you are human|captcha|access denied|enable javascript and cookies)", RegexOptions.IgnoreCase) then
             latchDenial ()
             raise (HttpRequestException("MoneyPuck challenge; collection paused until refusal backoff expires"))
         if body.Length > int64 maxBytes || (response.Content.Headers.ContentLength.HasValue && response.Content.Headers.ContentLength.Value > int64 maxBytes) then
