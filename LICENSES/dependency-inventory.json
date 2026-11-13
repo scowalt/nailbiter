@@ -7878,7 +7878,7 @@
     {
       "ecosystem": "nuget",
       "name": "xunit.runner.visualstudio",
-      "version": "3.1.5",
+      "version": "4.0.1",
       "declared_license": "Apache-2.0",
       "license_type": "expression",
       "license_urls": [
@@ -7891,7 +7891,7 @@
         {
           "type": "git",
           "url": "https://github.com/xunit/visualstudio.xunit",
-          "commit": "1b188a7b0a069d7fc94ae3c0b251f1302b602b63"
+          "commit": "0f7d528729972578553fb146cbde5f95b316cdc4"
         }
       ],
       "notices": []
