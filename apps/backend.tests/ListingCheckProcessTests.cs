@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using ListingCheck;
 using Xunit;
 
 namespace backend.tests;
@@ -10,6 +11,7 @@ public sealed class ListingCheckProcessTests
 {
     private const int Sigterm = 15;
     private const int Sigkill = 9;
+    private const string Cancelled = "cancelled: interrupted before the report was written (exit 130)";
 #if DEBUG
     private const string Configuration = "Debug";
 #else
@@ -20,22 +22,41 @@ public sealed class ListingCheckProcessTests
     private static extern int kill(int pid, int signal);
 
     [Fact]
+    public async Task One_sigterm_to_the_app_run_directly_exits_130_with_one_line()
+    {
+        var run = await SigtermToProcessGroupAsync("dotnet", typeof(ListingCheckCommand).Assembly.Location);
+
+        Assert.Equal([Cancelled], run.Errors);
+        Assert.DoesNotContain("outcome", run.Output);
+        Assert.Equal(ListingCheckCommand.Interrupted, run.Exit);
+    }
+
+    [Fact]
     public async Task One_sigterm_to_a_dotnet_run_process_group_is_one_graceful_interrupt()
+    {
+        var run = await SigtermToProcessGroupAsync("dotnet", "run", "--project", ListingCheckProject(), "-c", Configuration, "--no-build", "--");
+
+        Assert.Equal([Cancelled], run.Errors);
+        Assert.DoesNotContain("outcome", run.Output);
+        Assert.True(run.Exit is 130 or 143,
+            $"dotnet run should relay the app's exit 130, or exit 143 when its own copy of the SIGTERM lands after the app has exited; it exited {run.Exit}");
+    }
+
+    private sealed record Terminated(int Exit, string[] Errors, string Output);
+
+    private static async Task<Terminated> SigtermToProcessGroupAsync(params string[] command)
     {
         using var silent = new TcpListener(IPAddress.Loopback, 0);
         silent.Start();
         var port = ((IPEndPoint)silent.LocalEndpoint).Port;
-        using var run = Process.Start(new ProcessStartInfo("setsid")
+        var start = new ProcessStartInfo("setsid") { RedirectStandardOutput = true, RedirectStandardError = true };
+        foreach (var argument in command.Concat([
+            "url", "--base-url", $"http://127.0.0.1:{port}", "--samples", "1", "--warmup", "0",
+            "--ttfb-budget-ms", "1000", "--completion-budget-ms", "2000", "--request-timeout-ms", "60000"]))
         {
-            ArgumentList =
-            {
-                "dotnet", "run", "--project", ListingCheckProject(), "-c", Configuration, "--no-build", "--",
-                "url", "--base-url", $"http://127.0.0.1:{port}", "--samples", "1", "--warmup", "0",
-                "--ttfb-budget-ms", "1000", "--completion-budget-ms", "2000", "--request-timeout-ms", "60000"
-            },
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        })!;
+            start.ArgumentList.Add(argument);
+        }
+        using var run = Process.Start(start)!;
         var stdout = run.StandardOutput.ReadToEndAsync();
         var stderr = run.StandardError.ReadToEndAsync();
         try
@@ -50,11 +71,8 @@ public sealed class ListingCheckProcessTests
             await run.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(60));
 
             var streamsClosed = TimeSpan.FromSeconds(10);
-            Assert.Equal(["cancelled: interrupted before the report was written (exit 130)"],
-                (await stderr.WaitAsync(streamsClosed)).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-            Assert.DoesNotContain("outcome", await stdout.WaitAsync(streamsClosed));
-            Assert.True(run.ExitCode is 130 or 143,
-                $"dotnet run should relay the app's exit 130, or exit 143 when its own copy of the SIGTERM lands after the app has exited; it exited {run.ExitCode}");
+            var errors = (await stderr.WaitAsync(streamsClosed)).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            return new Terminated(run.ExitCode, errors, await stdout.WaitAsync(streamsClosed));
         }
         finally
         {
