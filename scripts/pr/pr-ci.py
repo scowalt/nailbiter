@@ -21,6 +21,8 @@ GH_TIMEOUT_SECONDS = 120
 MERGE_METHOD_SETTINGS = {'squash': 'allow_squash_merge', 'merge': 'allow_merge_commit', 'rebase': 'allow_rebase_merge'}
 PASSING_CONCLUSIONS = {'success', 'skipped', 'neutral'}
 ACTIONS_ONLY_NOTE = 'GitHub Actions runs only; required status checks, third-party statuses and reviews are enforced by GitHub at merge time and are not verified here'
+RUN_FIELDS = {'id': int, 'name': str, 'workflow_id': int, 'event': str, 'status': str, 'conclusion': (str, type(None)), 'head_sha': str, 'created_at': str}
+PULL_FIELDS = {'headRefOid': str, 'state': str, 'isDraft': bool, 'baseRefName': str, 'mergeable': str, 'mergeCommit': (dict, type(None)), 'autoMergeRequest': (dict, type(None)), 'mergeQueueEntry': (dict, type(None))}
 LEGACY_MEANINGS = {200: 'legacy branch protection is configured', 403: 'not visible to this token', 404: 'not found or not visible to this token; a 404 is not proof that the branch has no protection'}
 PULL_QUERY = '''query($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
@@ -62,6 +64,17 @@ class Response:
     error: str
 
 
+def shaped(record, fields, what):
+    if not isinstance(record, dict) or any(not isinstance(record.get(key), kind) for key, kind in fields.items()):
+        raise GitHubError(f'{what} had an unexpected shape')
+    return record
+
+
+def list_of_dicts(response):
+    body = response.body
+    return body if response.status == 200 and isinstance(body, list) and all(isinstance(item, dict) for item in body) else None
+
+
 def first_line(text):
     return next((line.strip() for line in text.splitlines() if line.strip()), '')
 
@@ -91,24 +104,33 @@ class GitHub:
         message = payload.get('message') if isinstance(payload, dict) else None
         return Response(int(status.group(1)) if status else None, payload, message or first_line(process.stderr) or 'gh api failed')
 
-    def require(self, path):
+    def require(self, path, key):
         response = self.get(path)
         if response.status != 200:
             raise GitHubError(f'GET {path} returned HTTP {response.status}: {response.error}')
-        return response.body
+        if not isinstance(response.body, dict) or not isinstance(response.body.get(key), list):
+            raise GitHubError(f'GET {path} returned malformed JSON without a {key} list')
+        return response.body[key]
 
     def pull_request(self, number):
         owner, name = self.repo.split('/')
         process = self.run(['api', 'graphql', '-f', f'owner={owner}', '-f', f'name={name}', '-F', f'number={number}', '-f', f'query={PULL_QUERY}'])
         if process.returncode != 0:
             raise GitHubError(f'reading pull request #{number} failed: {first_line(process.stderr) or first_line(process.stdout)}')
-        pull = ((json.loads(process.stdout).get('data') or {}).get('repository') or {}).get('pullRequest')
+        try:
+            document = json.loads(process.stdout)
+        except ValueError:
+            raise GitHubError(f'reading pull request #{number} returned malformed JSON') from None
+        pull = (((document if isinstance(document, dict) else {}).get('data') or {}).get('repository') or {}).get('pullRequest')
         if not pull:
             raise GitHubError(f'pull request #{number} was not found in {self.repo}')
-        return pull
+        return shaped(pull, PULL_FIELDS, f'pull request #{number}')
 
     def runs(self, sha):
-        return self.require(f'/actions/runs?head_sha={sha}&per_page=100')['workflow_runs']
+        return [shaped(run, RUN_FIELDS, 'an Actions run') for run in self.require(f'/actions/runs?head_sha={sha}&per_page=100', 'workflow_runs')]
+
+    def job_names(self, run_id):
+        return [shaped(job, {'name': str}, 'an Actions job')['name'] for job in self.require(f'/actions/runs/{run_id}/jobs?per_page=100', 'jobs')]
 
     def merge(self, number, sha, method, auto):
         process = self.run(['pr', 'merge', str(number), '--repo', self.repo, *(['--auto'] if auto else []), f'--{method}', '--match-head-commit', sha])
@@ -120,15 +142,21 @@ class Ci:
     state: Result
     runs: tuple
     superseded: tuple
+    required: dict | None
 
     def summary(self, sha):
         if not self.runs:
             return f'no Actions runs yet for {sha[:12]}'
-        listed = '; '.join(f"{run['name']} {run['conclusion'] or run['status']}" for run in self.runs)
+        listed = '; '.join(f"{run['name']} {run['event']} {run['conclusion'] or run['status']}" for run in self.runs)
+        missing = [name for name, run_id in (self.required or {}).items() if run_id is None]
+        if self.state is Result.PENDING and missing and all(run_outcome(run) is Result.PASSED for run in self.runs):
+            return f"Actions-only evidence: {listed}; no Actions job yet for required checks: {', '.join(missing)}"
+        if self.state is Result.PASSED and self.required is None:
+            return f'Actions-only evidence: {listed}; incomplete: the required checks could not be read'
         return f'Actions-only evidence: {listed}' + ('; required checks are enforced by GitHub at merge time' if self.state is Result.PASSED else '')
 
     def to_json(self):
-        return {'evidence': 'actions-only', 'state': self.state.value, 'note': ACTIONS_ONLY_NOTE, 'runs': [{key: run.get(key) for key in ['id', 'name', 'workflow_id', 'event', 'status', 'conclusion', 'run_attempt', 'html_url']} for run in self.runs], 'superseded_runs': list(self.superseded)}
+        return {'evidence': 'actions-only', 'state': self.state.value, 'complete': self.required is not None, 'note': ACTIONS_ONLY_NOTE, 'required_checks': self.required, 'runs': [{key: run.get(key) for key in ['id', 'name', 'workflow_id', 'event', 'status', 'conclusion', 'run_attempt', 'html_url']} for run in self.runs], 'superseded_runs': list(self.superseded)}
 
 
 def run_outcome(run):
@@ -139,15 +167,23 @@ def run_outcome(run):
     return {'cancelled': Result.CANCELLED, 'action_required': Result.BLOCKED}.get(run['conclusion'], Result.FAILED)
 
 
-def classify_ci(runs, sha):
-    own = sorted((run for run in runs if run.get('head_sha') == sha), key=lambda run: (run['created_at'], run['id']))
+def classify_ci(runs, sha, required_checks, job_names):
+    own = sorted((run for run in runs if run['head_sha'] == sha), key=lambda run: (run['created_at'], run['id']))
     latest = {}
     for run in own:
-        latest[run.get('workflow_id') or run['name']] = run
+        latest[(run['workflow_id'], run['event'])] = run
     current = tuple(latest.values())
     outcomes = {run_outcome(run) for run in current} or {Result.PENDING}
     state = next(result for result in CI_PRECEDENCE if result in outcomes)
-    return Ci(state, current, tuple(sorted(run['id'] for run in own if run not in current)))
+    required = None if required_checks is None else dict.fromkeys(required_checks)
+    if required and state is Result.PASSED:
+        for run in current:
+            for name in job_names(run['id']):
+                if name in required and required[name] is None:
+                    required[name] = run['id']
+        if None in required.values():
+            state = Result.PENDING
+    return Ci(state, current, tuple(sorted(run['id'] for run in own if run not in current)), required)
 
 
 def classify(pull, sha, ci):
@@ -163,7 +199,7 @@ def classify(pull, sha, ci):
         return Result.QUEUED, f"auto-merge ({pull['autoMergeRequest'].get('mergeMethod', '').lower()}) is enabled; GitHub merges when its policy is met"
     if pull.get('mergeQueueEntry'):
         return Result.QUEUED, f"in the merge queue ({pull['mergeQueueEntry'].get('state', '').lower()})"
-    return ci.state, ci.summary(sha)
+    return ci.state, ci.summary(sha) + ('; the pull request is a draft' if pull['isDraft'] else '')
 
 
 def merge_blocker(pull):
@@ -174,21 +210,31 @@ def merge_blocker(pull):
     return None
 
 
+def bypass_state(values):
+    if values - {'never', 'unknown'}:
+        return 'possible'
+    return 'unknown' if 'unknown' in values else 'never'
+
+
 def discover_policy(gh, branch):
     encoded = quote(branch, safe='')
     settings = gh.get('')
     rules = gh.get(f'/rules/branches/{encoded}')
     listed = gh.get('/rulesets?includes_parents=true&per_page=100')
     legacy = gh.get(f'/branches/{encoded}/protection')
-    applied = rules.body if rules.status == 200 and isinstance(rules.body, list) else None
-    applied_ids = {rule.get('ruleset_id') for rule in applied or []}
+    applied = list_of_dicts(rules)
+    applied_ids = sorted({rule['ruleset_id'] for rule in applied or [] if isinstance(rule.get('ruleset_id'), int)})
+    details = {ruleset_id: gh.get(f'/rulesets/{ruleset_id}?includes_parents=true') for ruleset_id in applied_ids}
+    known_details = {ruleset_id: detail.body if detail.status == 200 and isinstance(detail.body, dict) else {} for ruleset_id, detail in details.items()}
+    bypasses = {known.get('current_user_can_bypass') if isinstance(known.get('current_user_can_bypass'), str) else 'unknown' for known in known_details.values()}
+    bypass = 'unknown' if applied is None else bypass_state(bypasses)
+    entries = list_of_dicts(listed)
     rulesets = None
-    if listed.status == 200 and isinstance(listed.body, list):
+    if entries is not None and all(isinstance(entry.get('id'), int) for entry in entries):
         rulesets = []
-        for entry in listed.body:
-            detail = gh.get(f"/rulesets/{entry['id']}") if entry['id'] in applied_ids else None
-            known = detail.body if detail and detail.status == 200 else {}
-            rulesets.append({'id': entry['id'], 'name': entry.get('name'), 'source': entry.get('source'), 'enforcement': entry.get('enforcement'), 'applies_to_branch': entry['id'] in applied_ids if applied is not None else None, 'bypass_actors': len(known['bypass_actors']) if 'bypass_actors' in known else None, 'current_user_can_bypass': known.get('current_user_can_bypass', 'unknown')})
+        for entry in entries:
+            known = known_details.get(entry['id'], {})
+            rulesets.append({'id': entry['id'], 'name': entry.get('name'), 'source': entry.get('source'), 'enforcement': entry.get('enforcement'), 'applies_to_branch': entry['id'] in applied_ids if applied is not None else None, 'bypass_actors': len(known['bypass_actors']) if 'bypass_actors' in known else None, 'current_user_can_bypass': known.get('current_user_can_bypass') or 'unknown'})
     readable_settings = settings.body if settings.status == 200 and isinstance(settings.body, dict) else None
     auto = readable_settings.get('allow_auto_merge') if readable_settings else None
     protection = '+'.join(source for source, present in [('rulesets', bool(applied)), ('legacy', legacy.status == 200)] if present) or 'unknown'
@@ -196,20 +242,23 @@ def discover_policy(gh, branch):
         'branch': branch,
         'protection': protection,
         'rules': [rule.get('type') for rule in applied] if applied is not None else None,
-        'required_checks': [check['context'] for rule in applied or [] if rule.get('type') == 'required_status_checks' for check in rule.get('parameters', {}).get('required_status_checks', [])],
+        'required_checks': None if applied is None else list(dict.fromkeys(check['context'] for rule in applied if rule.get('type') == 'required_status_checks' for check in (rule.get('parameters') or {}).get('required_status_checks', []) if isinstance(check, dict) and isinstance(check.get('context'), str))),
         'rulesets': rulesets,
         'legacy_protection': {'http_status': legacy.status, 'meaning': LEGACY_MEANINGS.get(legacy.status, legacy.error)},
         'merge_methods': {method: readable_settings.get(setting) for method, setting in MERGE_METHOD_SETTINGS.items()} if readable_settings else None,
         'auto_merge': {True: 'enabled', False: 'disabled'}.get(auto, 'unknown'),
-        'access': {'settings': settings.status, 'rules': rules.status, 'rulesets': listed.status, 'legacy_protection': legacy.status},
+        'bypass': bypass,
+        'readable': readable_settings is not None or applied is not None or rulesets is not None or legacy.status == 200,
+        'access': {'settings': settings.status, 'rules': rules.status, 'rulesets': listed.status, 'ruleset_details': {str(ruleset_id): detail.status for ruleset_id, detail in details.items()}, 'legacy_protection': legacy.status},
     }
 
 
 def describe_policy(policy):
     methods = policy['merge_methods']
     allowed = ', '.join(method for method, enabled in methods.items() if enabled) if methods else 'unknown'
-    checks = ', '.join(policy['required_checks']) or 'none visible'
-    return f"policy for {policy['branch']}: protection {policy['protection']}; required checks: {checks}; merge methods: {allowed}; auto-merge {policy['auto_merge']}; legacy protection endpoint HTTP {policy['legacy_protection']['http_status']}"
+    checks = 'unknown' if policy['required_checks'] is None else ', '.join(policy['required_checks']) or 'none'
+    prefix = '' if policy['readable'] else 'error: no policy endpoint was readable; '
+    return f"{prefix}policy for {policy['branch']}: protection {policy['protection']}; required checks: {checks}; ruleset bypass {policy['bypass']}; merge methods: {allowed}; auto-merge {policy['auto_merge']}; legacy protection endpoint HTTP {policy['legacy_protection']['http_status']}"
 
 
 class Session:
@@ -229,8 +278,10 @@ class Session:
     def observe(self, refresh_ci=True):
         self.pull = self.gh.pull_request(self.args.number)
         self.expected_sha = self.expected_sha or self.pull['headRefOid']
+        if self.policy is None:
+            self.policy = discover_policy(self.gh, self.pull['baseRefName'])
         if refresh_ci or self.ci is None:
-            self.ci = classify_ci(self.gh.runs(self.expected_sha), self.expected_sha)
+            self.ci = classify_ci(self.gh.runs(self.expected_sha), self.expected_sha, self.policy['required_checks'], self.gh.job_names)
         return classify(self.pull, self.expected_sha, self.ci)
 
     def progress(self, result, reason):
@@ -268,13 +319,11 @@ class Session:
 
 
 def status_command(session):
-    observation = session.observe()
-    session.policy = discover_policy(session.gh, session.pull['baseRefName'])
-    return observation
+    return session.observe()
 
 
 def wait_command(session):
-    return session.wait(session.args.timeout, status_command(session))
+    return session.wait(session.args.timeout, session.observe())
 
 
 def merge_refusal(session):
@@ -283,6 +332,10 @@ def merge_refusal(session):
         return f'the repository does not allow {args.method} merges'
     if args.auto and session.policy['auto_merge'] != 'enabled':
         return f"native auto-merge is {session.policy['auto_merge']} for {args.repo}; nothing was queued. Rerun without --auto to wait for eligibility and merge"
+    if session.policy['bypass'] == 'possible':
+        return f"the current user can bypass a ruleset on {session.policy['branch']}; this tool does not merge where a bypass could skip the rules"
+    if session.policy['bypass'] != 'never':
+        return f"the ruleset bypass state for {session.policy['branch']} could not be read; this tool does not merge unless it can confirm no bypass applies"
     return merge_blocker(session.pull)
 
 
@@ -305,7 +358,11 @@ def merge_command(session):
     if refusal:
         return Result.BLOCKED, refusal
     session.mutated = True
-    return session.confirm(session.gh.merge(args.number, session.expected_sha, args.method, args.auto))
+    rejection = session.gh.merge(args.number, session.expected_sha, args.method, args.auto)
+    try:
+        return session.confirm(rejection)
+    except GitHubError as error:
+        return Result.ERROR, f'gh pr merge was called but reading the result failed ({error}); the merge outcome is unknown. Read the pull request before running merge again'
 
 
 def pull_summary(pull):
@@ -374,7 +431,7 @@ def main(argv=None, run=run_gh, clock=time.monotonic, sleep=time.sleep, out=sys.
         policy = discover_policy(gh, args.branch)
         print(json.dumps({'repo': args.repo, 'policy': policy}, indent=2), file=out)
         print(describe_policy(policy), file=err)
-        return 0
+        return 0 if policy['readable'] else EXIT_CODES[Result.ERROR]
     session = Session(gh, args, clock, sleep, err)
     command = {'status': status_command, 'wait': wait_command, 'merge': merge_command}[args.command]
     try:
