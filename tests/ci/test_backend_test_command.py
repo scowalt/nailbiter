@@ -62,19 +62,26 @@ logger = next(argv[i + 1] for i, arg in enumerate(argv) if arg == '--logger' and
 trx = Path(option('--results-directory')) / re.search(r'LogFileName=([^;]+)', logger).group(1)
 trx.parent.mkdir(parents=True, exist_ok=True)
 rows = []
+counts = {'Passed': 0, 'Failed': 0, 'Error': 0, 'NotExecuted': 0}
 for name, result in chosen.items():
-    if result == 'pass':
-        rows.append(f'<UnitTestResult testName={quoteattr(name)} outcome="Passed" />')
+    outcome = {'pass': 'Passed', 'skip': 'NotExecuted'}[result] if isinstance(result, str) else result.get('outcome', 'Failed')
+    counts[outcome] += 1
+    if outcome in ('Passed', 'NotExecuted'):
+        rows.append(f'<UnitTestResult testName={quoteattr(name)} outcome="{outcome}" />')
     else:
         print(f'  Failed {name} [1 ms]')
-        rows.append(f'<UnitTestResult testName={quoteattr(name)} outcome="Failed"><Output><ErrorInfo><Message>{escape(result["message"])}</Message><StackTrace>{escape(result["stack"])}</StackTrace></ErrorInfo></Output></UnitTestResult>')
-failed = sum(result != 'pass' for result in chosen.values())
-trx.write_text(f'<?xml version="1.0" encoding="utf-8"?><TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><Results>{"".join(rows)}</Results><ResultSummary outcome="Completed"><Counters total="{len(chosen)}" executed="{len(chosen)}" passed="{len(chosen) - failed}" failed="{failed}" /></ResultSummary></TestRun>')
+        rows.append(f'<UnitTestResult testName={quoteattr(name)} outcome="{outcome}"><Output><ErrorInfo><Message>{escape(result["message"])}</Message><StackTrace>{escape(result["stack"])}</StackTrace></ErrorInfo></Output></UnitTestResult>')
+run = scenario.get('runs', {}).get(project, {})
+counters = f'<Counters total="{len(chosen)}" executed="{len(chosen) - counts["NotExecuted"]}" passed="{counts["Passed"]}" failed="{counts["Failed"]}" error="{counts["Error"]}" notExecuted="{counts["NotExecuted"]}" />'
+if run.get('trx') != 'missing':
+    trx.write_text(f'<?xml version="1.0" encoding="utf-8"?><TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><Results>{"".join(rows)}</Results><ResultSummary outcome="Completed">{"" if run.get("trx") == "no-counters" else counters}</ResultSummary></TestRun>')
 if not chosen and selection:
     print(f'No test matches the given testcase filter `{selection}` in {project}.dll')
 print(f'Results File: {trx}')
+if run.get('crash'):
+    print(run['crash'])
 journal(cmd='test', phase='end', project=project)
-sys.exit(1 if failed else 0)
+sys.exit(run.get('exit', 1 if counts['Failed'] + counts['Error'] else 0))
 '''
 
 FAKE_MISE = r'''
@@ -239,6 +246,52 @@ class SelectionAndBuildTests(unittest.TestCase):
         self.assertRegex(output, r'fsharp\s+passed\s+2 passed, 0 failed')
         self.assertRegex(output, r'csharp\s+FAILED\s+2 passed, 1 failed')
 
+    def test_runs_that_end_without_a_clean_result_fail(self):
+        crash = 'The active test run was aborted. Reason: Test host process crashed'
+        cases = {
+            'nonzero exit with every test passed': {'backend.tests': {'exit': 1, 'crash': crash}},
+            'no results file': {'backend.tests': {'trx': 'missing', 'crash': crash}},
+            'results file without counters': {'backend.tests': {'trx': 'no-counters', 'exit': 1, 'crash': crash}},
+        }
+        for case, runs in cases.items():
+            with self.subTest(case):
+                harness = Harness(self, {'suites': PASSING, 'runs': runs})
+                code, output = harness.run('csharp')
+                self.assertEqual(code, EXIT['tests failed'], output)
+                self.assertRegex(output, r'csharp\s+FAILED')
+                self.assertIn(crash, output)
+                self.assertNotIn('Traceback', output)
+
+    def test_errored_tests_show_their_message_and_skips_are_not_errors(self):
+        suites = {**PASSING, 'backend.tests': {
+            'HostTests.Boots': 'pass',
+            'HostTests.Waits': 'skip',
+            'HostTests.Crashes': {'outcome': 'Error', 'message': 'System.TimeoutException: host did not start', 'stack': STACK},
+        }}
+        harness = Harness(self, {'suites': suites})
+        code, output = harness.run('csharp')
+        self.assertEqual(code, EXIT['tests failed'], output)
+        self.assertIn('System.TimeoutException: host did not start', output)
+        self.assertRegex(output, r'csharp\s+FAILED\s+1 passed, 1 failed, 1 skipped')
+
+    def test_a_selection_whose_tests_are_all_skipped_ran_no_test(self):
+        harness = Harness(self, {'suites': {**PASSING, 'backend.tests': {'HostTests.Waits': 'skip'}}})
+        code, output = harness.run('csharp')
+        self.assertEqual(code, EXIT['no tests matched'], output)
+
+    def test_an_invalid_filter_stops_before_the_next_suite(self):
+        harness = Harness(self, {'suites': PASSING})
+        code, output = harness.run('--filter', 'FullyQualifiedName~(')
+        self.assertEqual(code, EXIT['invalid selection'], output)
+        self.assertEqual([entry.get('project') for entry in calls(harness.journal())], [None, 'backend.fsharp.tests'])
+
+    def test_mise_output_that_is_not_json_is_a_toolchain_failure(self):
+        harness = Harness(self, {'suites': PASSING})
+        write_executable(harness.bin / 'mise', "print('mise WARN  config not trusted')\n")
+        code, output = harness.run()
+        self.assertEqual(code, EXIT['toolchain'], output)
+        self.assertNotIn('Traceback', output)
+
     def test_a_missing_mise_is_a_toolchain_failure(self):
         harness = Harness(self, {'suites': PASSING})
         bare = harness.temp / 'bare'
@@ -264,7 +317,7 @@ class SelectionAndBuildTests(unittest.TestCase):
         self.assertEqual(ignored.returncode, 0, 'obj/test-backend is gitignored')
         for entry in harness.journal():
             self.assertFalse({'-bl', '/bl', '-binaryLogger'} & set(entry['argv']), 'binary logs record the environment')
-            self.assertFalse([arg for arg in entry['argv'] if re.search(r'(^|[:=])diag', arg)], 'diagnostic verbosity prints the environment')
+            self.assertFalse([arg for arg in entry['argv'] if re.search(r'^-(v|verbosity):(d|detailed|diag|diagnostic)$', arg)], 'detailed and diagnostic verbosity print the environment')
 
 
 class ConcurrencyTests(unittest.TestCase):
@@ -300,8 +353,9 @@ class ConcurrencyTests(unittest.TestCase):
         harness.wait_for(lambda entry: entry['tag'] == 'first' and entry['cmd'] == 'build')
         build_pid = calls(harness.journal())[0]['pid']
         first.send_signal(signal.SIGTERM)
-        first.communicate(timeout=30)
-        self.assertNotEqual(first.returncode, 0)
+        first_output, _ = first.communicate(timeout=30)
+        self.assertEqual(first.returncode, 128 + signal.SIGTERM, first_output)
+        self.assertNotIn('Traceback', first_output)
         deadline = time.monotonic() + 15
         while Path(f'/proc/{build_pid}').exists() and time.monotonic() < deadline:
             time.sleep(0.1)
