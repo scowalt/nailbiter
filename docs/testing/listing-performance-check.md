@@ -80,10 +80,18 @@ report's exit code; if cleanup then fails, it says so on stderr.
 SIGTERM is always graceful, however many copies arrive. `dotnet run` forwards
 SIGTERM to the app, so one SIGTERM to its process group (how service managers
 and CI stop a job) reaches the app twice. Use SIGKILL to stop a run that will
-not finish cleanup. `dotnet run` itself may exit 143 after the app handled the
-SIGTERM and exited 130, when its own copy arrives after the app has exited;
-the single `cancelled:` line still shows the app stopped gracefully, and
-running the built app directly reports 130.
+not finish cleanup.
+
+Under `dotnet run`, its own exit code does not show how the app ended. For
+one graceful SIGTERM it can exit 0, 130 or 143, depending on when its own copy
+of the signal arrives. In SDK 10.0.401, `dotnet` handles SIGTERM with
+`Environment.Exit(0)`, and its process reaper replaces that 0 with the app's
+exit code only while it still waits for the app. A copy handled after the app
+has exited gives 0, and one that arrives after `dotnet` has removed its SIGTERM
+handler gives 143, the default action. The single
+`cancelled:` line shows the app stopped gracefully. Running the built app
+directly (`dotnet apps/listing-check/bin/Release/net10.0/listing-check.dll`)
+reports the app's own 130.
 
 A second Ctrl-C (SIGINT) ends the process at once without waiting for cleanup.
 A terminal sends each Ctrl-C to the foreground process group once and
