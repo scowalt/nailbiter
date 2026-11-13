@@ -11,24 +11,26 @@ It exits 0 with `READY` when the worktree is usable, and 1 with `NOT READY` when
 ## What it checks and prepares
 
 1. It loads the tools pinned in `.mise.toml` through `mise env`, so its own commands use the pinned versions whatever your shell's `PATH` says.
-2. It checks that each pinned tool reports its pinned version. A pin such as `"1.4"` accepts any `1.4.x`. It skips comments and warns about pin forms it cannot read, such as inline tables. For .NET it checks that `.mise.toml` and `apps/backend/global.json` pin the same SDK. It then runs `dotnet --version` in `apps/backend`, where `global.json` applies. The reported SDK must be the pinned one, or a later feature band of the same major and minor version, as `rollForward: latestFeature` allows.
-3. It warns when the same command in your own shell resolves to a different version. On this project's shared host, `~/.bun/bin/bun` comes before mise's shims, so a bare `bun` is not the pinned version. Run such commands as `mise exec -- bun ...`, or activate mise in your shell profile so its tools come first.
+2. It checks that each pinned tool reports its pinned version. A pin such as `"1.4"` accepts any `1.4.x`. It skips comments and accepts CRLF line endings and extra spaces. A pin it cannot read, such as an inline table, a `[tools.name]` table or `"latest"`, is a failure, and so is a `[tools]` table with no pins, so the check never passes having checked nothing. A key with a backend prefix, such as `"aqua:gitleaks/gitleaks"`, does not name the command it installs, so setup warns that it cannot check it. For .NET it checks that `.mise.toml` and `apps/backend/global.json` pin the same SDK. It then runs `dotnet --version` in `apps/backend`, where `global.json` applies. The reported SDK must be the pinned one, or a later feature band of the same major and minor version, as `rollForward: latestFeature` allows.
+3. It warns when the same command in your own shell resolves to a different version. In some agent shells on the shared host, `~/.bun/bin/bun` comes before mise's shims, so a bare `bun` there is not the pinned version. Run such commands as `mise exec -- bun ...`, or activate mise in your shell profile so its tools come first. BB's hook runs with mise's shims first, so it prints no such warning.
 4. It runs `bun install --frozen-lockfile --ignore-scripts` for the root, `apps/web-components` and `apps/www`.
-5. It installs the Lefthook pre-commit hook (gitleaks and the comment policy). Worktrees share one hooks directory, so when a pre-commit hook that mentions Lefthook is already there, it leaves that hook alone. Lefthook renames any other existing pre-commit hook to `pre-commit.old`.
-6. It restores the backend, `backend.fsharp.tests` and `backend.tests` projects.
-7. It launches Playwright's Chromium once. If the launch fails, the result is a warning, because only the browser regressions need it.
+5. It installs the Lefthook pre-commit hook (gitleaks and the comment policy) only when there is no pre-commit hook at all. Worktrees share one hooks directory, and `core.hooksPath` can point it elsewhere. A Lefthook hook already there is left as it is. Lefthook would rename any other pre-commit hook to `pre-commit.old`, and that hook would then stop running, so setup never installs over one. It warns instead and says how to run this repository's checks.
+6. It restores the backend, `backend.fsharp.tests` and `backend.tests` projects one at a time, so a failure names its project.
+7. It launches Playwright's Chromium once. If the launch fails, the result is a warning, because only the browser regressions need it. If a bun install failed, it skips this check, because the missing packages are the cause.
 
 Each install or restore step stops after 150 seconds, the browser check after 60, and each version check after 20. A step that ignores the stop signal is killed 10 seconds later. BB's hook also stops the whole run after 14 minutes, inside BB's 15-minute limit, and keeps the worktree. With empty bun and NuGet caches the whole run took 16.6 seconds on the shared host and filled about 1.5 GB of cache. A repeated run took about 6 seconds.
 
 ## What it never does
 
-It never runs `mise install`, `mise use`, `mise trust` or `git config --global`. It never downloads a toolchain, switches a branch, changes another worktree, writes refs, pushes or opens a pull request. It runs every command with `MISE_AUTO_INSTALL=0`. Otherwise a mise shim on `PATH` installs a missing pinned version the first time setup asks for its version. When a pinned tool or the .NET SDK is missing, the fix line says `mise install`. Run it from the repository root. It installs the versions in `.mise.toml`, including the .NET SDK, without changing any global default.
+It never runs `mise install`, `mise use`, `mise trust` or `git config --global`. It never downloads a toolchain, switches a branch, changes another worktree, writes refs, pushes or opens a pull request, and never replaces or renames a git hook it did not install. It runs every command with `MISE_AUTO_INSTALL=0`. Otherwise a mise shim on `PATH` installs a missing pinned version the first time setup asks for its version. `MISE_EXEC_AUTO_INSTALL=0` alone does not stop a shim, and `mise env` never installs. When a pinned tool or the .NET SDK is missing, the fix line says `mise install`. Run it from the repository root. It installs the versions in `.mise.toml`, including the .NET SDK, without changing any global default.
 
 `.mise.toml` contains only `[tools]`, so mise resolves it in a new worktree path without `mise trust`. This was measured with mise 2026.7.13. If the file ever needs trust, the script reports mise's error and says to review the file and run `mise trust`.
 
 ## BB worktrees
 
-BB runs the tracked `.bb-env-setup.sh` in each new BB-managed worktree. That hook runs `scripts/setup.sh` and always exits 0. BB deletes a new worktree when its hook exits non-zero, and every problem the script reports can be fixed inside the worktree, so a failing preflight never costs the thread its environment. BB shows the hook's output in the provisioning transcript. An agent in a new worktree runs `scripts/setup.sh` itself to see the verdict. With warm caches a new worktree took 8.9 seconds, and a repeated run 6.7 seconds.
+BB runs the tracked `.bb-env-setup.sh` in each new BB-managed worktree. That hook runs `scripts/setup.sh` in a session of its own and always exits 0. When setup finishes or reaches the 14-minute deadline, the hook kills every process left in that session, such as an install still running at the deadline or the MSBuild worker nodes that `dotnet restore` leaves behind, so nothing keeps working in the worktree after BB hands it to the agent.
+
+The hook needs Linux: GNU `timeout`, util-linux `setsid`, and procps `pkill` and `pgrep`. Without `setsid`, `pkill` or `pgrep` it runs `scripts/setup.sh` directly, with only each step's own time limit. Without `timeout`, setup reports `NOT READY` before doing any work. Either way the hook exits 0 and the worktree is kept. BB deletes a new worktree when its hook exits non-zero, and every problem the script reports can be fixed inside the worktree, so a failing preflight never costs the thread its environment. BB shows the hook's output in the provisioning transcript. An agent in a new worktree runs `scripts/setup.sh` itself to see the verdict. With warm caches a new worktree took 8.9 seconds, and a repeated run 6.7 seconds.
 
 The repository has no `.worktreeinclude`. Builds and tests need no untracked local configuration.
 
@@ -66,9 +68,13 @@ READY (1 warning(s))
 - commented and prefix pins, and pin forms it cannot read
 - a missing tool and a mismatched tool
 - a missing, older and later-major .NET SDK, a later feature band, and pins that disagree
-- a failed install, a missing browser, and the hook keeping a worktree that is not ready
+- CRLF line endings, a `[tools]` table with no pins, and keys with a backend prefix
+- a failed install, a failed restore, a missing browser, and the hook keeping a worktree that is not ready
+- an existing pre-commit hook that is not Lefthook's
+- the hook stopping setup at its deadline and leaving no process behind, and a host without GNU `timeout`
+- a real mise shim, with `auto_install` on, in front of a pinned version that is not installed: setup must fail with `mise install` and make no network connection
 
-The fake-toolchain cases use shims in a temporary directory and touch no installed tool. CI runs the file with the other `tests/ci` contracts. To run it locally:
+The fake-toolchain cases use shims in a temporary directory and touch no installed tool. The real-mise case points mise's data, config, cache and state directories at a temporary directory, and sends any download to a local proxy that only counts connections. CI runs the file with the other `tests/ci` contracts. To run it locally:
 
 ```sh
 mise exec -- python -m unittest tests/ci/test_setup.py -v

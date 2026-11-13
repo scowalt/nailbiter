@@ -6,6 +6,7 @@ cd "$root" || exit 1
 caller_path=$PATH
 failures=0
 warnings=0
+pins=0
 export DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 MISE_AUTO_INSTALL=0
 
 report() {
@@ -36,11 +37,12 @@ version_at_least() {
 
 pinned_tools() {
   awk '
-    { sub(/[ \t]*#.*/, "") }
+    { sub(/\r$/, ""); sub(/[ \t]*#.*/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, "") }
+    /^\[tools\./ { print $0, "?" }
     /^\[/ { in_tools = ($0 == "[tools]"); next }
     !in_tools || !NF { next }
-    match($0, /^"?[^ ="]+"? *= *"[0-9][0-9.]*"$/) { gsub(/[" ]/, ""); sub(/=/, " "); print; next }
-    { sub(/[ =].*/, ""); gsub(/"/, ""); print $0, "?" }
+    match($0, /^"?[^ \t="]+"?[ \t]*=[ \t]*"[0-9][0-9.]*"$/) { gsub(/[" \t]/, ""); sub(/=/, " "); print; next }
+    { sub(/[ \t]*=.*/, ""); gsub(/"/, ""); print $0, "?" }
   ' .mise.toml
 }
 
@@ -99,16 +101,21 @@ run_step() {
 install_git_hook() {
   local hook
   hook="$(git rev-parse --git-path hooks)/pre-commit"
-  if grep -qs lefthook "$hook"; then
+  if grep -qs '^call_lefthook()' "$hook"; then
     report ok "git pre-commit hook (lefthook)"
-    return
+  elif [[ -e $hook || -L $hook ]]; then
+    report warn "$hook is not Lefthook's, so setup left it alone and this repository's pre-commit checks do not run" \
+      "run 'mise exec -- bun node_modules/.bin/lefthook run pre-commit' before each commit, or merge the hook into lefthook.yml"
+  else
+    run_step "git pre-commit hook installed (lefthook)" bun node_modules/.bin/lefthook install pre-commit
   fi
-  run_step "git pre-commit hook installed (lefthook)" bun node_modules/.bin/lefthook install pre-commit
 }
 
 check_playwright() {
   local launch="const { chromium } = require('playwright'); await (await chromium.launch()).close();"
-  if timeout -k 10 60 bun -e "$launch" >/dev/null 2>&1; then
+  if ((dependency_failures > 0)); then
+    report skip "Playwright Chromium until the bun dependencies install"
+  elif timeout -k 10 60 bun -e "$launch" >/dev/null 2>&1; then
     report ok "Playwright Chromium"
   else
     report warn "Playwright Chromium does not launch, so browser regressions (bun run test:live-sync) cannot run" \
@@ -118,6 +125,11 @@ check_playwright() {
 
 printf 'nailbiter setup: %s\n' "$root"
 
+if ! command -v timeout >/dev/null; then
+  report fail "GNU timeout is not on PATH" \
+    "setup runs on Linux; elsewhere install GNU coreutils and put its unprefixed commands first on PATH"
+  verdict
+fi
 if ! command -v mise >/dev/null; then
   report fail "mise is not on PATH" "install mise (https://mise.jdx.dev/getting-started.html), then rerun scripts/setup.sh"
   verdict
@@ -131,25 +143,35 @@ fi
 eval "$mise_env"
 
 while read -r tool pin; do
-  case $tool:$pin in
-    *:\?) report warn "cannot check the $tool pin in .mise.toml; only exact versions such as \"1.2.3\" are checked" ;;
+  pins=$((pins + 1))
+  if [[ $pin == '?' ]]; then
+    report fail "cannot read the '$tool' pin in .mise.toml" 'write each pin as name = "1.2.3" under [tools]'
+    continue
+  fi
+  case $tool in
     *dotnet*) check_dotnet_sdk "$pin" ;;
+    *:*) report warn "setup cannot check '$tool' because the pin does not name its command" "check it with 'mise ls --current'" ;;
     *) check_tool "$tool" "$pin" "$tool $pin" ;;
   esac
 done < <(pinned_tools)
+if ((pins == 0)); then
+  report fail ".mise.toml pins no tools under [tools]" 'restore the [tools] table, one name = "1.2.3" pin per line'
+fi
 
 if ((failures > 0)); then
   printf 'skip  dependencies, git hook and restore until the toolchain is fixed\n'
   verdict
 fi
 
+before=$failures
 for project in . apps/web-components apps/www; do
   run_step "bun dependencies ($project)" bun install --cwd "$project" --frozen-lockfile --ignore-scripts
 done
+dependency_failures=$((failures - before))
 install_git_hook
-run_step "dotnet restore (backend, backend.fsharp.tests, backend.tests)" bash -c '
-  dotnet restore apps/backend/backend.csproj &&
-  dotnet restore apps/backend.fsharp.tests/backend.fsharp.tests.fsproj &&
-  dotnet restore apps/backend.tests/backend.tests.csproj'
+for project in apps/backend/backend.csproj apps/backend.fsharp.tests/backend.fsharp.tests.fsproj apps/backend.tests/backend.tests.csproj; do
+  name=${project##*/}
+  run_step "dotnet restore (${name%.*})" dotnet restore "$project"
+done
 check_playwright
 verdict
