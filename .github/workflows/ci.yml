@@ -15,10 +15,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  validate:
-    name: Validate
+  checks:
+    name: Checks
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 30
     outputs:
       marketing: ${{ steps.marketing.outputs.changed }}
     steps:
@@ -58,17 +58,15 @@ jobs:
         run: |
           bun install --cwd apps/web-components --frozen-lockfile --ignore-scripts
           bun run --cwd apps/web-components build --outDir ../../.ci/web-components
-      - name: Backend build and integration suites
+      - name: Backend build and F# suite
         env:
           DOTNET_CLI_TELEMETRY_OPTOUT: '1'
           DOTNET_NOLOGO: '1'
         run: |
           dotnet restore apps/backend/backend.csproj
           dotnet restore apps/backend.fsharp.tests/backend.fsharp.tests.fsproj
-          dotnet restore apps/backend.tests/backend.tests.csproj
           dotnet build apps/backend/backend.csproj --no-restore --configuration Release
           dotnet test apps/backend.fsharp.tests/backend.fsharp.tests.fsproj --no-restore --configuration Release
-          dotnet test apps/backend.tests/backend.tests.csproj --no-restore --configuration Release
       - name: Build and package marketing once
         run: |
           bun install --cwd apps/www --frozen-lockfile --ignore-scripts
@@ -95,9 +93,50 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  backend-tests:
+    name: Backend integration tests (${{ matrix.shard }}/${{ strategy.job-total }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+      - name: Build the C# test suite
+        run: |
+          sh scripts/ci/verify-checkout.sh
+          dotnet restore apps/backend.tests/backend.tests.csproj
+          dotnet build apps/backend.tests/backend.tests.csproj --no-restore --configuration Release
+      - name: Run this shard's test classes
+        run: python scripts/ci/backend-test-shard.py ${{ strategy.job-index }} ${{ strategy.job-total }}
+
+  validate:
+    name: Validate
+    needs: [checks, backend-tests]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      marketing: ${{ needs.checks.outputs.marketing }}
+    steps:
+      - name: Require every validation job
+        env:
+          CHECKS: ${{ needs.checks.result }}
+          BACKEND_TESTS: ${{ needs.backend-tests.result }}
+        run: |
+          echo "Checks: $CHECKS, backend integration tests: $BACKEND_TESTS"
+          test "$CHECKS" = success
+          test "$BACKEND_TESTS" = success
+
   image:
     name: Build and scan backend image
-    needs: validate
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

@@ -33,6 +33,7 @@ Each document below is the authoritative source for its topic. [AGENTS.md](../AG
 ## Testing
 
 - [testing/shared-postgresql-fixture.md](testing/shared-postgresql-fixture.md): the shared PostgreSQL server for hosted game tests.
+- [testing/ci-backend-shards.md](testing/ci-backend-shards.md): how CI splits the C# suite across parallel jobs.
 - [testing/ryuk-host-port-stress.md](testing/ryuk-host-port-stress.md): the Testcontainers Ryuk host-port probe.
 - [testing/pro-hype-continuity.md](testing/pro-hype-continuity.md), [testing/suspense-weighted-excitement.md](testing/suspense-weighted-excitement.md) and [testing/mlb-highlights-acceptance.md](testing/mlb-highlights-acceptance.md): feature verification matrices.
 - [../tests/fixtures/README.md](../tests/fixtures/README.md): synthetic fixture provenance.

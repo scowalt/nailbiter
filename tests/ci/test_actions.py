@@ -30,7 +30,7 @@ class PipelineTests(unittest.TestCase):
         for job in self.jobs.values():
             self.assertEqual(job['runs-on'], 'ubuntu-24.04')
             self.assertNotIn('container', job)
-        for name in ['validate', 'image']:
+        for name in ['checks', 'backend-tests', 'validate', 'image']:
             serialized = json.dumps(self.jobs[name])
             self.assertNotIn('secrets.', serialized)
             self.assertTrue(all(value in {'read', 'none'} for value in self.jobs[name].get('permissions', self.workflow['permissions']).values()))
@@ -53,8 +53,8 @@ class PipelineTests(unittest.TestCase):
                     self.assertFalse(step['with']['persist-credentials'])
 
     def test_all_validation_contracts_remain(self):
-        text = json.dumps(self.jobs['validate'])
-        for expected in ['.comment-policy/check.py', 'unittest discover -s .comment-policy', 'bun run lint', 'bun run test:live-sync', 'playwright install --with-deps chromium', 'scripts/test-fixtures/generate.py --check', 'tests/deployment', 'tests/ci', 'tests/fixtures', 'RUN_RECOVERY_DB_TESTS=1', 'PYTHONPATH=src', 'build --outDir', 'dotnet build apps/backend/backend.csproj --no-restore --configuration Release', 'dotnet test apps/backend.fsharp.tests/backend.fsharp.tests.fsproj --no-restore --configuration Release', 'dotnet test apps/backend.tests/backend.tests.csproj --no-restore --configuration Release', 'bun run --cwd apps/www build', 'bun run test:icons']:
+        text = json.dumps([self.jobs[name] for name in ['checks', 'backend-tests', 'validate']])
+        for expected in ['.comment-policy/check.py', 'unittest discover -s .comment-policy', 'bun run lint', 'bun run test:live-sync', 'playwright install --with-deps chromium', 'scripts/test-fixtures/generate.py --check', 'tests/deployment', 'tests/ci', 'tests/fixtures', 'RUN_RECOVERY_DB_TESTS=1', 'PYTHONPATH=src', 'build --outDir', 'dotnet build apps/backend/backend.csproj --no-restore --configuration Release', 'dotnet test apps/backend.fsharp.tests/backend.fsharp.tests.fsproj --no-restore --configuration Release', 'dotnet build apps/backend.tests/backend.tests.csproj --no-restore --configuration Release', 'scripts/ci/backend-test-shard.py ${{ strategy.job-index }} ${{ strategy.job-total }}', 'bun run --cwd apps/www build', 'bun run test:icons']:
             self.assertIn(expected, text)
         self.assertNotIn('pilot:evaluate', text)
         tools = tomllib.loads((ROOT / '.mise.toml').read_text())['tools']
@@ -65,9 +65,24 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(release_bun['with']['bun-version'], tools['bun'])
         self.assertNotIn('GH_TOKEN', self.jobs['release']['env'])
 
+    def test_validate_gates_on_every_validation_job(self):
+        validate = self.jobs['validate']
+        self.assertEqual(validate['needs'], ['checks', 'backend-tests'])
+        self.assertEqual(validate['if'], '${{ !cancelled() }}')
+        self.assertEqual(validate['outputs']['marketing'], '${{ needs.checks.outputs.marketing }}')
+        gate = validate['steps'][-1]
+        self.assertEqual(gate['env'], {'CHECKS': '${{ needs.checks.result }}', 'BACKEND_TESTS': '${{ needs.backend-tests.result }}'})
+        self.assertIn('test "$CHECKS" = success', gate['run'])
+        self.assertIn('test "$BACKEND_TESTS" = success', gate['run'])
+        shards = self.jobs['backend-tests']['strategy']
+        self.assertFalse(shards['fail-fast'])
+        self.assertGreater(len(shards['matrix']['shard']), 1)
+        for name in ['checks', 'backend-tests']:
+            self.assertNotIn('dotnet test apps/backend.tests', json.dumps(self.jobs[name]))
+
     def test_scanned_artifact_is_promoted_without_rebuilding(self):
         image = self.jobs['image']
-        self.assertEqual(image['needs'], 'validate')
+        self.assertNotIn('needs', image)
         steps = image['steps']
         scan = next(step for step in steps if step.get('uses', '').startswith('aquasecurity/trivy-action@'))
         self.assertEqual(scan['with']['exit-code'], '1')
