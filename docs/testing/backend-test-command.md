@@ -32,7 +32,7 @@ Each selected suite must pass at least one test. A suite whose selected tests ar
 
 When suites end differently, the command returns the first code that applies in the order 1, 2, 4.
 
-`dotnet test` with xunit.runner.visualstudio 4.0.1 exits 0 when a filter matches no test. It also exits 0 for a filter that it cannot parse, and prints only an `Incorrect format for TestCaseFilter` message. The command reads each suite's TRX results file and its output, so neither case passes. It counts passed, failed and skipped tests from the results listed in the TRX file, not from its `Counters` summary, which reports a skipped test as `notExecuted="0"`.
+`dotnet test` with xunit.runner.visualstudio 4.0.1 exits 0 when a filter matches no test. It also exits 0 for a filter that it cannot parse, and prints only an `Incorrect format for TestCaseFilter` message. The command reads each suite's TRX results file and its output, so neither case passes. It counts passed, failed and skipped tests from the results listed in the TRX file, not from its `Counters` summary, which reports a skipped test as `notExecuted="0"`. A run also fails if the failed, error, timeout and aborted totals in `Counters` differ from the number of failed tests listed; the message names both numbers.
 
 ## Output and logs
 
@@ -54,7 +54,7 @@ The command writes a solution file with the selected test projects into the run 
 
 ## Tests
 
-`tests/ci/test_backend_test_command.py` runs the command against fake `dotnet` and `mise` executables for most cases. One test uses the real .NET SDK. It writes a throwaway worktree in which an F# and a C# test project share one library, then starts both suites at once. It checks that both pass, that the second waits for the lock, that the library compiles once and that no log mentions an MVID. It takes about 10 seconds with a warm NuGet cache, and it skips when no .NET 10 SDK is on `PATH`. CI runs the file with the other `tests/ci` contracts, after mise has installed the SDK. To run it locally:
+`tests/ci/test_backend_test_command.py` runs the command against fake `dotnet` and `mise` executables for most cases. One test uses the real .NET SDK. It writes a throwaway worktree in which an F# and a C# test project share one library, then starts both suites at once. It checks four things. Both runs pass. The second run waits for the lock, and its MSBuild `Build started` time is no earlier than the `finish` time in the first run's TRX file. The library compiles once. No log mentions an MVID. It takes about 10 seconds with a warm NuGet cache, and it skips when no .NET 10 SDK is on `PATH`. CI runs the file with the other `tests/ci` contracts, after mise has installed the SDK. To run it locally:
 
 ```sh
 mise exec -- python -m unittest tests/ci/test_backend_test_command.py -v
