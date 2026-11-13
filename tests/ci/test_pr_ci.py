@@ -584,6 +584,47 @@ class ToolTests(unittest.TestCase):
                     self.assertNotIn(result['result'], ['merged', 'queued'])
                     self.assertEqual(fake.merges(), [])
 
+    def test_a_legacy_response_other_than_200_or_404_is_incomplete(self):
+        cases = {
+            'forbidden': FORBIDDEN,
+            'unauthorized': (401, {'message': 'Bad credentials', 'status': '401'}),
+            'unprocessable': (422, {'message': 'Validation Failed', 'status': '422'}),
+            'server error with JSON': (500, {'message': 'Server Error', 'status': '500'}),
+            'bad gateway with HTML': raw(502, '<html><body>Bad Gateway</body></html>'),
+            'transport failure': Process(1, '', 'error connecting to api.github.com\n'),
+            'no status': Process(0, '', ''),
+        }
+        auto_enabled = {f'repos/{REPO}': (200, SETTINGS | {'allow_auto_merge': True})}
+        for label, legacy in cases.items():
+            with self.subTest(label):
+                api = {f'repos/{REPO}/branches/main/protection': legacy}
+                code, result = self.invoke(FakeGitHub([pull()], api=api), 'status', str(NUMBER))
+                self.assertEqual(result['result'], 'incomplete')
+                self.assertEqual(code, 12)
+                self.assertIsNone(result['policy']['required_checks'])
+                self.assertFalse(result['ci']['complete'])
+                for extra, auto in [({}, []), (auto_enabled, ['--auto'])]:
+                    fake = FakeGitHub([pull()], api=api | extra, after_merge=[pull(state='MERGED', merge_commit=MERGE_SHA)])
+                    code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge', *auto)
+                    self.assertEqual(result['result'], 'incomplete')
+                    self.assertEqual(code, 12)
+                    self.assertFalse(result['mutated'])
+                    self.assertEqual(fake.merges(), [])
+
+    def test_merge_auto_never_arms_auto_merge_on_incomplete_evidence(self):
+        for protection in [{'required_status_checks': {'contexts': 'Validate'}}, ['not an object']]:
+            with self.subTest(protection=protection):
+                fake = self.legacy_only(protection, {1: REQUIRED_JOBS})
+                fake.api[f'repos/{REPO}'] = (200, SETTINGS | {'allow_auto_merge': True})
+                fake.after_merge = [pull(auto=AUTO)]
+                code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge', '--auto')
+                self.assertEqual(result['policy']['auto_merge'], 'enabled')
+                self.assertEqual(result['policy']['bypass'], 'never')
+                self.assertEqual(result['result'], 'incomplete')
+                self.assertEqual(code, 12)
+                self.assertFalse(result['mutated'])
+                self.assertEqual(fake.merges(), [])
+
     def test_readable_legacy_protection_alone_makes_policy_readable(self):
         fake = FakeGitHub([pull()], api={f'repos/{REPO}': FORBIDDEN, f'repos/{REPO}/rules/branches/main': FORBIDDEN, f'repos/{REPO}/rulesets': FORBIDDEN, f'repos/{REPO}/branches/main/protection': (200, {'required_linear_history': {'enabled': True}})})
         code, result = self.invoke(fake, 'policy')
