@@ -450,6 +450,12 @@ class ToolTests(unittest.TestCase):
         self.assertIsNone(result['ci']['required_checks'])
         self.assertIn('incomplete', result['reason'])
 
+    def test_no_runs_are_pending_even_when_the_required_checks_are_unknown(self):
+        fake = FakeGitHub([pull()], runs={SHA: [[]]}, api={f'repos/{REPO}/rules/branches/main': FORBIDDEN})
+        code, result = self.invoke(fake, 'status', str(NUMBER))
+        self.assertEqual(result['result'], 'pending')
+        self.assertFalse(result['ci']['complete'])
+
     def test_status_names_a_draft(self):
         fake = FakeGitHub([pull(draft=True)])
         code, result = self.invoke(fake, 'status', str(NUMBER))
@@ -471,7 +477,7 @@ class ToolTests(unittest.TestCase):
                 fake = FakeGitHub([pull()], api={f'repos/{REPO}/rulesets/77': (200, RULESET_DETAIL | {'current_user_can_bypass': bypass, 'bypass_actors': [{'actor_type': 'RepositoryRole', 'actor_id': 5}]})}, after_merge=[pull(state='MERGED', merge_commit=MERGE_SHA)])
                 code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge')
                 self.assertEqual(result['result'], 'blocked')
-                self.assertIn('bypass', result['reason'])
+                self.assertIn('can bypass', result['reason'])
                 self.assertEqual(result['policy']['bypass'], 'possible')
                 self.assertEqual(fake.merges(), [])
 
