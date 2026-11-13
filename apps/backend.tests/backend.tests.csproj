@@ -51,6 +51,7 @@
     <None Include="../backend.fsharp.tests/Fixtures/kalshi-mlb-401907993.json" Link="Fixtures/KalshiMlb/schedule-change.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/MoneyPuckQualification/Synthetic/*" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="../backend/backend.csproj" />
+    <ProjectReference Include="../listing-check/listing-check.csproj" />
     <None Include="../../docker-compose.yml" Link="docker-compose.yml" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
