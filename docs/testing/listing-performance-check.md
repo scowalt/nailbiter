@@ -74,11 +74,19 @@ it.
 | 7 | `budget` | All requests succeeded, but a page's measured median TTFB or completion exceeded its budget. |
 | 130 | — | Interrupted by Ctrl-C (SIGINT) or SIGTERM before the report was written. One `cancelled:` line is printed to stderr and no report is written. Fixture mode still removes its container. |
 
-If the interrupt arrives after the report was written and cleanup then fails,
-the run keeps the report's exit code and says so on stderr. A second Ctrl-C
-ends the process at once without waiting for cleanup; the Testcontainers
-reaper (Ryuk) then removes the fixture container, usually within about 10
-seconds.
+If the interrupt arrives after the report was written, the run keeps the
+report's exit code; if cleanup then fails, it says so on stderr.
+
+SIGTERM is always graceful, however many copies arrive. `dotnet run` forwards
+SIGTERM to the app, so one SIGTERM to its process group (how service managers
+and CI stop a job) reaches the app twice. Use SIGKILL to stop a run that will
+not finish cleanup.
+
+A second Ctrl-C (SIGINT) ends the process at once without waiting for cleanup.
+A terminal sends each Ctrl-C to the foreground process group once and
+`dotnet run` does not forward SIGINT, so the app sees one SIGINT per press.
+The Testcontainers reaper (Ryuk) then removes the fixture container, usually
+within about 15 seconds.
 
 Content rules in both modes: the body starts with `<!DOCTYPE html>`, contains
 `</html>` (so a cut-off body fails), and carries the page marker (`home-schedule page` for
