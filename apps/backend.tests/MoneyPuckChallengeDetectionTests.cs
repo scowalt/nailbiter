@@ -44,11 +44,7 @@ public sealed class MoneyPuckChallengeDetectionTests
         await using var app = await ReportingApp.StartAsync();
         app.Harness.Handler.Page = app.Harness.Handler.Page.Replace("</body>", JavaScriptDetections + "</body>");
 
-        var result = await app.RefreshAsync();
-
-        Assert.Equal((32, 32), (result.Qualification, result.Rankings));
-        Assert.False(await app.DeniedAsync());
-        Assert.Empty(await app.SentEventsAsync());
+        await app.AssertCollectedWithoutReportingAsync(await app.RefreshAsync());
     }
 
     [Theory]
@@ -60,12 +56,7 @@ public sealed class MoneyPuckChallengeDetectionTests
         await using var app = await ReportingApp.StartAsync();
         app.Harness.Handler.Page = app.Harness.Handler.Page.Replace("</body>", $"<script src=\"{script}\"></script></body>");
 
-        var result = await app.RefreshAsync();
-
-        Assert.Equal((32, 32), (result.Qualification, result.Rankings));
-        Assert.Equal(32, (await app.Harness.RowsAsync()).Count);
-        Assert.False(await app.DeniedAsync());
-        Assert.Empty(await app.SentEventsAsync());
+        await app.AssertCollectedWithoutReportingAsync(await app.RefreshAsync());
     }
 
     [Theory]
@@ -83,13 +74,7 @@ public sealed class MoneyPuckChallengeDetectionTests
                 ? new((HttpStatusCode)status) { Content = new StringContent(body) }
                 : null);
 
-        var result = await app.RefreshAsync();
-
-        Assert.Equal((0, 0), (result.Qualification, result.Rankings));
-        Assert.True(await app.DeniedAsync());
-        var sent = Assert.Single(await app.SentEventsAsync());
-        Assert.Equal((typeof(MoneyPuckService).FullName, "error"), (sent.Logger, sent.Level));
-        Assert.Contains(sent.Exceptions, type => type == typeof(HttpRequestException).FullName);
+        await app.AssertLatchedWithOneErrorAsync(await app.RefreshAsync());
     }
 
     private sealed record SentEvent(string? Logger, string? Level, string?[] Exceptions);
@@ -114,7 +99,24 @@ public sealed class MoneyPuckChallengeDetectionTests
         public Task<MoneyPuckRefreshResult> RefreshAsync() =>
             Harness.App.Services.GetRequiredService<MoneyPuckService>().RefreshNhlAsync(CancellationToken.None);
 
-        public async Task<bool> DeniedAsync()
+        public async Task AssertCollectedWithoutReportingAsync(MoneyPuckRefreshResult result)
+        {
+            Assert.Equal((32, 32), (result.Qualification, result.Rankings));
+            Assert.Equal(32, (await Harness.RowsAsync()).Count);
+            Assert.False(await DeniedAsync());
+            Assert.Empty(await SentEventsAsync());
+        }
+
+        public async Task AssertLatchedWithOneErrorAsync(MoneyPuckRefreshResult result)
+        {
+            Assert.Equal((0, 0), (result.Qualification, result.Rankings));
+            Assert.True(await DeniedAsync());
+            var sent = Assert.Single(await SentEventsAsync());
+            Assert.Equal((typeof(MoneyPuckService).FullName, "error"), (sent.Logger, sent.Level));
+            Assert.Contains(sent.Exceptions, type => type == typeof(HttpRequestException).FullName);
+        }
+
+        private async Task<bool> DeniedAsync()
         {
             using var scope = Harness.App.Services.CreateScope();
             return await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database
