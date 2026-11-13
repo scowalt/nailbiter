@@ -10,10 +10,7 @@ This repo uses a single domain context:
 ## Before exploring
 
 Read `GLOSSARY.md` and ADRs relevant to the area being changed.
-
-If these files or directories are absent, proceed silently.
-The domain-modeling skill creates them lazily when terms or decisions
-are resolved; do not scaffold empty domain documents upfront.
+Add a term or ADR when a decision is resolved; do not create empty stubs.
 
 ## Use the glossary's vocabulary
 
