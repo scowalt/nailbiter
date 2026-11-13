@@ -126,6 +126,19 @@ public sealed class ProviderResilienceClockTests
         Assert.Equal(LogLevel.Warning, finalAttempt.Level);
     }
 
+    [Fact]
+    public async Task Retry_reaches_the_provider_when_the_thread_that_armed_its_attempt_timeout_is_descheduled()
+    {
+        var scoreboard = Scoreboards["EspnOdds"];
+        await using var app = new ClockedApp(Answer.Status(HttpStatusCode.TooManyRequests), descheduleAfterArming: TimeSpan.FromMilliseconds(50));
+
+        var fetch = scoreboard.Run(app.Services, CancellationToken.None);
+        var elapsed = await app.RunAsync(fetch);
+
+        Assert.Equal(StandardAttempts, app.Provider.Attempts.Count);
+        Assert.InRange(elapsed, TimeSpan.Zero, TotalRequestTimeout - AttemptTimeout);
+    }
+
     [Theory]
     [MemberData(nameof(NonRetryableAnswers))]
     public async Task Non_retryable_scoreboard_answer_is_fetched_once_and_stays_a_warning(string name, HttpStatusCode status)
@@ -220,7 +233,7 @@ public sealed class ProviderResilienceClockTests
         public sealed record Reply(HttpStatusCode Code) : Answer;
     }
 
-    private sealed class SteppedClock() : FakeTimeProvider(Origin)
+    private sealed class SteppedClock(TimeSpan descheduleAfterArming) : FakeTimeProvider(Origin)
     {
         private static readonly DateTimeOffset Origin = new(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
         private readonly List<TrackedTimer> timers = [];
@@ -244,7 +257,7 @@ public sealed class ProviderResilienceClockTests
 
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
         {
-            var timer = new TrackedTimer();
+            var timer = new TrackedTimer(descheduleAfterArming);
             timer.Arm(dueTime, period);
             timer.Inner = base.CreateTimer(s =>
             {
@@ -252,10 +265,11 @@ public sealed class ProviderResilienceClockTests
                 callback(s);
             }, state, dueTime, period);
             lock (timers) timers.Add(timer);
+            timer.Deschedule(dueTime);
             return timer;
         }
 
-        private sealed class TrackedTimer : ITimer
+        private sealed class TrackedTimer(TimeSpan descheduleAfterArming) : ITimer
         {
             private TimeSpan period;
             private volatile bool live;
@@ -270,12 +284,19 @@ public sealed class ProviderResilienceClockTests
                 live = dueTime != Timeout.InfiniteTimeSpan;
             }
 
+            public void Deschedule(TimeSpan dueTime)
+            {
+                if (dueTime != Timeout.InfiniteTimeSpan) Thread.Sleep(descheduleAfterArming);
+            }
+
             public void Fired() => live = period != Timeout.InfiniteTimeSpan && period != TimeSpan.Zero;
 
             public bool Change(TimeSpan dueTime, TimeSpan period)
             {
                 Arm(dueTime, period);
-                return Inner.Change(dueTime, period);
+                var changed = Inner.Change(dueTime, period);
+                Deschedule(dueTime);
+                return changed;
             }
 
             public void Dispose()
@@ -299,8 +320,9 @@ public sealed class ProviderResilienceClockTests
         private readonly SentTransport transport = new();
         private readonly LogRecorder logs = new();
 
-        public ClockedApp(Answer answer)
+        public ClockedApp(Answer answer, TimeSpan descheduleAfterArming = default)
         {
+            Clock = new SteppedClock(descheduleAfterArming);
             Provider = new ControlledProvider(answer, Clock);
             app = entry.WithWebHostBuilder(builder =>
             {
@@ -324,7 +346,7 @@ public sealed class ProviderResilienceClockTests
             });
         }
 
-        public SteppedClock Clock { get; } = new();
+        public SteppedClock Clock { get; }
 
         public async Task<TimeSpan> RunAsync(Task work)
         {
