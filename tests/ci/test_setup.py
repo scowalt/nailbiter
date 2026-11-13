@@ -2,8 +2,10 @@ import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import subprocess
 import tempfile
+import threading
 import time
 import tomllib
 import unittest
@@ -270,3 +272,71 @@ class ToolchainPreflightTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ConnectionCounter:
+    def __init__(self):
+        self.server = socket.create_server(('127.0.0.1', 0))
+        self.connections = 0
+        self.thread = threading.Thread(target=self.serve, daemon=True)
+        self.thread.start()
+
+    @property
+    def url(self):
+        return f'http://127.0.0.1:{self.server.getsockname()[1]}'
+
+    def serve(self):
+        while True:
+            try:
+                connection, _ = self.server.accept()
+            except OSError:
+                return
+            self.connections += 1
+            connection.close()
+
+    def close(self):
+        self.server.close()
+        self.thread.join(5)
+
+
+@unittest.skipUnless(shutil.which('mise'), 'needs a real mise')
+class RealMiseShimTests(unittest.TestCase):
+    def setUp(self):
+        self.root = Path(tempfile.mkdtemp(prefix='nailbiter-mise-shims-'))
+        self.addCleanup(shutil.rmtree, self.root)
+        self.repo = self.root / 'repo'
+        (self.repo / 'scripts').mkdir(parents=True)
+        (self.repo / 'apps/backend').mkdir(parents=True)
+        shutil.copy2(ROOT / 'scripts/setup.sh', self.repo / 'scripts/setup.sh')
+        (self.repo / '.mise.toml').write_text('[tools]\nbun = "1.3.13"\n')
+        git('init', '--quiet', cwd=self.repo)
+        self.mise_dirs = {name: self.root / name.split('_')[1].lower() for name in ['MISE_DATA_DIR', 'MISE_CONFIG_DIR', 'MISE_CACHE_DIR', 'MISE_STATE_DIR']}
+        (self.mise_dirs['MISE_CONFIG_DIR']).mkdir()
+        (self.mise_dirs['MISE_CONFIG_DIR'] / 'config.toml').write_text('[settings]\nauto_install = true\nexec_auto_install = true\n')
+        write_executable(self.installs / '1.0.0/bin/bun', "echo 1.0.0\n")
+        self.bin = self.root / 'bin'
+        self.bin.mkdir()
+        (self.bin / 'mise').symlink_to(os.path.realpath(shutil.which('mise')))
+        for tool in SYSTEM_TOOLS:
+            (self.bin / tool).symlink_to(shutil.which(tool))
+        self.network = ConnectionCounter()
+        self.addCleanup(self.network.close)
+        subprocess.run(self.env(f'{self.bin}') + ['mise', 'reshim'], cwd=self.root, check=True, capture_output=True, timeout=60)
+
+    @property
+    def installs(self):
+        return self.mise_dirs['MISE_DATA_DIR'] / 'installs/bun'
+
+    def env(self, path):
+        proxies = [f'{name}={self.network.url}' for name in ['HTTPS_PROXY', 'HTTP_PROXY', 'https_proxy', 'http_proxy', 'ALL_PROXY']]
+        return ['env', '-i', f'HOME={self.root}', f'PATH={path}', *[f'{k}={v}' for k, v in self.mise_dirs.items()], *proxies]
+
+    def test_pinned_version_missing_behind_a_shim_fails_without_installing(self):
+        shims = self.mise_dirs['MISE_DATA_DIR'] / 'shims'
+        self.assertTrue((shims / 'bun').exists())
+        result = subprocess.run(self.env(f'{shims}:{self.bin}') + ['bash', 'scripts/setup.sh'], cwd=self.repo, capture_output=True, text=True, timeout=120)
+        self.assertEqual(self.network.connections, 0, result.stdout + result.stderr)
+        self.assertEqual(sorted(path.name for path in self.installs.iterdir()), ['1.0.0'])
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertNotIn('ok    bun', result.stdout)
+        self.assertRegex(result.stdout, r'fail  .*bun 1\.3\.13.*\n      fix: mise install\n')
