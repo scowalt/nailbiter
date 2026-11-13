@@ -158,7 +158,7 @@ public sealed class AbortedRequestReportingTests
             var started = new ReportingApp(database, database.GetConnectionString() + connectionOptions, interceptors);
             using var scope = started.app.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
-            await db.Database.EnsureCreatedAsync();
+            await TestSchema.CreateAsync(db.Database);
             db.Games.Add(new Game
             {
                 Id = GameId, Sport = "nhl", Status = "in_progress", SeasonYear = 2027, SeasonType = 2,

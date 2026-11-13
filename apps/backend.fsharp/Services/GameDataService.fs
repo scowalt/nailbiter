@@ -276,9 +276,13 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
         if gameIds.IsEmpty then return Dictionary<string, OddsSnapshot>()
         else
         let ids = gameIds |> List.distinct |> List.toArray
+        let! newest =
+            db.Database
+                .SqlQueryRaw<DateTime>("SELECT DISTINCT timestamp AS \"Value\" FROM newest_odds WHERE game_id = ANY ({0})", ids :> obj)
+                .ToArrayAsync(ct)
         let! odds =
             db.OddsSnapshots
-                .FromSqlRaw("SELECT DISTINCT ON (game_id) * FROM odds_snapshots WHERE game_id = ANY ({0}) ORDER BY game_id, timestamp DESC, id DESC", ids :> obj)
+                .FromSqlRaw("SELECT DISTINCT ON (game_id) * FROM odds_snapshots WHERE timestamp = ANY ({1}) AND game_id = ANY ({0}) ORDER BY game_id, timestamp DESC, id DESC", ids :> obj, newest :> obj)
                 .AsNoTracking()
                 .ToDictionaryAsync((fun o -> o.GameId), ct)
         let expiredBounds = odds |> Seq.filter (fun entry -> not (GameWinnerProbabilityPolicy.FreshForDisplay(entry.Value, timeProvider.GetUtcNow().UtcDateTime))) |> Seq.map (fun entry -> entry.Key) |> Seq.toArray

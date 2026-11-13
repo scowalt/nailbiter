@@ -497,7 +497,7 @@ public sealed class PlayoffStatusCollectionTests
             await collector.database.StartAsync();
             collector.app = collector.CreateFactory();
             using var scope = collector.app.Services.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database.EnsureCreatedAsync();
+            await TestSchema.CreateAsync(scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database);
             return collector;
         }
 

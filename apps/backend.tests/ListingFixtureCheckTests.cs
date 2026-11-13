@@ -85,7 +85,7 @@ public sealed class ListingFixtureCheckTests(ITestOutputHelper output)
         }
     }
 
-    private const string LatestOddsRead = "SELECT DISTINCT ON (game_id) * FROM odds_snapshots WHERE game_id = ANY (";
+    private const string LatestOddsRead = "SELECT DISTINCT ON (game_id) * FROM odds_snapshots WHERE timestamp = ANY (@p1) AND game_id = ANY (";
     private const string SecondHistoryScan = "SELECT DISTINCT ON (game_id) o.* FROM odds_snapshots o "
         + "WHERE o.timestamp = (SELECT max(h.timestamp) FROM odds_snapshots h WHERE h.game_id = o.game_id) AND o.game_id = ANY (";
     private const string OpaqueFunction = "SELECT * FROM odds_snapshots_latest(";

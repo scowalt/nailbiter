@@ -575,7 +575,7 @@ public sealed class HighlightsFaultReportingTests(HighlightsFaultReportingTests.
         {
             await container.StartAsync();
             await using var db = Context();
-            await db.Database.EnsureCreatedAsync();
+            await TestSchema.CreateAsync(db.Database);
         }
 
         public Task DisposeAsync() => container.DisposeAsync().AsTask();

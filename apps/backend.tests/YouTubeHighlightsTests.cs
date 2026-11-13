@@ -561,7 +561,7 @@ public sealed class YouTubeHighlightsTests(YouTubeHighlightsDatabase fixture) : 
         using (var scope = host.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
-            await db.Database.EnsureCreatedAsync();
+            await TestSchema.CreateAsync(db.Database);
             db.Games.Add(new backend.Models.Game
             {
                 Id = "youtube-adapter-render", Sport = "mlb", Status = "final", HomeTeam = "Atlanta Braves", AwayTeam = "Los Angeles Dodgers",

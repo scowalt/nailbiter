@@ -67,7 +67,7 @@ public sealed class HighlightsPersistenceTests : IAsyncLifetime
         await database.StartAsync();
         app = CreateHost();
         using var scope = app.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database.EnsureCreatedAsync();
+        await TestSchema.CreateAsync(scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database);
     }
 
     private async Task Collect(string sport = "mlb")

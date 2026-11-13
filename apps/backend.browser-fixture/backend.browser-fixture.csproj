@@ -11,6 +11,7 @@
     <Content Include="../backend.tests/Fixtures/ProHype/mlb-pregame-401907973.json" Link="Fixtures/ProHype/mlb-pregame-401907973.json" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../backend/Migrations/034_PlayoffSeriesObservation.sql" Link="Migrations/034_PlayoffSeriesObservation.sql" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../backend/Migrations/035_ProHypeLifecycle.sql" Link="Migrations/035_ProHypeLifecycle.sql" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../backend/Migrations/042_NewestOdds.sql" Link="Migrations/042_NewestOdds.sql" CopyToOutputDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.15.0" />

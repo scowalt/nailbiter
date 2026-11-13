@@ -783,7 +783,7 @@ public sealed class ProviderFailureReportingTests
                 configure?.Invoke(services);
             }) { database = database };
             using var scope = app.Services.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database.EnsureCreatedAsync();
+            await TestSchema.CreateAsync(scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database);
             return app;
         }
 

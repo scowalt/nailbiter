@@ -330,7 +330,7 @@ public sealed class RatingsProviderReportingTests
         var database = IsolatedPostgreSql.CreateContainer();
         await database.StartAsync();
         await using var db = new ExcitementDbContext(new DbContextOptionsBuilder<ExcitementDbContext>().UseNpgsql(database.GetConnectionString()).Options);
-        await db.Database.EnsureCreatedAsync();
+        await TestSchema.CreateAsync(db.Database);
         return database;
     }
 

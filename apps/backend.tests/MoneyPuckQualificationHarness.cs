@@ -68,7 +68,7 @@ public sealed class MoneyPuckQualificationHarness : IAsyncDisposable
         CreateApplication(configureDb, configureServices, enabled, configuredTransport);
         using var scope = App.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
-        await db.Database.EnsureCreatedAsync();
+        await TestSchema.CreateAsync(db.Database);
         await db.Database.ExecuteSqlRawAsync("CREATE UNIQUE INDEX qualification_test_identity ON team_ratings (sport, team_abbreviation, season, source)");
     }
     public async Task RestartApplicationAsync()

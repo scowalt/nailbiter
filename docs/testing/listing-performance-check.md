@@ -165,9 +165,15 @@ Core command interceptor recording SQL and parameters:
   no scheduled game, and none missing.
 - No provider request was attempted.
 
-The latest-odds query scans every chunk once by design. The report shows the
-counts (`relationScans`, `chunkScans`) so a change in that number is visible in
-review.
+The latest-odds read looks up each listed game's newest snapshot time in the
+`newest_odds` table, which a trigger from `042_NewestOdds.sql` keeps current on
+every insert, update and delete of `odds_snapshots`. It then reads
+`odds_snapshots` at those times only, so TimescaleDB plans just the chunks that
+hold the listed games' newest snapshots, however long the history is.
+`LatestOddsHistoryTests` checks that the planned chunks are exactly those chunks
+for 7-day and 56-day histories. The report shows the counts (`relationScans`,
+`chunkScans`) so a change in that number is visible in review. The excitement
+history read still scans every chunk.
 
 ## Report
 

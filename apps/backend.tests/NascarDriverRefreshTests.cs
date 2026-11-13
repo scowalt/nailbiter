@@ -380,7 +380,7 @@ public sealed class NascarDriverRefreshTests
             await nascar.database.StartAsync();
             nascar.app = nascar.CreateFactory();
             using var scope = nascar.app.Services.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database.EnsureCreatedAsync();
+            await TestSchema.CreateAsync(scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database);
             return nascar;
         }
 

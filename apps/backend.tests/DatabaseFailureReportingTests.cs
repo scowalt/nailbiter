@@ -450,7 +450,7 @@ public sealed class DatabaseFailureReportingTests
             await database.container.StartAsync();
             var options = new DbContextOptionsBuilder<ExcitementDbContext>().UseNpgsql(database.ConnectionString).Options;
             await using var db = new ExcitementDbContext(options);
-            await db.Database.EnsureCreatedAsync();
+            await TestSchema.CreateAsync(db.Database);
             db.Games.Add(new Game
             {
                 Id = GameId, Sport = "nba", Status = "scheduled", SeasonYear = 2027, SeasonType = 2,

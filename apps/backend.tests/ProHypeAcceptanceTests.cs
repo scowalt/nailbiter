@@ -76,7 +76,7 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
         options = new DbContextOptionsBuilder<ExcitementDbContext>().UseNpgsql(database.GetConnectionString()).Options;
         await Change(async db =>
         {
-            await db.Database.EnsureCreatedAsync();
+            await TestSchema.CreateAsync(db.Database);
             await db.Database.ExecuteSqlRawAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", "035_ProHypeLifecycle.sql")));
         });
     }

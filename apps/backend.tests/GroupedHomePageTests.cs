@@ -40,7 +40,7 @@ public sealed class GroupedHomePageTests : IAsyncLifetime
         }));
         client = app.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         using var scope = app.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database.EnsureCreatedAsync();
+        await TestSchema.CreateAsync(scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database);
     }
 
     private Game Game(string id, int hour = 18, string status = "scheduled", string sport = "nba") => new()
