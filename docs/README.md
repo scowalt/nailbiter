@@ -34,6 +34,7 @@ Each document below is the authoritative source for its topic. [AGENTS.md](../AG
 
 - [testing/shared-postgresql-fixture.md](testing/shared-postgresql-fixture.md): the shared PostgreSQL server for hosted game tests.
 - [testing/ryuk-host-port-stress.md](testing/ryuk-host-port-stress.md): the Testcontainers Ryuk host-port probe.
+- [testing/listing-performance-check.md](testing/listing-performance-check.md): the home and league listing check, in Timescale fixture mode or against an explicit URL.
 - [testing/pro-hype-continuity.md](testing/pro-hype-continuity.md), [testing/suspense-weighted-excitement.md](testing/suspense-weighted-excitement.md) and [testing/mlb-highlights-acceptance.md](testing/mlb-highlights-acceptance.md): feature verification matrices.
 - [../tests/fixtures/README.md](../tests/fixtures/README.md): synthetic fixture provenance.
 
