@@ -85,6 +85,11 @@ public static class ListingCheckCommand
         return report.ExitCode;
     }
 
+    public static async Task<int> RunAsync(Func<CancellationToken, Task<int>> run, TextWriter error, CancellationTokenSource cancellation)
+    {
+        return await run(cancellation.Token);
+    }
+
     public static async Task<int> RejectAsync(TextWriter output, Failure failure)
     {
         await output.WriteLineAsync($"{Failure.Name(failure.Kind)}: {failure.Message}");
