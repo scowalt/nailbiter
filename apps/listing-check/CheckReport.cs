@@ -98,7 +98,7 @@ public static class ListingCheckCommand
 
     public static void Interrupt(CancellationTokenSource cancellation, PosixSignalContext context)
     {
-        context.Cancel = true;
+        context.Cancel = !cancellation.IsCancellationRequested;
         cancellation.Cancel();
     }
 
