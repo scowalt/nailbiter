@@ -1,11 +1,9 @@
-using System.Data.Common;
 using System.Text.Json;
 using AngleSharp.Html.Parser;
 using backend.Data;
 using backend.Models;
 using backend.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FSharp.Collections;
 using Npgsql;
@@ -58,7 +56,7 @@ public sealed class ListingPerformanceTests : IClassFixture<SharedPostgreSql>, I
         foreach (var (name, value) in captured.Parameters)
             command.Parameters.Add(new NpgsqlParameter(name, value));
         using var plan = JsonDocument.Parse((string)(await command.ExecuteScalarAsync())!);
-        var scans = Descendants(plan.RootElement[0].GetProperty("Plan"))
+        var scans = QueryPlans.Descendants(plan.RootElement[0].GetProperty("Plan"))
             .Where(n => n.TryGetProperty("Relation Name", out var relation) && relation.GetString() == "odds_snapshots")
             .ToArray();
         Assert.True(scans.Length == 1, $"Expected one odds history scan, got {scans.Length}. Plan: {plan.RootElement}");
@@ -193,28 +191,4 @@ public sealed class ListingPerformanceTests : IClassFixture<SharedPostgreSql>, I
         GameId = id, Timestamp = Now.UtcDateTime.AddMinutes(i), HomeWinProbability = .5, AwayWinProbability = .5,
         Source = "Kalshi", HomeMoneyline = -100, AwayMoneyline = -100
     });
-
-    private static IEnumerable<JsonElement> Descendants(JsonElement node)
-    {
-        yield return node;
-        if (node.TryGetProperty("Plans", out var children))
-            foreach (var child in children.EnumerateArray())
-                foreach (var descendant in Descendants(child))
-                    yield return descendant;
-    }
-
-    private sealed record CapturedCommand(string Sql, (string Name, object Value)[] Parameters, bool CanBeCanceled);
-
-    private sealed class CommandRecorder : DbCommandInterceptor
-    {
-        public List<CapturedCommand> Commands { get; } = [];
-
-        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
-            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
-        {
-            Commands.Add(new(command.CommandText, command.Parameters.Cast<DbParameter>()
-                .Select(p => (p.ParameterName, p.Value!)).ToArray(), cancellationToken.CanBeCanceled));
-            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
-        }
-    }
 }

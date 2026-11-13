@@ -47,9 +47,11 @@ works. If every case shares one database, all four tests fail.
 3. Keep creating the `HostedGameFixture` per case and calling its
    `InitializeAsync` and `DisposeAsync` from the test class's `IAsyncLifetime`.
 
-A suite that needs a schema other than `EnsureCreatedAsync` output, such as
-SQL migrations or TimescaleDB hypertables, needs its own template step.
-`SharedPostgreSql` builds only the EF Core model.
+The public constructor builds only the EF Core model. A suite that needs more,
+such as TimescaleDB hypertables, passes its own container and a
+`prepareTemplate` step to the internal constructor; the step runs once on the
+template after `EnsureCreatedAsync`. The [listing performance
+check](listing-performance-check.md) uses it with the pinned TimescaleDB image.
 
 ## Measure a change
 

@@ -1,6 +1,9 @@
 using System.Diagnostics;
+using System.Net;
 using backend.Data;
 using backend.Models;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -17,6 +20,8 @@ internal sealed class HostedGameFixture : IAsyncLifetime
     private readonly AppFactory entry = new();
     private readonly Action<IServiceCollection>? configureServices;
     private readonly SharedPostgreSql? server;
+    private readonly bool listenOnLoopback;
+    private int rejectedOutboundRequests;
     private TestDatabase? database;
     private WebApplicationFactory<Program>? app;
     private readonly string timingOwner = "case-" + Guid.NewGuid().ToString("N");
@@ -26,12 +31,15 @@ internal sealed class HostedGameFixture : IAsyncLifetime
     public FakeTimeProvider Clock { get; }
     public HttpClient Client { get; private set; } = null!;
     public IServiceProvider Services => app!.Services;
+    public int RejectedOutboundRequests => Volatile.Read(ref rejectedOutboundRequests);
 
-    public HostedGameFixture(DateTimeOffset? now = null, Action<IServiceCollection>? configureServices = null, SharedPostgreSql? server = null)
+    public HostedGameFixture(DateTimeOffset? now = null, Action<IServiceCollection>? configureServices = null, SharedPostgreSql? server = null,
+        bool listenOnLoopback = false)
     {
         Clock = new FakeTimeProvider(now ?? new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
         this.configureServices = configureServices;
         this.server = server;
+        this.listenOnLoopback = listenOnLoopback;
     }
 
     public async Task InitializeAsync()
@@ -48,10 +56,19 @@ internal sealed class HostedGameFixture : IAsyncLifetime
             services.AddDbContext<ExcitementDbContext>(options => options.UseNpgsql(connectionString));
             services.RemoveAll<TimeProvider>();
             services.AddSingleton<TimeProvider>(Clock);
-            services.AddSingleton<IHttpMessageHandlerBuilderFilter, RejectOutboundRequests>();
+            services.AddSingleton<IHttpMessageHandlerBuilderFilter>(
+                new RejectOutboundRequests(() => Interlocked.Increment(ref rejectedOutboundRequests)));
             configureServices?.Invoke(services);
         }));
-        Client = app.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
+        if (listenOnLoopback)
+        {
+            app.UseKestrel(options => options.Listen(IPAddress.Loopback, 0));
+            app.StartServer();
+            var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
+            Client = new HttpClient { BaseAddress = new Uri(address) };
+        }
+        else
+            Client = app.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         FixtureTimings.Record(timingOwner, "host", Stopwatch.GetElapsedTime(hostStarted));
         using var scope = Services.CreateScope();
         await FixtureTimings.MeasureAsync(timingOwner, "schema",
@@ -92,18 +109,21 @@ internal sealed class HostedGameFixture : IAsyncLifetime
         FixtureTimings.Record(timingOwner, "dispose", Stopwatch.GetElapsedTime(disposeStarted));
     }
 
-    private sealed class RejectOutboundRequests : IHttpMessageHandlerBuilderFilter
+    private sealed class RejectOutboundRequests(Action rejected) : IHttpMessageHandlerBuilderFilter
     {
         public Action<HttpMessageHandlerBuilder> Configure(Action<HttpMessageHandlerBuilder> next) => builder =>
         {
             next(builder);
-            builder.PrimaryHandler = new RejectHandler();
+            builder.PrimaryHandler = new RejectHandler(rejected);
         };
 
-        private sealed class RejectHandler : HttpMessageHandler
+        private sealed class RejectHandler(Action rejected) : HttpMessageHandler
         {
-            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                rejected();
                 throw new InvalidOperationException("Live provider requests are forbidden in hosted game tests: " + request.RequestUri);
+            }
         }
     }
 }

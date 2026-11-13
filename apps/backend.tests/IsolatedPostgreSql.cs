@@ -8,11 +8,11 @@ internal static class IsolatedPostgreSql
 {
     public static PostgreSqlContainer CreateContainer() => CreateBuilder().Build();
 
-    public static PostgreSqlBuilder CreateBuilder()
+    public static PostgreSqlBuilder CreateBuilder(string image = "postgres:16-alpine")
     {
         ConfigureTestcontainers();
         var id = Guid.NewGuid().ToString("N");
-        var builder = new PostgreSqlBuilder("postgres:16-alpine")
+        var builder = new PostgreSqlBuilder(image)
             .WithDatabase($"nailbiter_test_{id}")
             .WithPassword($"nailbiter-test-{id}");
         if (TestcontainersSettings.OS.DockerEndpointAuthConfig.Endpoint.Scheme != "unix") return builder;
