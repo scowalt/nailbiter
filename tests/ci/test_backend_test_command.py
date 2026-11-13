@@ -72,7 +72,7 @@ for name, result in chosen.items():
         print(f'  Failed {name} [1 ms]')
         rows.append(f'<UnitTestResult testName={quoteattr(name)} outcome="{outcome}"><Output><ErrorInfo><Message>{escape(result["message"])}</Message><StackTrace>{escape(result["stack"])}</StackTrace></ErrorInfo></Output></UnitTestResult>')
 run = scenario.get('runs', {}).get(project, {})
-counters = f'<Counters total="{len(chosen)}" executed="{len(chosen) - counts["NotExecuted"]}" passed="{counts["Passed"]}" failed="{counts["Failed"]}" error="{counts["Error"]}" notExecuted="{counts["NotExecuted"]}" />'
+counters = f'<Counters total="{len(chosen)}" executed="{len(chosen) - counts["NotExecuted"]}" passed="{counts["Passed"]}" failed="{counts["Failed"]}" error="{counts["Error"]}" notExecuted="0" />'
 if run.get('trx') != 'missing':
     trx.write_text(f'<?xml version="1.0" encoding="utf-8"?><TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><Results>{"".join(rows)}</Results><ResultSummary outcome="Completed">{"" if run.get("trx") == "no-counters" else counters}</ResultSummary></TestRun>')
 if not chosen and selection:
