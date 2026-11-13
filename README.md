@@ -57,7 +57,26 @@ cd apps/www
 portless run --tailscale astro dev
 ```
 
-For backend development, set `ConnectionStrings__DefaultConnection` to your isolated development database. Do not start the production Compose stack against existing production-named volumes just to run tests. Explicitly disable collection and telemetry (the preserved application defaults are not an offline-development profile). From the repository root:
+The local URL works. The Tailscale URL returns HTTP 403 until [#146](https://github.com/scowalt/nailbiter/issues/146) is fixed.
+
+For backend development, set `ConnectionStrings__DefaultConnection` to your isolated development database. Do not start the production Compose stack against existing production-named volumes just to run tests. The application does not create its tables. Apply every `apps/backend/Migrations/*.sql` file in name order, as `scripts/ci/deploy-backend.sh` does in production, or the pages return HTTP 500. To create a throwaway database with the TimescaleDB image that `docker-compose.yml` pins, from the repository root:
+
+```sh
+image=$(grep -o 'timescale/timescaledb:[^"[:space:]]*' docker-compose.yml)
+db=$(docker run -d --rm -e POSTGRES_PASSWORD=devonly -e POSTGRES_DB=excitement_score -p 127.0.0.1::5432 "$image")
+until docker exec "$db" pg_isready -q -h 127.0.0.1 -U postgres; do sleep 1; done
+for migration in apps/backend/Migrations/*.sql; do
+  case "$(basename "$migration")" in
+    0[0-1][0-9]_*|020_*) stop=0 ;;
+    *) stop=1 ;;
+  esac
+  docker exec -i "$db" psql -q -v ON_ERROR_STOP=$stop -U postgres -d excitement_score < "$migration" || { echo "Failed: $migration"; break; }
+done
+port=$(docker port "$db" 5432 | head -n 1 | cut -d: -f2)
+export ConnectionStrings__DefaultConnection="Host=127.0.0.1;Port=$port;Database=excitement_score;Username=postgres;Password=devonly"
+```
+
+Like the deploy script, the loop lets the legacy migrations up to `020_` report errors and continue, and it stops at the first error in a later migration. `docker stop "$db"` stops and removes the database. Explicitly disable collection and telemetry (the preserved application defaults are not an offline-development profile). From the repository root:
 
 ```sh
 : "${ConnectionStrings__DefaultConnection:?Set an isolated development database first}"
