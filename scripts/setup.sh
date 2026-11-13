@@ -36,12 +36,12 @@ version_at_least() {
 }
 
 pinned_tools() {
-  awk '
-    { sub(/\r$/, ""); sub(/[ \t]*#.*/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, "") }
+  awk -v q="'" '
+    { sub(/\r$/, ""); sub(/[ \t]*#.*/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, ""); gsub(q, "\"") }
     /^\[tools\./ { print $0, "?" }
     /^\[/ { in_tools = ($0 == "[tools]"); next }
     !in_tools || !NF { next }
-    match($0, /^"?[^ \t="]+"?[ \t]*=[ \t]*"[0-9][0-9.]*"$/) { gsub(/[" \t]/, ""); sub(/=/, " "); print; next }
+    match($0, /^("[^"]+"|[^ \t=".]+)[ \t]*=[ \t]*"[0-9][0-9.]*"$/) { gsub(/[" \t]/, ""); sub(/=/, " "); print; next }
     { sub(/[ \t]*=.*/, ""); gsub(/"/, ""); print $0, "?" }
   ' .mise.toml
 }
