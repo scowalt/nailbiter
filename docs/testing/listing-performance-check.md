@@ -72,7 +72,13 @@ it.
 | 5 | `content` | A 2xx HTML page failed a content rule. |
 | 6 | `query-work` | Fixture mode only. A page broke a deterministic database-work rule. |
 | 7 | `budget` | All requests succeeded, but a page's measured median TTFB or completion exceeded its budget. |
-| 130 | — | Interrupted by Ctrl-C (SIGINT) or SIGTERM. One `cancelled:` line is printed to stderr and no report is written. Fixture mode still removes its container. |
+| 130 | — | Interrupted by Ctrl-C (SIGINT) or SIGTERM before the report was written. One `cancelled:` line is printed to stderr and no report is written. Fixture mode still removes its container. |
+
+If the interrupt arrives after the report was written and cleanup then fails,
+the run keeps the report's exit code and says so on stderr. A second Ctrl-C
+ends the process at once without waiting for cleanup; the Testcontainers
+reaper (Ryuk) then removes the fixture container, usually within about 10
+seconds.
 
 Content rules in both modes: the body starts with `<!DOCTYPE html>`, contains
 `</html>` (so a cut-off body fails), and carries the page marker (`home-schedule page` for
