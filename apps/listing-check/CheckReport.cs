@@ -107,7 +107,7 @@ public static class ListingCheckCommand
         }
         catch (Exception) when (cancellation.IsCancellationRequested && reported is int exitCode)
         {
-            await error.WriteLineAsync($"cancelled: interrupted during cleanup after the report was written (exit {exitCode})");
+            await error.WriteLineAsync($"cancelled: interrupted after the report was written (exit {exitCode})");
             return exitCode;
         }
         catch (Exception) when (cancellation.IsCancellationRequested)
@@ -131,11 +131,13 @@ public static class ListingCheckCommand
 
 public sealed class Interruption : IDisposable
 {
+    private int ctrlCs;
+
     public CancellationTokenSource Cancellation { get; } = new();
 
     public void Handle(PosixSignalContext context)
     {
-        context.Cancel = !Cancellation.IsCancellationRequested;
+        context.Cancel = context.Signal != PosixSignal.SIGINT || Interlocked.Increment(ref ctrlCs) == 1;
         Cancellation.Cancel();
     }
 
