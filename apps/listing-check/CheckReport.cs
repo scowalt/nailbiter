@@ -91,14 +91,15 @@ public static class ListingCheckCommand
     public static async Task<int> RunUntilInterruptedAsync(Func<CancellationToken, Task<int>> run)
     {
         using var cancellation = new CancellationTokenSource();
-        void Interrupt(PosixSignalContext context)
-        {
-            context.Cancel = true;
-            cancellation.Cancel();
-        }
-        using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, Interrupt);
-        using var terminate = PosixSignalRegistration.Create(PosixSignal.SIGTERM, Interrupt);
+        using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, context => Interrupt(cancellation, context));
+        using var terminate = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context => Interrupt(cancellation, context));
         return await RunAsync(run, Console.Error, cancellation);
+    }
+
+    public static void Interrupt(CancellationTokenSource cancellation, PosixSignalContext context)
+    {
+        context.Cancel = true;
+        cancellation.Cancel();
     }
 
     public static async Task<int> RunAsync(Func<CancellationToken, Task<int>> run, TextWriter error, CancellationTokenSource cancellation)

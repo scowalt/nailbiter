@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using ListingCheck;
 using Xunit;
 
@@ -19,6 +20,21 @@ public sealed class ListingCheckCancellationTests
 
         Assert.Equal(130, exit);
         Assert.Equal(["cancelled: interrupted before the report was written (exit 130)"], error.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    [Fact]
+    public void The_first_interrupt_cancels_the_run_and_a_second_keeps_the_default_action()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var first = new PosixSignalContext(PosixSignal.SIGINT);
+        var second = new PosixSignalContext(PosixSignal.SIGINT);
+
+        ListingCheckCommand.Interrupt(cancellation, first);
+        ListingCheckCommand.Interrupt(cancellation, second);
+
+        Assert.True(cancellation.IsCancellationRequested);
+        Assert.True(first.Cancel);
+        Assert.False(second.Cancel);
     }
 
     [Fact]
