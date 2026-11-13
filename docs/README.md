@@ -13,6 +13,7 @@ Each document below is the authoritative source for its topic. [AGENTS.md](../AG
 ## Delivery and operations
 
 - [deployment.md](deployment.md): hosting, secrets, CI validation, the release contract and production boundaries.
+- [pr-workflow.md](pr-workflow.md): pull request CI status, bounded waiting and explicitly authorized merges.
 - [overload-safeguards.md](overload-safeguards.md): the swap reserve and PostgreSQL statement timeout on the shared VPS.
 - [operations/database-backups.md](operations/database-backups.md): backup and restore verification.
 - [operations/mlb-highlights-local.md](operations/mlb-highlights-local.md): MLB highlights local acceptance and operational boundary.

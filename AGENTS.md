@@ -36,6 +36,6 @@ The live application is one .NET 10 host: C# in `apps/backend`, F# in `apps/back
 
 Run the relevant offline test suites and report actual results, failures and coverage limits. Synthetic fixtures verify implemented contracts, not live provider conformance. Preserve default-off source/feature activation gates and MoneyPuck's shared daily limit. Stop on an access denial; no bypasses, provider probing or production-data repair without a separately authorized scope.
 
-For GitHub Actions status, obtain the exact PR head SHA and use `gh run list --commit`; the configured token cannot read Checks/statusCheckRollup. Actions-only evidence does not prove every protection requirement passed.
+For PR CI status, waiting and explicitly authorized merges, use `scripts/pr/pr-ci.py` as `docs/pr-workflow.md` describes.
 
 On shared headless machines, start browser-accessible development servers with Portless/private Tailscale as the Development section of `README.md` shows. Let Portless allocate ports, verify reported endpoints with `portless list`, and remove temporary test servers. Preserve other projects' routes/proxy and keep tunnels private. In-process HTTP test servers and intercepted Playwright fixtures are preferred for offline regressions.
