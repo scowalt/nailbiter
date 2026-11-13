@@ -36,22 +36,49 @@ public sealed class ListingCheckCancellationTests
         }, error, cancellation);
 
         Assert.Equal(7, exit);
-        Assert.Equal(["cancelled: interrupted during cleanup after the report was written (exit 7)"], error.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries));
+        Assert.Equal(["cancelled: interrupted after the report was written (exit 7)"], error.ToString().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries));
     }
 
     [Fact]
-    public void The_first_interrupt_cancels_the_run_and_a_second_keeps_the_default_action()
+    public void Sigterm_copies_stay_graceful_and_only_a_second_sigint_keeps_the_default_action()
     {
-        using var cancellation = new CancellationTokenSource();
-        var first = new PosixSignalContext(PosixSignal.SIGINT);
-        var second = new PosixSignalContext(PosixSignal.SIGINT);
+        using var interruption = new Interruption();
+        var signals = new[] { PosixSignal.SIGTERM, PosixSignal.SIGTERM, PosixSignal.SIGINT, PosixSignal.SIGTERM, PosixSignal.SIGINT }
+            .Select(signal => new PosixSignalContext(signal)).ToList();
 
-        ListingCheckCommand.Interrupt(cancellation, first);
-        ListingCheckCommand.Interrupt(cancellation, second);
+        foreach (var context in signals) interruption.Handle(context);
 
-        Assert.True(cancellation.IsCancellationRequested);
-        Assert.True(first.Cancel);
-        Assert.False(second.Cancel);
+        Assert.True(interruption.Cancellation.IsCancellationRequested);
+        Assert.Equal([true, true, true, true, false], signals.Select(context => context.Cancel));
+    }
+
+    [Fact]
+    public void Of_two_simultaneous_sigints_exactly_one_stays_graceful()
+    {
+        const int Rounds = 200_000;
+        var interruptions = Enumerable.Range(0, Rounds).Select(_ => new Interruption()).ToArray();
+        var graceful = new int[Rounds];
+        var round = -1;
+        var handlers = Enumerable.Range(0, 2).Select(_ => new Thread(() =>
+        {
+            for (var mine = 0; mine < Rounds; mine++)
+            {
+                while (Volatile.Read(ref round) < mine) Thread.SpinWait(1);
+                var context = new PosixSignalContext(PosixSignal.SIGINT);
+                interruptions[mine].Handle(context);
+                if (context.Cancel) Interlocked.Increment(ref graceful[mine]);
+            }
+        })).ToList();
+        handlers.ForEach(handler => handler.Start());
+        for (var next = 0; next < Rounds; next++)
+        {
+            Volatile.Write(ref round, next);
+            while (Volatile.Read(ref graceful[next]) == 0) Thread.SpinWait(1);
+        }
+        handlers.ForEach(handler => handler.Join());
+        foreach (var interruption in interruptions) interruption.Dispose();
+
+        Assert.Equal([], graceful.Select((count, index) => (count, index)).Where(result => result.count != 1).Take(5));
     }
 
     [Fact]

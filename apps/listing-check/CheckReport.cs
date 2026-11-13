@@ -92,16 +92,10 @@ public static class ListingCheckCommand
 
     public static async Task<int> RunUntilInterruptedAsync(Func<CancellationToken, Action<int>, Task<int>> run)
     {
-        using var cancellation = new CancellationTokenSource();
-        using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, context => Interrupt(cancellation, context));
-        using var terminate = PosixSignalRegistration.Create(PosixSignal.SIGTERM, context => Interrupt(cancellation, context));
-        return await RunAsync(run, Console.Error, cancellation);
-    }
-
-    public static void Interrupt(CancellationTokenSource cancellation, PosixSignalContext context)
-    {
-        context.Cancel = !cancellation.IsCancellationRequested;
-        cancellation.Cancel();
+        using var interruption = new Interruption();
+        using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, interruption.Handle);
+        using var terminate = PosixSignalRegistration.Create(PosixSignal.SIGTERM, interruption.Handle);
+        return await RunAsync(run, Console.Error, interruption.Cancellation);
     }
 
     public static async Task<int> RunAsync(Func<CancellationToken, Action<int>, Task<int>> run, TextWriter error, CancellationTokenSource cancellation)
@@ -133,4 +127,17 @@ public static class ListingCheckCommand
         await output.WriteLineAsync($"{Failure.Name(failure.Kind)}: {failure.Message}");
         return (int)failure.Kind;
     }
+}
+
+public sealed class Interruption : IDisposable
+{
+    public CancellationTokenSource Cancellation { get; } = new();
+
+    public void Handle(PosixSignalContext context)
+    {
+        context.Cancel = !Cancellation.IsCancellationRequested;
+        Cancellation.Cancel();
+    }
+
+    public void Dispose() => Cancellation.Dispose();
 }
