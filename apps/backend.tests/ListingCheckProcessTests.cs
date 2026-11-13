@@ -32,14 +32,12 @@ public sealed class ListingCheckProcessTests
     }
 
     [Fact]
-    public async Task One_sigterm_to_a_dotnet_run_process_group_is_one_graceful_interrupt()
+    public async Task One_sigterm_to_a_dotnet_run_process_group_is_one_graceful_interrupt_whose_exit_code_only_the_direct_test_checks_as_dotnet_run_exits_0_130_or_143_by_timing()
     {
         var run = await SigtermToProcessGroupAsync("dotnet", "run", "--project", ListingCheckProject(), "-c", Configuration, "--no-build", "--");
 
         Assert.Equal([Cancelled], run.Errors);
         Assert.DoesNotContain("outcome", run.Output);
-        Assert.True(run.Exit is 130 or 143,
-            $"dotnet run should relay the app's exit 130, or exit 143 when its own copy of the SIGTERM lands after the app has exited; it exited {run.Exit}");
     }
 
     private sealed record Terminated(int Exit, string[] Errors, string Output);
