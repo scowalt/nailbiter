@@ -428,11 +428,9 @@
 
   .network-logo {
     display: inline-block;
-    height: 1.4em;
+    height: 1.1em;
     max-width: 6em;
-    padding: 0.15em 0.3em;
-    border-radius: 0.25rem;
-    background: var(--color-white);
+    filter: var(--filter-text-subtle);
     vertical-align: middle;
   }
 
