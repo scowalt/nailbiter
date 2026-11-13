@@ -250,9 +250,13 @@ public sealed class ProviderResilienceClockTests
             get { lock (timers) return timers.Count(t => t.Live); }
         }
 
-        public bool HasLiveTimerSince(int created)
+        public bool AwaitsFirstTimerSince(int created)
         {
-            lock (timers) return timers.Skip(created).Any(t => t.Live);
+            lock (timers)
+            {
+                var since = timers.Skip(created).ToArray();
+                return since.Any(t => t.Live) && !since.Any(t => t.HasFired);
+            }
         }
 
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
@@ -273,10 +277,13 @@ public sealed class ProviderResilienceClockTests
         {
             private TimeSpan period;
             private volatile bool live;
+            private volatile bool fired;
 
             public ITimer Inner { get; set; } = null!;
 
             public bool Live => live;
+
+            public bool HasFired => fired;
 
             public void Arm(TimeSpan dueTime, TimeSpan period)
             {
@@ -289,7 +296,11 @@ public sealed class ProviderResilienceClockTests
                 if (dueTime != Timeout.InfiniteTimeSpan) Thread.Sleep(descheduleAfterArming);
             }
 
-            public void Fired() => live = period != Timeout.InfiniteTimeSpan && period != TimeSpan.Zero;
+            public void Fired()
+            {
+                fired = true;
+                live = period != Timeout.InfiniteTimeSpan && period != TimeSpan.Zero;
+            }
 
             public bool Change(TimeSpan dueTime, TimeSpan period)
             {
@@ -380,7 +391,7 @@ public sealed class ProviderResilienceClockTests
         {
             [] => false,
             [.., { Ended: null }] => Provider.Hangs,
-            [.., var last] => Clock.HasLiveTimerSince(last.TimersAtEnd)
+            [.., var last] => Clock.AwaitsFirstTimerSince(last.TimersAtEnd)
         };
 
         public ControlledProvider Provider { get; }
