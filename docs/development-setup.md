@@ -30,19 +30,17 @@ It never runs `mise install`, `mise use`, `mise trust` or `git config --global`.
 
 BB runs the tracked `.bb-env-setup.sh` in each new BB-managed worktree. That hook runs `scripts/setup.sh` in a session of its own and always exits 0. When setup finishes or reaches the 14-minute deadline, the hook kills every process left in that session, such as an install still running at the deadline or the MSBuild worker nodes that `dotnet restore` leaves behind, so nothing keeps working in the worktree after BB hands it to the agent.
 
-The hook needs Linux: GNU `timeout`, util-linux `setsid`, and procps `pkill` and `pgrep`. Without `setsid`, `pkill` or `pgrep` it runs `scripts/setup.sh` directly, with only each step's own time limit. Without `timeout`, setup reports `NOT READY` before doing any work. Either way the hook exits 0 and the worktree is kept. BB deletes a new worktree when its hook exits non-zero, and every problem the script reports can be fixed inside the worktree, so a failing preflight never costs the thread its environment. BB shows the hook's output in the provisioning transcript. An agent in a new worktree runs `scripts/setup.sh` itself to see the verdict. With warm caches a new worktree took 8.9 seconds, and a repeated run 6.7 seconds.
+The hook needs Linux: GNU `timeout`, util-linux `setsid`, and procps `pkill` and `pgrep`. Without `setsid`, `pkill` or `pgrep` it runs `scripts/setup.sh` directly, with only each step's own time limit. Without `timeout`, setup reports `NOT READY` before doing any work. Either way the hook exits 0 and the worktree is kept. BB deletes a new worktree when its hook exits non-zero, and every problem the script reports can be fixed inside the worktree, so a failing preflight never costs the thread its environment. BB shows the hook's output in the provisioning transcript. An agent in a new worktree runs `scripts/setup.sh` itself to see the verdict. With warm caches and the daemon's `PATH`, a new worktree took 6.9 seconds, and a repeated run 6.0 seconds.
 
 The repository has no `.worktreeinclude`. Builds and tests need no untracked local configuration.
 
 ## Example
 
-The first run in a new clone on the shared host:
+The first run of BB's hook in a new worktree on the shared host, with the daemon's `PATH`:
 
 ```text
-nailbiter setup: /tmp/nb-fresh-RwqU/wt
+nailbiter setup: /tmp/nb-hook-8hy1/wt
 ok    bun 1.4.2
-warn  'bun' in your own shell is /home/scowalt/.bun/bin/bun, not bun 1.4.2
-      fix: run it as 'mise exec -- bun ...', or activate mise in your shell profile so its tools come first
 ok    .NET SDK 10.0.401 (apps/backend/global.json)
 ok    gitleaks 8.30.1
 ok    python 3.14.8
@@ -50,11 +48,15 @@ ok    uv 0.11.32
 ok    bun dependencies (.)
 ok    bun dependencies (apps/web-components)
 ok    bun dependencies (apps/www)
-ok    git pre-commit hook installed (lefthook)
-ok    dotnet restore (backend, backend.fsharp.tests, backend.tests)
+ok    git pre-commit hook (lefthook)
+ok    dotnet restore (backend)
+ok    dotnet restore (backend.fsharp.tests)
+ok    dotnet restore (backend.tests)
 ok    Playwright Chromium
-READY (1 warning(s))
+READY (0 warning(s))
 ```
+
+The hooks directory already held Lefthook's hook, so setup left it as it was. In a clone with no pre-commit hook, that line reads `ok    git pre-commit hook installed (lefthook)`.
 
 ## Tests
 
