@@ -30,7 +30,10 @@ type internal MoneyPuckHttpClient(httpClient: HttpClient, timeProvider: TimeProv
             gate.LatchDenial(?retryAfter = retryAfter)
         let cloudflareChallenge =
             match response.Headers.TryGetValues("cf-mitigated") with
-            | true, values -> values |> Seq.exists (fun value -> value.Trim().Equals("challenge", StringComparison.OrdinalIgnoreCase))
+            | true, values ->
+                values
+                |> Seq.collect (fun value -> value.Split(',', StringSplitOptions.TrimEntries))
+                |> Seq.exists (fun token -> token.Equals("challenge", StringComparison.OrdinalIgnoreCase))
             | _ -> false
         if response.StatusCode = HttpStatusCode.Unauthorized || response.StatusCode = HttpStatusCode.Forbidden
            || response.StatusCode = HttpStatusCode.TooManyRequests || cloudflareChallenge then
