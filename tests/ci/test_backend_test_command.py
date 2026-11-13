@@ -384,6 +384,7 @@ class ConcurrencyTests(unittest.TestCase):
         lock.parent.mkdir(parents=True)
         lock.write_text('scripts/test-backend csharp --configuration Release (pid 999999999, started 09:00:00)\n')
         holder = subprocess.Popen([sys.executable, '-c', HOLDER, str(lock)], stdout=subprocess.PIPE, text=True)
+        self.addCleanup(holder.stdout.close)
         self.addCleanup(holder.kill)
         self.assertEqual(holder.stdout.readline().strip(), 'locked')
         code, output = harness.run('fsharp')
