@@ -80,7 +80,10 @@ report's exit code; if cleanup then fails, it says so on stderr.
 SIGTERM is always graceful, however many copies arrive. `dotnet run` forwards
 SIGTERM to the app, so one SIGTERM to its process group (how service managers
 and CI stop a job) reaches the app twice. Use SIGKILL to stop a run that will
-not finish cleanup.
+not finish cleanup. `dotnet run` itself may exit 143 after the app handled the
+SIGTERM and exited 130, when its own copy arrives after the app has exited;
+the single `cancelled:` line still shows the app stopped gracefully, and
+running the built app directly reports 130.
 
 A second Ctrl-C (SIGINT) ends the process at once without waiting for cleanup.
 A terminal sends each Ctrl-C to the foreground process group once and
