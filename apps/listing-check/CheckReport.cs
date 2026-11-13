@@ -84,6 +84,7 @@ public static class ListingCheckCommand
         var probe = await ListingProbe.RunAsync(client, options.BaseUrl!, options, null, cancellationToken);
         var report = CheckReport.Create(start, CheckMode.Url, options, options.BaseUrl!.GetLeftPart(UriPartial.Authority), probe, [], null);
         await report.WriteAsync(output, options.ReportPath);
+        onReported?.Invoke(report.ExitCode);
         return report.ExitCode;
     }
 
@@ -105,9 +106,15 @@ public static class ListingCheckCommand
 
     public static async Task<int> RunAsync(Func<CancellationToken, Action<int>, Task<int>> run, TextWriter error, CancellationTokenSource cancellation)
     {
+        int? reported = null;
         try
         {
-            return await run(cancellation.Token, _ => { });
+            return await run(cancellation.Token, exitCode => reported = exitCode);
+        }
+        catch (Exception) when (cancellation.IsCancellationRequested && reported is int exitCode)
+        {
+            await error.WriteLineAsync($"cancelled: interrupted during cleanup after the report was written (exit {exitCode})");
+            return exitCode;
         }
         catch (Exception) when (cancellation.IsCancellationRequested)
         {

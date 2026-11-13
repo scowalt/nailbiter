@@ -77,6 +77,7 @@ internal static class ListingFixtureCheck
             var report = CheckReport.Create(start, CheckMode.Fixture, options, Target, probe, failures,
                 new FixtureDetails(workload, controls, startup, queryWork));
             await report.WriteAsync(output, options.ReportPath);
+            onReported?.Invoke(report.ExitCode);
             return report.ExitCode;
         }
         finally
