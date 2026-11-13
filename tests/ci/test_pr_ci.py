@@ -462,7 +462,7 @@ class ToolTests(unittest.TestCase):
         self.assertFalse(result['ci']['complete'])
 
     def test_required_check_names_match_exactly(self):
-        for name in ['Validate (extra)', 'Validate (3.12)', 'validate', 'Pre-Validate']:
+        for name in ['Validate (extra)', 'Validate (3.12)', 'validate', 'Pre-Validate', 'Validate ', ' Validate']:
             with self.subTest(name=name):
                 fake = FakeGitHub([pull()], jobs={1: [name, 'Build and scan backend image']})
                 code, result = self.invoke(fake, 'status', str(NUMBER))
@@ -502,6 +502,12 @@ class ToolTests(unittest.TestCase):
             'head': pull() | {'headRefOid': 123},
             'auto-merge method': pull(auto={'enabledAt': '2026-11-12T10:05:00Z', 'mergeMethod': None}),
             'queue state': pull(queue={'state': 3, 'position': 1}),
+            'draft flag': pull() | {'isDraft': 'no'},
+            'base branch': pull() | {'baseRefName': 5},
+            'mergeable': pull() | {'mergeable': None},
+            'missing merge commit key': {key: value for key, value in pull(state='MERGED', merge_commit=MERGE_SHA).items() if key != 'mergeCommit'},
+            'missing auto-merge key': {key: value for key, value in pull().items() if key != 'autoMergeRequest'},
+            'missing merge queue key': {key: value for key, value in pull().items() if key != 'mergeQueueEntry'},
         }
         for label, readback in cases.items():
             with self.subTest(label):
@@ -511,6 +517,72 @@ class ToolTests(unittest.TestCase):
                 self.assertTrue(result['mutated'])
                 self.assertIn('outcome is unknown', result['reason'])
                 self.assertEqual(len(fake.merges()), 1)
+
+    def test_failed_outranks_cancelled(self):
+        runs = [run(1, conclusion='cancelled'), run(2, conclusion='failure', workflow=2, name='Docs')]
+        for order in [runs, runs[::-1]]:
+            with self.subTest(first=order[0]['conclusion']):
+                fake = FakeGitHub([pull()], runs={SHA: [order]})
+                code, result = self.invoke(fake, 'status', str(NUMBER))
+                self.assertEqual(result['result'], 'failed')
+                self.assertEqual(code, EXIT_CODES['failed'])
+
+    def test_an_unfinished_required_job_is_named_sensibly(self):
+        fake = FakeGitHub([pull()], jobs={1: [job('Validate', status='in_progress'), 'Build and scan backend image']})
+        code, result = self.invoke(fake, 'status', str(NUMBER))
+        self.assertEqual(result['result'], 'pending')
+        self.assertIn('Validate not finished', result['reason'])
+        self.assertNotIn('None', result['reason'])
+
+    def legacy_only(self, protection, jobs):
+        return FakeGitHub([pull()], jobs=jobs, api={
+            f'repos/{REPO}/rules/branches/main': (200, []),
+            f'repos/{REPO}/rulesets': (200, []),
+            f'repos/{REPO}/branches/main/protection': (200, protection),
+        })
+
+    def test_legacy_required_checks_are_waited_for(self):
+        shapes = {
+            'contexts': {'required_status_checks': {'strict': True, 'contexts': ['Validate', 'Legacy gate'], 'checks': []}},
+            'checks': {'required_status_checks': {'strict': True, 'contexts': [], 'checks': [{'context': 'Validate', 'app_id': 15368}, {'context': 'Legacy gate', 'app_id': None}]}},
+        }
+        for label, protection in shapes.items():
+            with self.subTest(label):
+                code, result = self.invoke(self.legacy_only(protection, {1: ['Validate']}), 'status', str(NUMBER))
+                self.assertEqual(result['policy']['required_checks'], ['Validate', 'Legacy gate'])
+                self.assertEqual(result['result'], 'pending')
+                self.assertIn('Legacy gate', result['reason'])
+                self.assertTrue(result['ci']['complete'])
+                fake = self.legacy_only(protection, {1: ['Validate', 'Legacy gate']})
+                code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge')
+                self.assertEqual(len(fake.merges()), 1)
+                self.assertEqual(result['ci']['required_checks']['Legacy gate'], [{'run_id': 1, 'conclusion': 'success'}])
+
+    def test_legacy_protection_without_required_checks_adds_none(self):
+        for protection in [{'required_linear_history': {'enabled': True}}, {'required_status_checks': None}]:
+            with self.subTest(protection=protection):
+                code, result = self.invoke(self.legacy_only(protection, {1: []}), 'status', str(NUMBER))
+                self.assertEqual(result['policy']['required_checks'], [])
+                self.assertEqual(result['result'], 'passed')
+
+    def test_unreadable_legacy_required_checks_are_incomplete(self):
+        cases = [
+            {'required_status_checks': {'contexts': 'Validate'}},
+            {'required_status_checks': {'checks': [{'context': 5}]}},
+            {'required_status_checks': 'Validate'},
+            ['not an object'],
+        ]
+        for protection in cases:
+            with self.subTest(protection=protection):
+                code, result = self.invoke(self.legacy_only(protection, {1: REQUIRED_JOBS}), 'status', str(NUMBER))
+                self.assertIsNone(result['policy']['required_checks'])
+                self.assertEqual(result['result'], 'incomplete')
+                self.assertEqual(code, EXIT_CODES['incomplete'])
+                for auto in [[], ['--auto']]:
+                    fake = self.legacy_only(protection, {1: REQUIRED_JOBS})
+                    code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge', *auto)
+                    self.assertNotIn(result['result'], ['merged', 'queued'])
+                    self.assertEqual(fake.merges(), [])
 
     def test_readable_legacy_protection_alone_makes_policy_readable(self):
         fake = FakeGitHub([pull()], api={f'repos/{REPO}': FORBIDDEN, f'repos/{REPO}/rules/branches/main': FORBIDDEN, f'repos/{REPO}/rulesets': FORBIDDEN, f'repos/{REPO}/branches/main/protection': (200, {'required_linear_history': {'enabled': True}})})
