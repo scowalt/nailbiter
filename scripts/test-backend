@@ -25,6 +25,7 @@ STACK_LINES = 8
 TRX = '{http://microsoft.com/schemas/VisualStudio/TeamTest/2010}'
 INVALID_FILTER = 'Incorrect format for TestCaseFilter'
 FAILED_OUTCOMES = {'Failed', 'Error', 'Timeout', 'Aborted'}
+FAILED_COUNTERS = ('failed', 'error', 'timeout', 'aborted')
 
 
 @dataclass(frozen=True)
@@ -223,6 +224,10 @@ def read_results(result, trx, output):
     result.passed = sum(test.get('outcome') == 'Passed' for test in tests)
     result.failed = len(result.failures)
     result.skipped = sum(test.get('outcome') == 'NotExecuted' for test in tests)
+    reported = sum(int(counters.get(name, 0)) for counters in run.iter(f'{TRX}Counters') for name in FAILED_COUNTERS)
+    if reported != result.failed:
+        result.outcome = Exit.TESTS_FAILED
+        result.detail = f'TRX counters report {reported} failed tests, but it lists {result.failed}; read its log'
 
 
 def run_suite(suite, args, run, environment):
