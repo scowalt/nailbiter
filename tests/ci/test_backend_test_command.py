@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -38,8 +39,9 @@ if argv[0] == 'build':
     print('  Determining projects to restore...')
     time.sleep(scenario.get('build_sleep', 0))
     if scenario.get('build_error'):
-        print(scenario['build_error'])
+        print(f'     3>{scenario["build_error"]}')
         print('Build FAILED.')
+        print(f'       {scenario["build_error"]}')
         journal(cmd='build', phase='end')
         sys.exit(1)
     print('Build succeeded.')
@@ -48,6 +50,11 @@ if argv[0] == 'build':
 
 project = Path(argv[1]).stem
 journal(cmd='test', phase='start', project=project)
+if scenario.get('test_sleep'):
+    import subprocess
+    host = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'])
+    journal(cmd='testhost', phase='spawn', host=host.pid)
+    time.sleep(scenario['test_sleep'])
 tests = scenario['suites'][project]
 selection = option('--filter')
 if selection and '(' in selection:
@@ -72,7 +79,9 @@ for name, result in chosen.items():
         print(f'  Failed {name} [1 ms]')
         rows.append(f'<UnitTestResult testName={quoteattr(name)} outcome="{outcome}"><Output><ErrorInfo><Message>{escape(result["message"])}</Message><StackTrace>{escape(result["stack"])}</StackTrace></ErrorInfo></Output></UnitTestResult>')
 run = scenario.get('runs', {}).get(project, {})
-counters = f'<Counters total="{len(chosen)}" executed="{len(chosen) - counts["NotExecuted"]}" passed="{counts["Passed"]}" failed="{counts["Failed"]}" error="{counts["Error"]}" notExecuted="0" />'
+totals = {'total': len(chosen), 'executed': len(chosen) - counts['NotExecuted'], 'passed': counts['Passed'], 'failed': counts['Failed'], 'error': counts['Error'], 'notExecuted': 0}
+totals.update(run.get('counters', {}))
+counters = '<Counters ' + ' '.join(f'{name}="{value}"' for name, value in totals.items()) + ' />'
 if run.get('trx') != 'missing':
     trx.write_text(f'<?xml version="1.0" encoding="utf-8"?><TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><Results>{"".join(rows)}</Results><ResultSummary outcome="Completed">{"" if run.get("trx") == "no-counters" else counters}</ResultSummary></TestRun>')
 if not chosen and selection:
@@ -160,6 +169,35 @@ class Harness:
         raise AssertionError(f'journal never matched: {self.journal()}')
 
 
+HOLDER = '''
+import fcntl, os, sys, time
+handle = open(sys.argv[1], 'a+')
+fcntl.flock(handle, fcntl.LOCK_EX)
+print('locked', flush=True)
+time.sleep(0.6)
+handle.seek(0)
+handle.truncate()
+handle.write(f'scripts/test-backend all --configuration Release (pid {os.getpid()}, started 09:30:00)\\n')
+handle.flush()
+time.sleep(0.6)
+'''
+
+
+def group_members(group):
+    members = []
+    for stat in Path('/proc').glob('[0-9]*/stat'):
+        with contextlib.suppress(OSError):
+            state, _, process_group = stat.read_text().rsplit(')', 1)[1].split()[:3]
+            if int(process_group) == group and state != 'Z':
+                members.append(int(stat.parent.name))
+    return members
+
+
+def kill_group(group):
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(group, signal.SIGKILL)
+
+
 def calls(journal, phase='start'):
     return [entry for entry in journal if entry['phase'] == phase]
 
@@ -230,7 +268,7 @@ class SelectionAndBuildTests(unittest.TestCase):
         harness = Harness(self, {'suites': PASSING, 'build_error': error})
         code, output = harness.run()
         self.assertEqual(code, EXIT['build failed'], output)
-        self.assertIn('error CS1002: ; expected', output)
+        self.assertEqual(output.count('error CS1002: ; expected'), 1, output)
         self.assertEqual([entry['cmd'] for entry in calls(harness.journal())], ['build'])
 
     def test_failing_test_shows_its_assertion_and_stack_head_on_the_first_run(self):
@@ -273,6 +311,12 @@ class SelectionAndBuildTests(unittest.TestCase):
         self.assertEqual(code, EXIT['tests failed'], output)
         self.assertIn('System.TimeoutException: host did not start', output)
         self.assertRegex(output, r'csharp\s+FAILED\s+1 passed, 1 failed, 1 skipped')
+
+    def test_printed_counts_come_from_the_listed_results(self):
+        harness = Harness(self, {'suites': FAILING, 'runs': {'backend.tests': {'counters': {'passed': 7, 'failed': 3, 'error': 2}}}})
+        code, output = harness.run('csharp')
+        self.assertEqual(code, EXIT['tests failed'], output)
+        self.assertRegex(output, r'csharp\s+FAILED\s+2 passed, 1 failed, 0 skipped')
 
     def test_a_selection_whose_tests_are_all_skipped_ran_no_test(self):
         harness = Harness(self, {'suites': {**PASSING, 'backend.tests': {'HostTests.Waits': 'skip'}}})
@@ -334,6 +378,19 @@ class ConcurrencyTests(unittest.TestCase):
         tags = [entry['tag'] for entry in harness.journal()]
         self.assertEqual(tags, ['first'] * 4 + ['second'] * 4, harness.journal())
 
+    def test_the_wait_message_names_a_holder_that_has_not_written_its_name_yet(self):
+        harness = Harness(self, {'suites': PASSING})
+        lock = harness.worktree / 'obj/test-backend/lock'
+        lock.parent.mkdir(parents=True)
+        lock.write_text('scripts/test-backend csharp --configuration Release (pid 999999999, started 09:00:00)\n')
+        holder = subprocess.Popen([sys.executable, '-c', HOLDER, str(lock)], stdout=subprocess.PIPE, text=True)
+        self.addCleanup(holder.kill)
+        self.assertEqual(holder.stdout.readline().strip(), 'locked')
+        code, output = harness.run('fsharp')
+        holder.wait(timeout=30)
+        self.assertEqual(code, EXIT['passed'], output)
+        self.assertIn(f'waiting for scripts/test-backend all --configuration Release (pid {holder.pid}, started 09:30:00) to finish', output)
+
     def test_another_worktree_runs_alongside(self):
         harness = Harness(self, {'suites': PASSING, 'build_sleep': 1.5})
         other = make_worktree(harness.temp, 'other')
@@ -365,6 +422,102 @@ class ConcurrencyTests(unittest.TestCase):
         self.assertEqual(code, 0, output)
         self.assertNotIn('waiting', output)
 
+    def test_stopping_an_invocation_stops_every_process_of_its_test_run(self):
+        for stop, code in ((signal.SIGTERM, 128 + signal.SIGTERM), (signal.SIGINT, 130)):
+            with self.subTest(stop.name):
+                harness = Harness(self, {'suites': PASSING, 'test_sleep': 60})
+                first = harness.start('fsharp')
+                harness.wait_for(lambda entry: entry['cmd'] == 'testhost')
+                group = next(entry['pid'] for entry in calls(harness.journal()) if entry['cmd'] == 'test')
+                host = next(entry['host'] for entry in harness.journal() if entry['cmd'] == 'testhost')
+                self.addCleanup(kill_group, group)
+                self.assertIn(host, group_members(group))
+                first.send_signal(stop)
+                output, _ = first.communicate(timeout=30)
+                self.assertEqual(first.returncode, code, output)
+                deadline = time.monotonic() + 15
+                while group_members(group) and time.monotonic() < deadline:
+                    time.sleep(0.1)
+                self.assertEqual(group_members(group), [], 'the test host stops with its invocation')
+
+
+
+def dotnet_sdk_root():
+    if not shutil.which('dotnet'):
+        return None
+    with contextlib.suppress(OSError, subprocess.SubprocessError):
+        sdks = subprocess.run(['dotnet', '--list-sdks'], cwd=ROOT, capture_output=True, text=True, timeout=60).stdout
+        match = re.search(r'^10\.\S+ \[(.+)\]$', sdks, re.MULTILINE)
+        if match:
+            return Path(match[1]).parent
+    return None
+
+
+def test_packages():
+    project = (ROOT / CSHARP).read_text()
+    return ''.join(
+        f'    <PackageReference Include="{name}" Version="{re.search(rf'Include="{re.escape(name)}" Version="([^"]+)"', project)[1]}" />\n'
+        for name in ('Microsoft.NET.Test.Sdk', 'xunit', 'xunit.runner.visualstudio')
+    )
+
+
+def project_file(sources, references=''):
+    return f"""<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+{sources}{references}  </ItemGroup>
+</Project>
+"""
+
+
+def write_real_fixture(worktree):
+    shared = '    <ProjectReference Include="../shared/Shared.csproj" />\n' + test_packages()
+    files = {
+        'apps/shared/Shared.csproj': project_file(''),
+        'apps/shared/Answer.cs': 'namespace Shared;\n\npublic static class Answer\n{\n    public static int Value => 42;\n}\n',
+        FSHARP: project_file('    <Compile Include="Tests.fs" />\n', shared),
+        'apps/backend.fsharp.tests/Tests.fs': 'module Tests\n\nopen Xunit\n\n[<Fact>]\nlet ``reads the shared answer`` () =\n    Assert.Equal(42, Shared.Answer.Value)\n',
+        CSHARP: project_file('', shared),
+        'apps/backend.tests/Tests.cs': 'using Xunit;\n\npublic class Tests\n{\n    [Fact]\n    public void Reads_the_shared_answer() => Assert.Equal(42, Shared.Answer.Value);\n}\n',
+    }
+    for name, body in files.items():
+        (worktree / name).parent.mkdir(parents=True, exist_ok=True)
+        (worktree / name).write_text(body)
+
+
+@unittest.skipIf(dotnet_sdk_root() is None, 'needs a .NET 10 SDK on PATH')
+class RealToolchainTests(unittest.TestCase):
+    def test_concurrent_suites_share_one_build_of_their_library(self):
+        temp = Path(tempfile.mkdtemp(prefix='nailbiter-test-backend-real-'))
+        self.addCleanup(shutil.rmtree, temp, ignore_errors=True)
+        worktree = make_worktree(temp, 'worktree')
+        write_real_fixture(worktree)
+        write_executable(temp / 'bin/mise', FAKE_MISE)
+        environment = {
+            **os.environ,
+            'PATH': f'{dotnet_sdk_root()}:{temp / "bin"}:{os.environ["PATH"]}',
+            'MSBUILDDISABLENODEREUSE': '1',
+        }
+        start = lambda suite: subprocess.Popen([sys.executable, SCRIPT, suite], cwd=worktree, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        fsharp = start('fsharp')
+        lock = worktree / 'obj/test-backend/lock'
+        deadline = time.monotonic() + 30
+        while not (lock.exists() and lock.read_text().strip()) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        csharp = start('csharp')
+        outputs = [process.communicate(timeout=180)[0] for process in (fsharp, csharp)]
+        self.assertEqual([fsharp.returncode, csharp.returncode], [0, 0], '\n'.join(outputs))
+        self.assertRegex(outputs[0], r'fsharp\s+passed\s+1 passed, 0 failed')
+        self.assertRegex(outputs[1], r'csharp\s+passed\s+1 passed, 0 failed')
+        self.assertIn('waiting for scripts/test-backend fsharp', outputs[1])
+        build_logs = [path.read_text() for path in (worktree / 'obj/test-backend/runs').glob('*/build.log')]
+        self.assertEqual(len(build_logs), 2)
+        compiles = [len(re.findall(r'^\s*\S*/csc\s.*/out:obj/Release/net10\.0/Shared\.dll', log, re.MULTILINE)) for log in build_logs]
+        self.assertEqual(sum(compiles), 1, 'the shared library compiles once across both invocations')
+        logs = '\n'.join(path.read_text() for path in (worktree / 'obj/test-backend/runs').glob('*/*.log'))
+        self.assertNotRegex(logs, re.compile('mvid', re.IGNORECASE))
 
 if __name__ == '__main__':
     unittest.main()
