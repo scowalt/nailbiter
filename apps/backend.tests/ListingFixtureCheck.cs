@@ -35,6 +35,7 @@ internal static class ListingFixtureCheck
         var startup = new Dictionary<string, double>();
         async Task<T> Phase<T>(string name, Func<Task<T>> work)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var started = Stopwatch.GetTimestamp();
             var result = await FixtureTimings.MeasureAsync(TimingOwner, name, work);
             startup[name] = Math.Round(Stopwatch.GetElapsedTime(started).TotalMilliseconds, 1);
@@ -163,14 +164,6 @@ internal static class ListingCheckEntryPoint
         var arguments = rest.Select((arg, i) => i > 0 && rest[i - 1] == "--report" && !arg.StartsWith("--", StringComparison.Ordinal)
             ? Path.GetFullPath(arg) : arg).ToArray();
         Directory.SetCurrentDirectory(AppContext.BaseDirectory);
-        try
-        {
-            return await ListingFixtureCheck.RunAsync(arguments, Console.Out);
-        }
-        catch (Exception error)
-        {
-            await Console.Error.WriteLineAsync(error.ToString());
-            return 1;
-        }
+        return await ListingCheckCommand.RunUntilInterruptedAsync(token => ListingFixtureCheck.RunAsync(arguments, Console.Out, cancellationToken: token));
     }
 }

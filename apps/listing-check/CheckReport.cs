@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -85,9 +86,37 @@ public static class ListingCheckCommand
         return report.ExitCode;
     }
 
+    public const int Interrupted = 130;
+
+    public static async Task<int> RunUntilInterruptedAsync(Func<CancellationToken, Task<int>> run)
+    {
+        using var cancellation = new CancellationTokenSource();
+        void Interrupt(PosixSignalContext context)
+        {
+            context.Cancel = true;
+            cancellation.Cancel();
+        }
+        using var interrupt = PosixSignalRegistration.Create(PosixSignal.SIGINT, Interrupt);
+        using var terminate = PosixSignalRegistration.Create(PosixSignal.SIGTERM, Interrupt);
+        return await RunAsync(run, Console.Error, cancellation);
+    }
+
     public static async Task<int> RunAsync(Func<CancellationToken, Task<int>> run, TextWriter error, CancellationTokenSource cancellation)
     {
-        return await run(cancellation.Token);
+        try
+        {
+            return await run(cancellation.Token);
+        }
+        catch (Exception) when (cancellation.IsCancellationRequested)
+        {
+            await error.WriteLineAsync($"cancelled: interrupted before the report was written (exit {Interrupted})");
+            return Interrupted;
+        }
+        catch (Exception unexpected)
+        {
+            await error.WriteLineAsync(unexpected.ToString());
+            return 1;
+        }
     }
 
     public static async Task<int> RejectAsync(TextWriter output, Failure failure)
