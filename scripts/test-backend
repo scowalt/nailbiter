@@ -201,11 +201,11 @@ def read_results(result, trx, output):
         result.detail = 'the test run wrote no result counts; read its log'
         return
     result.passed = int(counters.get('passed', 0))
-    result.skipped = int(counters.get('notExecuted', 0))
     for test in run.iter(f'{TRX}UnitTestResult'):
         if test.get('outcome') in FAILED_OUTCOMES:
             info = f'{TRX}Output/{TRX}ErrorInfo/{TRX}'
             result.failures.append(Failure(test.get('testName', '?'), text(test, f'{info}Message'), text(test, f'{info}StackTrace')))
+    result.skipped = sum(test.get('outcome') == 'NotExecuted' for test in run.iter(f'{TRX}UnitTestResult'))
     result.failed = max(len(result.failures), sum(int(counters.get(name, 0)) for name in ('failed', 'error', 'timeout', 'aborted')))
 
 
