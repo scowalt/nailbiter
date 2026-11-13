@@ -13,7 +13,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 PINS = tomllib.loads((ROOT / '.mise.toml').read_text())['tools']
 SDK = json.loads((ROOT / 'apps/backend/global.json').read_text())['sdk']['version']
-SYSTEM_TOOLS = ['awk', 'bash', 'dirname', 'git', 'grep', 'head', 'sed', 'sleep', 'sort', 'tail', 'timeout']
+SYSTEM_TOOLS = ['awk', 'bash', 'dirname', 'git', 'grep', 'head', 'pgrep', 'pkill', 'sed', 'setsid', 'sleep', 'sort', 'tail', 'timeout']
 GLOBAL_DEFAULTS = ['.gitconfig', '.config/git/config', '.config/mise/config.toml', '.tool-versions', '.local/state/mise/trusted-configs']
 
 
@@ -40,6 +40,28 @@ def global_defaults():
         path = home / name
         state[name] = sorted(os.listdir(path)) if path.is_dir() else path.read_bytes() if path.exists() else None
     return state
+
+
+def processes_in(root):
+    found = []
+    for entry in Path('/proc').iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            cwd = os.readlink(entry / 'cwd')
+        except OSError:
+            continue
+        if cwd == str(root) or cwd.startswith(f'{root}/'):
+            found.append(int(entry.name))
+    return found
+
+
+def kill_processes_in(root):
+    for pid in processes_in(root):
+        try:
+            os.kill(pid, 9)
+        except OSError:
+            pass
 
 
 def tree_state(*roots):
@@ -111,6 +133,7 @@ class ToolchainPreflightTests(unittest.TestCase):
     def setUp(self):
         self.root = Path(tempfile.mkdtemp(prefix='nailbiter-preflight-'))
         self.addCleanup(shutil.rmtree, self.root)
+        self.addCleanup(kill_processes_in, self.root)
         for name in ['scripts/setup.sh', '.bb-env-setup.sh', '.mise.toml', 'apps/backend/global.json']:
             (self.root / name).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / name, self.root / name)
@@ -174,15 +197,46 @@ class ToolchainPreflightTests(unittest.TestCase):
             '# node = "22"\n'
             f'"asdf:mise-plugins/mise-dotnet-core" = "{SDK}"\n'
             'bun = "1.4" # minor line only\n'
-            'uv = { version = "0.11.32" }\n'
             '\n[env]\nX = "1"\n')
-        result = self.run_setup({'bun': says('1.4.2'), 'dotnet': says(SDK), 'uv': says('uv 0.11.32')})
+        result = self.run_setup({'bun': says('1.4.2'), 'dotnet': says(SDK)})
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('ok    bun 1.4\n', result.stdout)
         self.assertIn(f'ok    .NET SDK {SDK}', result.stdout)
-        self.assertIn('warn  cannot check the uv pin in .mise.toml', result.stdout)
         self.assertNotIn('node', result.stdout)
         self.assertNotIn(' X ', result.stdout)
+
+    def test_crlf_line_endings_and_surrounding_spaces_are_read(self):
+        (self.root / '.mise.toml').write_bytes(f'[tools]  \r\n  bun = "{PINS["bun"]}"  \r\n"asdf:mise-plugins/mise-dotnet-core" = "{SDK}"\r\n'.encode())
+        result = self.run_setup({'bun': says('1.3.11'), 'dotnet': says(SDK)})
+        self.assertNotReady(result, f'does not provide bun {PINS["bun"]}')
+        self.assertIn(f'ok    .NET SDK {SDK}', result.stdout)
+
+    def test_pin_forms_it_cannot_read_are_not_ready(self):
+        (self.root / '.mise.toml').write_text(
+            '[tools]\n'
+            f'bun = "{PINS["bun"]}"\n'
+            'uv = { version = "0.11.32" }\n'
+            'python = "latest"\n'
+            '[tools.gitleaks]\n'
+            'version = "8.30.1"\n')
+        result = self.run_setup(pinned_tool_shims())
+        self.assertNotReady(result,
+                            "fail  cannot read the 'uv' pin in .mise.toml",
+                            "fail  cannot read the 'python' pin in .mise.toml",
+                            "fail  cannot read the '[tools.gitleaks]' pin in .mise.toml",
+                            'fix: write each pin as name = "1.2.3" under [tools]')
+
+    def test_mise_config_without_pins_is_not_ready(self):
+        (self.root / '.mise.toml').write_text('[env]\nX = "1"\n')
+        result = self.run_setup(pinned_tool_shims())
+        self.assertNotReady(result, 'fail  .mise.toml pins no tools under [tools]')
+
+    def test_backend_prefixed_pin_is_a_warning(self):
+        (self.root / '.mise.toml').write_text(f'[tools]\nbun = "{PINS["bun"]}"\n"aqua:gitleaks/gitleaks" = "8.30.1"\n"asdf:mise-plugins/mise-dotnet-core" = "{SDK}"\n')
+        result = self.run_setup(pinned_tool_shims())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("warn  setup cannot check 'aqua:gitleaks/gitleaks' because the pin does not name its command", result.stdout)
+        self.assertIn("fix: check it with 'mise ls --current'", result.stdout)
 
     def test_prefix_pin_does_not_match_a_longer_number(self):
         (self.root / '.mise.toml').write_text(f'[tools]\nbun = "1.4"\n"asdf:mise-plugins/mise-dotnet-core" = "{SDK}"\n')
@@ -245,7 +299,32 @@ class ToolchainPreflightTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn('      | error: lockfile had changes, but lockfile is frozen\nfail  bun dependencies (.)', result.stdout)
         self.assertIn('ok    bun dependencies (apps/www)', result.stdout)
+        self.assertIn('skip  Playwright Chromium until the bun dependencies install', result.stdout)
+        self.assertNotIn('warn  Playwright', result.stdout)
         self.assertIn('NOT READY: 1 problem(s)', result.stdout)
+
+    def test_failed_restore_names_its_own_project(self):
+        project = 'apps/backend.fsharp.tests/backend.fsharp.tests.fsproj'
+        dotnet = f'[ "$1" = restore ] && [ "$2" = {project} ] && {{ echo "error NU1301: Unable to load the service index"; exit 1; }}\n' + says(SDK)
+        result = self.run_setup(pinned_tool_shims() | {'dotnet': dotnet})
+        self.assertEqual(result.returncode, 1, result.stdout)
+        self.assertIn('      | error NU1301: Unable to load the service index\nfail  dotnet restore (backend.fsharp.tests)\n', result.stdout)
+        self.assertIn(f"fix: rerun scripts/setup.sh; if it fails again, run 'dotnet restore {project}' and read its output", result.stdout)
+        self.assertIn('ok    dotnet restore (backend)', result.stdout)
+        self.assertIn('ok    dotnet restore (backend.tests)', result.stdout)
+
+    def test_existing_pre_commit_hook_that_is_not_lefthooks_is_left_alone(self):
+        hook = self.root / '.git/hooks/pre-commit'
+        original = '#!/bin/sh\n# team checks; maybe lefthook later\nexit 0\n'
+        hook.write_text(original)
+        hook.chmod(0o755)
+        lefthook = '[ "$1" = node_modules/.bin/lefthook ] && { mv .git/hooks/pre-commit .git/hooks/pre-commit.old; echo call_lefthook > .git/hooks/pre-commit; }\n'
+        result = self.run_setup(pinned_tool_shims() | {'bun': lefthook + says(PINS['bun'])})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(hook.read_text(), original)
+        self.assertFalse((hook.parent / 'pre-commit.old').exists())
+        self.assertIn("warn  .git/hooks/pre-commit is not Lefthook's, so setup left it alone and this repository's pre-commit checks do not run", result.stdout)
+        self.assertIn("fix: run 'mise exec -- bun node_modules/.bin/lefthook run pre-commit' before each commit, or merge the hook into lefthook.yml", result.stdout)
 
     def test_missing_playwright_browser_is_a_warning(self):
         bun = '[ "$1" = -e ] && exit 1\n' + says(PINS['bun'])
@@ -264,12 +343,31 @@ class ToolchainPreflightTests(unittest.TestCase):
         self.assertIn('The worktree is kept', result.stdout)
 
     def test_bb_hook_stops_setup_at_its_deadline_and_keeps_the_worktree(self):
-        bun = '[ "$1" = install ] && exec sleep 30\n' + says(PINS['bun'])
+        bun = '[ "$1" = install ] && exec sleep 300\n' + says(PINS['bun'])
         started = time.monotonic()
-        result = self.run_setup(pinned_tool_shims() | {'bun': bun}, script='.bb-env-setup.sh', env=['NAILBITER_SETUP_DEADLINE=2'])
+        result = self.run_setup(pinned_tool_shims() | {'bun': bun}, script='.bb-env-setup.sh', env=['NAILBITER_SETUP_DEADLINE=5'])
         self.assertLess(time.monotonic() - started, 20)
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn('did not finish before the provisioning deadline. The worktree is kept', result.stdout)
+        self.assertEqual(processes_in(self.root), [])
+
+    def test_bb_hook_stops_processes_that_setup_leaves_running(self):
+        dotnet = '[ "$1" = restore ] && { sleep 300 </dev/null >/dev/null 2>&1 & exit 0; }\n' + says(SDK)
+        result = self.run_setup(pinned_tool_shims() | {'dotnet': dotnet}, script='.bb-env-setup.sh')
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn('READY (0 warning(s))', result.stdout)
+        self.assertEqual(result.stderr, '')
+        self.assertEqual(processes_in(self.root), [])
+
+    def test_without_gnu_tools_setup_is_not_ready_and_the_hook_keeps_the_worktree(self):
+        for tool in ['timeout', 'setsid', 'pkill', 'pgrep']:
+            (self.system / tool).unlink()
+        result = self.run_setup(pinned_tool_shims(), script='.bb-env-setup.sh')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('fail  GNU timeout is not on PATH', result.stdout)
+        self.assertIn('The worktree is kept', result.stdout)
+        standalone = self.run_setup(pinned_tool_shims())
+        self.assertEqual(standalone.returncode, 1, standalone.stdout)
 
     def test_shadowed_tool_in_the_callers_shell_is_a_warning(self):
         result = self.run_setup(pinned_tool_shims(), shell_tools={'bun': says('0.0.1')})
