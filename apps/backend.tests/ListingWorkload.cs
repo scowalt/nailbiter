@@ -14,7 +14,7 @@ namespace backend.tests;
 
 internal sealed record ExpectedGame(string Id, string Sport, string Status, (string Selector, string Text)[] Checks);
 
-internal sealed record WorkloadDescription(string Image, string TimescaleVersion, string TelemetryLevel, long Chunks, long CompressedChunks,
+internal sealed record WorkloadDescription(string Image, string TimescaleVersion, string TelemetryLevel, string TimescaleBackgroundWorkers, long Chunks, long CompressedChunks,
     IReadOnlyDictionary<string, int> GamesByStatus, long Snapshots, long ListingSnapshots, DateTimeOffset Clock);
 
 internal sealed class ListingWorkloadManifest(IReadOnlyList<ExpectedGame> listed)
@@ -126,6 +126,7 @@ internal static class ListingWorkload
         }
         await using var describe = new NpgsqlCommand("""
             SELECT (SELECT extversion FROM pg_extension WHERE extname = 'timescaledb'), current_setting('timescaledb.telemetry_level'),
+                current_setting('timescaledb.max_background_workers'),
                 (SELECT count(*) FROM show_chunks('odds_snapshots')),
                 (SELECT count(*) FROM timescaledb_information.chunks WHERE hypertable_name = 'odds_snapshots' AND is_compressed),
                 (SELECT count(*) FROM odds_snapshots), (SELECT count(*) FROM odds_snapshots WHERE game_id LIKE 'today-%')
@@ -134,7 +135,7 @@ internal static class ListingWorkload
             .ToDictionaryAsync(group => group.Key, group => group.Count);
         await using var row = await describe.ExecuteReaderAsync();
         await row.ReadAsync();
-        return new(image, row.GetString(0), row.GetString(1), row.GetInt64(2), row.GetInt64(3), statuses, row.GetInt64(4), row.GetInt64(5), Now);
+        return new(image, row.GetString(0), row.GetString(1), row.GetString(2), row.GetInt64(3), row.GetInt64(4), statuses, row.GetInt64(5), row.GetInt64(6), Now);
     }
 
     private static IEnumerable<Seeded> Games()

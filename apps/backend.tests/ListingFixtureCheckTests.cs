@@ -36,6 +36,8 @@ public sealed class ListingFixtureCheckTests(ITestOutputHelper output)
             var workload = fixture.GetProperty("workload");
             Assert.True(workload.GetProperty("compressedChunks").GetInt64() > 0);
             Assert.True(workload.GetProperty("chunks").GetInt64() >= 29);
+            Assert.Equal("off", workload.GetProperty("telemetryLevel").GetString());
+            Assert.Equal("0", workload.GetProperty("timescaleBackgroundWorkers").GetString());
             Assert.Equal(0, fixture.GetProperty("controls").GetProperty("providerRequestsAttempted").GetInt32());
             var work = fixture.GetProperty("queryWork").EnumerateArray().ToDictionary(path => path.GetProperty("path").GetString()!);
             Assert.Equal(ListingWorkload.Paths, work.Keys);

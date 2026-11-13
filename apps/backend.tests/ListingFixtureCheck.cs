@@ -12,7 +12,7 @@ namespace backend.tests;
 internal sealed record QueryWork(string Path, int LatestReads, int ExcitementReads, int ExcitementGames, int RelationScans,
     int DistinctRelations, IReadOnlyList<string> DuplicateRelations, int ChunkScans, IReadOnlyList<string> NewestSnapshotChunks, double? PlanningMs);
 
-internal sealed record FixtureControls(bool AppFactoryWorkersRemoved, int TimescaleBackgroundWorkers, string ProviderHttp, int ProviderRequestsAttempted);
+internal sealed record FixtureControls(bool AppFactoryWorkersRemoved, string ProviderHttp, int ProviderRequestsAttempted);
 
 internal sealed record FixtureDetails(WorkloadDescription Workload, FixtureControls Controls, IReadOnlyDictionary<string, double> Startup,
     IReadOnlyList<QueryWork> QueryWork);
@@ -73,7 +73,7 @@ internal static class ListingFixtureCheck
                 queryWork.Add(await CheckQueryWorkAsync(host, path, recorder.Commands.ToList(), manifest, failures));
             }
             if (whileServing is not null) await whileServing(address, cancellationToken);
-            var controls = new FixtureControls(true, 0, "rejected", host.RejectedOutboundRequests);
+            var controls = new FixtureControls(true, "rejected", host.RejectedOutboundRequests);
             var report = CheckReport.Create(start, CheckMode.Fixture, options, Target, probe, failures,
                 new FixtureDetails(workload, controls, startup, queryWork));
             await report.WriteAsync(output, options.ReportPath);
