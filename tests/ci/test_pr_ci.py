@@ -589,6 +589,7 @@ class ToolTests(unittest.TestCase):
             'forbidden': FORBIDDEN,
             'unauthorized': (401, {'message': 'Bad credentials', 'status': '401'}),
             'unprocessable': (422, {'message': 'Validation Failed', 'status': '422'}),
+            'rate limited': (429, {'message': 'API rate limit exceeded', 'status': '429'}),
             'server error with JSON': (500, {'message': 'Server Error', 'status': '500'}),
             'bad gateway with HTML': raw(502, '<html><body>Bad Gateway</body></html>'),
             'transport failure': Process(1, '', 'error connecting to api.github.com\n'),
