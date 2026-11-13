@@ -3,13 +3,14 @@ deadline=${NAILBITER_SETUP_DEADLINE:-840}
 if command -v setsid >/dev/null && command -v pkill >/dev/null && command -v pgrep >/dev/null; then
   setsid bash scripts/setup.sh &
   session=$!
-  trap 'pkill -KILL -s "$session"; exit 143' TERM INT HUP
-  (sleep "$deadline" && pkill -KILL -s "$session") 2>/dev/null &
+  (trap 'kill "$!"; exit 1' TERM; sleep "$deadline" & wait "$!" && pkill -KILL -s "$session") 2>/dev/null &
   watchdog=$!
+  trap 'kill "$watchdog" 2>/dev/null; pkill -KILL -s "$session"; exit 143' TERM INT HUP
   wait "$session" 2>/dev/null
   status=$?
-  pkill -P "$watchdog" sleep
-  if wait "$watchdog"; then
+  kill "$watchdog" 2>/dev/null
+  wait "$watchdog"
+  if ((status == 137)); then
     status=124
   fi
   pkill -KILL -s "$session"

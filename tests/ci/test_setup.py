@@ -368,6 +368,7 @@ class ToolchainPreflightTests(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 20)
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertIn('did not finish before the provisioning deadline. The worktree is kept', result.stdout)
+        self.assertEqual(result.stderr, '')
         self.assertEqual(processes_in(self.root), [])
 
     def test_bb_hook_does_not_report_a_deadline_that_setup_beat(self):
