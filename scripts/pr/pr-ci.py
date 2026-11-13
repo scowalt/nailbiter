@@ -286,9 +286,9 @@ def ruleset_contexts(applied):
 
 
 def legacy_contexts(legacy):
-    if legacy.status != 200:
+    if legacy.status == 404:
         return []
-    if not isinstance(legacy.body, dict):
+    if legacy.status != 200 or not isinstance(legacy.body, dict):
         return None
     checks = legacy.body.get('required_status_checks')
     if checks is None:
