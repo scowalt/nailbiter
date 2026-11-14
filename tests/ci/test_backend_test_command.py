@@ -20,6 +20,7 @@ EXIT = {'passed': 0, 'tests failed': 1, 'invalid selection': 2, 'build failed': 
 
 FAKE_DOTNET = r'''
 import json, os, re, sys, time
+from datetime import datetime
 from pathlib import Path
 from xml.sax.saxutils import escape, quoteattr
 
@@ -34,9 +35,15 @@ def journal(**entry):
 def option(name):
     return argv[argv.index(name) + 1] if name in argv else None
 
+culture = next((os.environ[name] for name in ('LC_ALL', 'LC_MESSAGES', 'LANG') if os.environ.get(name)), 'C').split('.')[0]
+language = (os.environ.get('DOTNET_CLI_UI_LANGUAGE') or {'1031': 'de-DE'}.get(os.environ.get('VSLANG', '')) or culture)[:2]
+
 if argv[0] == 'build':
     projects = re.findall(r'Path="([^"]+)"', Path(argv[1]).read_text())
     journal(cmd='build', phase='start', projects=projects)
+    started = datetime.fromisoformat(scenario.get('build_started') or datetime.now().isoformat())
+    layout = {'de_DE': '%d.%m.%Y %H:%M:%S', 'en_GB': '%d/%m/%Y %H:%M:%S', 'en_US': '%m/%d/%Y %-I:%M:%S %p'}.get(culture, '%m/%d/%Y %H:%M:%S')
+    print(f'Der Buildvorgang wurde am {started:{layout}} gestartet.' if language == 'de' else f'Build started {started:{layout}}.')
     print('  Determining projects to restore...')
     time.sleep(scenario.get('build_sleep', 0))
     if scenario.get('build_error'):
@@ -59,7 +66,10 @@ if scenario.get('test_sleep'):
 tests = scenario['suites'][project]
 selection = option('--filter')
 if selection and '(' in selection:
-    print(f'[xUnit.net 00:00:00.39] {project}: Exception filtering tests: Incorrect format for TestCaseFilter Error: Invalid Condition. Specify the correct format and try again.')
+    if language == 'de':
+        print(f'[xUnit.net 00:00:00.39] {project}: Exception filtering tests: Ungültiges Format für TestCaseFilter Fehler: Ungültige Bedingung. Geben Sie das richtige Format an, und versuchen Sie es erneut.')
+    else:
+        print(f'[xUnit.net 00:00:00.39] {project}: Exception filtering tests: Incorrect format for TestCaseFilter Error: Invalid Condition. Specify the correct format and try again.')
     chosen = {}
 elif selection:
     needles = [part.split('~', 1)[1] for part in selection.split('|')]
@@ -114,6 +124,13 @@ FAILING = {
 }
 
 
+def locale_caller(locale):
+    return {'LANG': locale, 'LC_ALL': locale}
+
+
+GERMAN_CALLERS = (locale_caller('de_DE.UTF-8'), {'DOTNET_CLI_UI_LANGUAGE': 'de-DE'}, {'VSLANG': '1031'})
+
+
 def write_executable(path, body):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(f'#!{sys.executable}\n{body}')
@@ -134,12 +151,24 @@ def sandbox(test, prefix):
     return temp
 
 
+def process_table():
+    for stat in Path('/proc').glob('[0-9]*/stat'):
+        with contextlib.suppress(OSError):
+            state, _, group = stat.read_text().rsplit(')', 1)[1].split()[:3]
+            yield int(stat.parent.name), state, int(group)
+
+
+def working_directory(pid):
+    with contextlib.suppress(OSError):
+        return os.readlink(f'/proc/{pid}/cwd')
+
+
 def processes_under(temp):
     marker = str(temp)
-    for process in Path('/proc').glob('[0-9]*'):
-        with contextlib.suppress(OSError):
-            if int(process.name) != os.getpid() and (marker.encode() in (process / 'cmdline').read_bytes() or os.readlink(process / 'cwd').startswith(marker)):
-                yield int(process.name)
+    table = list(process_table())
+    inside = {pid for pid, _, _ in table if (cwd := working_directory(pid)) and (cwd == marker or cwd.startswith(f'{marker}/'))}
+    groups = {group for pid, _, group in table if pid in inside} - {os.getpgrp()}
+    return [pid for pid, _, group in table if (pid in inside or group in groups) and pid != os.getpid()]
 
 
 def stop_processes_under(temp):
@@ -158,10 +187,11 @@ def trx_finish(trx):
 
 def msbuild_start(log):
     started = re.match(r'Build started (.+)\.', log.read_text()).group(1)
-    for layout in ('%m/%d/%Y %I:%M:%S %p', '%m/%d/%Y %H:%M:%S'):
-        with contextlib.suppress(ValueError):
-            return datetime.strptime(started, layout)
-    raise AssertionError(f'unrecognised MSBuild start time {started!r}')
+    return datetime.strptime(started, '%m/%d/%Y %H:%M:%S')
+
+
+def assert_built_after(test, waiter_log, holder_trx):
+    test.assertGreaterEqual(msbuild_start(waiter_log), trx_finish(holder_trx).replace(microsecond=0), 'the waiting run built before the holder had finished its tests')
 
 
 class SandboxedTestCase(unittest.TestCase):
@@ -184,17 +214,18 @@ class Harness:
         self.scenario.write_text(json.dumps(scenario))
         self.worktree = make_worktree(self.temp, 'worktree')
 
-    def env(self, tag='', path=None):
+    def env(self, tag='', path=None, caller=None):
         return {
             'HOME': str(self.temp),
             'PATH': path if path is not None else f'{self.bin}:/usr/bin:/bin',
             'FAKE_SCENARIO': str(self.scenario),
             'FAKE_JOURNAL': str(self.journal_path),
             'FAKE_TAG': tag,
+            **(caller or {}),
         }
 
-    def start(self, *args, tag='', worktree=None, path=None):
-        return subprocess.Popen([sys.executable, str((worktree or self.worktree) / SCRIPT), *args], cwd=worktree or self.worktree, env=self.env(tag, path), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    def start(self, *args, tag='', worktree=None, path=None, caller=None):
+        return subprocess.Popen([sys.executable, str((worktree or self.worktree) / SCRIPT), *args], cwd=worktree or self.worktree, env=self.env(tag, path, caller), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
     def run(self, *args, **kwargs):
         process = self.start(*args, **kwargs)
@@ -228,13 +259,7 @@ time.sleep(0.6)
 
 
 def group_members(group):
-    members = []
-    for stat in Path('/proc').glob('[0-9]*/stat'):
-        with contextlib.suppress(OSError):
-            state, _, process_group = stat.read_text().rsplit(')', 1)[1].split()[:3]
-            if int(process_group) == group and state != 'Z':
-                members.append(int(stat.parent.name))
-    return members
+    return [pid for pid, state, process_group in process_table() if process_group == group and state != 'Z']
 
 
 def kill_group(group):
@@ -300,6 +325,27 @@ class SelectionAndBuildTests(SandboxedTestCase):
         code, output = harness.run('fsharp', '--filter', 'FullyQualifiedName~(')
         self.assertEqual(code, EXIT['invalid selection'], output)
         self.assertIn('Incorrect format for TestCaseFilter', output)
+
+    def test_an_invalid_filter_is_an_invalid_selection_in_any_caller_language(self):
+        for caller in GERMAN_CALLERS:
+            with self.subTest(**caller):
+                harness = Harness(self, {'suites': PASSING})
+                code, output = harness.run('csharp', '--filter', 'FullyQualifiedName~(', caller=caller)
+                self.assertEqual(code, EXIT['invalid selection'], output)
+                self.assertIn('Incorrect format for TestCaseFilter', output)
+
+    def test_the_build_order_check_catches_an_early_build_in_any_caller_language(self):
+        holder_finished = datetime(2026, 5, 12, 13, 49, 24).astimezone()
+        for caller in (*GERMAN_CALLERS, locale_caller('en_GB.UTF-8'), locale_caller('en_US.UTF-8')):
+            with self.subTest(**caller):
+                harness = Harness(self, {'suites': PASSING, 'build_started': '2026-05-12T13:49:19'})
+                code, output = harness.run('csharp', caller=caller)
+                self.assertEqual(code, EXIT['passed'], output)
+                holder = harness.temp / 'holder.trx'
+                holder.write_text(f'<Times finish="{holder_finished.isoformat()}" />')
+                waiter = next(harness.worktree.glob('obj/test-backend/runs/*/build.log'))
+                with self.assertRaisesRegex(AssertionError, 'built before the holder'):
+                    assert_built_after(self, waiter, holder)
 
     def test_unknown_suite_is_an_invalid_selection_and_builds_nothing(self):
         harness = Harness(self, {'suites': PASSING})
@@ -368,6 +414,20 @@ class SelectionAndBuildTests(SandboxedTestCase):
         self.assertEqual(code, EXIT['tests failed'], output)
         self.assertRegex(output, r'csharp\s+FAILED\s+2 passed, 0 failed, 0 skipped')
         self.assertIn('TRX counters report 2 failed tests, but it lists 0', output)
+
+    def test_a_results_file_without_counters_fails_and_says_so(self):
+        cases = {
+            'with a listed failure': (FAILING, 1),
+            'with only passing results': (PASSING, 0),
+        }
+        for case, (suites, exit_code) in cases.items():
+            with self.subTest(case):
+                harness = Harness(self, {'suites': suites, 'runs': {'backend.tests': {'trx': 'no-counters', 'exit': exit_code}}})
+                code, output = harness.run('csharp')
+                self.assertEqual(code, EXIT['tests failed'], output)
+                self.assertRegex(output, r'csharp\s+FAILED')
+                self.assertIn('the TRX file has no Counters; read its log', output)
+                self.assertNotIn('TRX counters report', output)
 
     def test_a_selection_whose_tests_are_all_skipped_ran_no_test(self):
         harness = Harness(self, {'suites': {**PASSING, 'backend.tests': {'HostTests.Waits': 'skip'}}})
@@ -493,6 +553,33 @@ class ConcurrencyTests(SandboxedTestCase):
                 self.assertEqual(group_members(group), [], 'the test host stops with its invocation')
 
 
+class SandboxCleanupTests(SandboxedTestCase):
+    def test_cleanup_stops_the_sandbox_processes_and_their_groups_and_nothing_else(self):
+        temp = sandbox(self, 'nailbiter-test-backend-cleanup-')
+        (temp / 'sub').mkdir()
+        sibling = Path(f'{temp}2')
+        sibling.mkdir()
+        self.addCleanup(shutil.rmtree, sibling, ignore_errors=True)
+
+        def start(cwd, *args, **options):
+            process = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)', *args], cwd=cwd, **options)
+            self.addCleanup(process.wait)
+            self.addCleanup(process.kill)
+            return process
+
+        leader = start(temp, process_group=0)
+        nested = start(temp / 'sub')
+        grouped = start(sibling, process_group=leader.pid)
+        bystander = start(sibling)
+        mentioner = start(sibling, str(temp / 'sub'))
+        stop_processes_under(temp)
+        for name, process in {'leader': leader, 'nested': nested, 'grouped': grouped}.items():
+            with self.subTest(stopped=name):
+                self.assertEqual(process.wait(timeout=10), -signal.SIGKILL)
+        for name, process in {'bystander': bystander, 'mentioner': mentioner}.items():
+            with self.subTest(survives=name):
+                self.assertIsNone(process.poll())
+
 
 def dotnet_sdk_root():
     if not shutil.which('dotnet'):
@@ -550,6 +637,7 @@ class RealToolchainTests(SandboxedTestCase):
             **os.environ,
             'PATH': f'{dotnet_sdk_root()}:{temp / "bin"}:{os.environ["PATH"]}',
             'MSBUILDDISABLENODEREUSE': '1',
+            'UseSharedCompilation': 'false',
         }
         start = lambda suite: subprocess.Popen([sys.executable, SCRIPT, suite], cwd=worktree, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         fsharp = start('fsharp')
@@ -565,9 +653,7 @@ class RealToolchainTests(SandboxedTestCase):
         self.assertIn('waiting for scripts/test-backend fsharp', outputs[1])
         runs = {next(run.glob('*.trx')).stem: run for run in (worktree / 'obj/test-backend/runs').iterdir()}
         self.assertEqual(sorted(runs), ['csharp', 'fsharp'])
-        holder_finished = trx_finish(runs['fsharp'] / 'fsharp.trx')
-        waiter_build_started = msbuild_start(runs['csharp'] / 'build.log')
-        self.assertGreaterEqual(waiter_build_started, holder_finished.replace(microsecond=0), 'the waiting run built before the holder had finished its tests')
+        assert_built_after(self, runs['csharp'] / 'build.log', runs['fsharp'] / 'fsharp.trx')
         build_logs = [(run / 'build.log').read_text() for run in runs.values()]
         compiles = [len(re.findall(r'^\s*\S*/csc\s.*/out:obj/Release/net10\.0/Shared\.dll', log, re.MULTILINE)) for log in build_logs]
         self.assertEqual(sum(compiles), 1, 'the shared library compiles once across both invocations')

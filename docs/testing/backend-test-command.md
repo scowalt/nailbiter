@@ -9,7 +9,7 @@ scripts/test-backend csharp --filter FullyQualifiedName~NflPlayoffLeverage
 scripts/test-backend --configuration Debug
 ```
 
-Run `scripts/setup.sh` once in a new worktree first. The command takes the pinned .NET SDK from `mise env`, so it does not need `mise exec`. It passes the rest of your environment to `dotnet` unchanged, so variables such as `TESTCONTAINERS_RYUK_DISABLED` and `DOCKER_HOST` still apply.
+Run `scripts/setup.sh` once in a new worktree first. The command takes the pinned .NET SDK from `mise env`, so it does not need `mise exec`. It runs `dotnet` with `LC_ALL=C.UTF-8` and `DOTNET_CLI_UI_LANGUAGE=en-US`, so the build and the tests use the invariant culture and English messages whatever your locale, `VSLANG` or `DOTNET_CLI_UI_LANGUAGE`. The command reads that output: under `de_DE`, for example, the test adapter reports an invalid filter in German, which the command would otherwise count as a filter that matched no test. It passes the rest of your environment to `dotnet` unchanged, so variables such as `TESTCONTAINERS_RYUK_DISABLED` and `DOCKER_HOST` still apply.
 
 ## Selection
 
@@ -32,7 +32,7 @@ Each selected suite must pass at least one test. A suite whose selected tests ar
 
 When suites end differently, the command returns the first code that applies in the order 1, 2, 4.
 
-`dotnet test` with xunit.runner.visualstudio 4.0.1 exits 0 when a filter matches no test. It also exits 0 for a filter that it cannot parse, and prints only an `Incorrect format for TestCaseFilter` message. The command reads each suite's TRX results file and its output, so neither case passes. It counts passed, failed and skipped tests from the results listed in the TRX file, not from its `Counters` summary, which reports a skipped test as `notExecuted="0"`. A run also fails if the failed, error, timeout and aborted totals in `Counters` differ from the number of failed tests listed; the message names both numbers.
+`dotnet test` with xunit.runner.visualstudio 4.0.1 exits 0 when a filter matches no test. It also exits 0 for a filter that it cannot parse, and prints only an `Incorrect format for TestCaseFilter` message. The command reads each suite's TRX results file and its output, so neither case passes. It counts passed, failed and skipped tests from the results listed in the TRX file, not from its `Counters` summary, which reports a skipped test as `notExecuted="0"`. A run also fails if the failed, error, timeout and aborted totals in `Counters` differ from the number of failed tests listed; the message names both numbers. A TRX file without `Counters` fails the run, and the message says that the `Counters` are missing.
 
 ## Output and logs
 
