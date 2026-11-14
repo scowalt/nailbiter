@@ -22,6 +22,7 @@ using Sentry.AspNetCore;
 using Sentry.Extensibility;
 using Sentry.Protocol.Envelopes;
 using Xunit;
+using Xunit.Sdk;
 
 namespace backend.tests;
 
@@ -177,7 +178,7 @@ public sealed class ProviderResilienceClockTests
         var reported = await Record.ExceptionAsync(() => UsingAsync(new FailingDisposal(disposal), _ => throw failure));
 
         Assert.StartsWith(failure.Message, reported.Message, StringComparison.Ordinal);
-        Assert.Equal([failure, disposal], Assert.IsAssignableFrom<AggregateException>(reported).InnerExceptions);
+        Assert.Equal([failure, disposal], Assert.IsType<AggregateException>(reported.InnerException).InnerExceptions);
     }
 
     [Fact]
@@ -255,10 +256,19 @@ public sealed class ProviderResilienceClockTests
         {
             await body(resource);
         }
-        finally
+        catch (Exception failure)
         {
-            await resource.DisposeAsync();
+            try
+            {
+                await resource.DisposeAsync();
+            }
+            catch (Exception disposal)
+            {
+                throw new XunitException(failure.Message, new AggregateException(failure, disposal));
+            }
+            throw;
         }
+        await resource.DisposeAsync();
     }
 
     private static async Task AssertNothingRetriesAsync(ClockedApp app, Task fetch)
