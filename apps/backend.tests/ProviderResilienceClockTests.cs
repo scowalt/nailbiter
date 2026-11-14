@@ -166,7 +166,7 @@ public sealed class ProviderResilienceClockTests
         Assert.Equal(0, app.Clock.LiveTimers);
 
         app.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
-        await disposal.Started.WaitAsync(Guard);
+        await app.WaitForEntryThreadDisposalAsync(disposal.Started);
         await Task.Run(() => app.DisposeAsync().AsTask()).WaitAsync(Guard);
 
         Assert.True(disposal.Finished);
@@ -179,7 +179,7 @@ public sealed class ProviderResilienceClockTests
         var hang = app.Services.GetRequiredService<ClocklessHang>();
 
         app.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
-        await hang.Started.WaitAsync(Guard);
+        await app.WaitForEntryThreadDisposalAsync(hang.Started);
         var reported = await Record.ExceptionAsync(() => app.DisposeAsync().AsTask().WaitAsync(Guard * 2));
         hang.Release();
         await app.DisposeAsync().AsTask().WaitAsync(Guard);
@@ -558,6 +558,8 @@ public sealed class ProviderResilienceClockTests
             await SentrySdk.FlushAsync(TimeSpan.FromSeconds(5));
             return transport.Events.ToArray();
         }
+
+        public Task WaitForEntryThreadDisposalAsync(Task reached) => reached.WaitAsync(Guard);
 
         public async ValueTask DisposeAsync()
         {
