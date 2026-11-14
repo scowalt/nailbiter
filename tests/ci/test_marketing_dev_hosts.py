@@ -1,8 +1,10 @@
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 import http.client
 import os
 from pathlib import Path
+import re
 import shutil
+import signal
 import socket
 import subprocess
 import tempfile
@@ -30,10 +32,22 @@ def status(port, host):
         connection.close()
 
 
+def output(log):
+    log.seek(0)
+    return re.sub(r'\x1b\[[0-9;]*m', '', log.read().decode(errors='replace'))
+
+
+def interrupt(signum, frame):
+    raise KeyboardInterrupt
+
+
 class MarketingDevHostsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        previous_sigterm = signal.signal(signal.SIGTERM, interrupt)
+        cls.addClassCleanup(signal.signal, signal.SIGTERM, previous_sigterm)
         cls.tmp = tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls.tmp.cleanup)
         cls.site = Path(cls.tmp.name) / 'www'
         tracked = subprocess.run(['git', 'ls-files', '-z', 'apps/www'], cwd=ROOT, check=True, capture_output=True, text=True).stdout
         for name in filter(None, tracked.split('\0')):
@@ -44,35 +58,38 @@ class MarketingDevHostsTest(unittest.TestCase):
         cls.env = {key: value for key, value in os.environ.items() if not key.startswith('PORTLESS')}
         cls.env.update(CI='1', ASTRO_TELEMETRY_DISABLED='1')
 
-    @classmethod
-    def tearDownClass(cls):
-        cls.tmp.cleanup()
-
     def astro(self, *args, **env):
         return [str(self.site / 'node_modules/.bin/astro'), *args], {**self.env, **env}
 
     @contextmanager
-    def serve(self, command, **env):
+    def launch(self, command, **env):
         port = free_port()
         args, child_env = self.astro(command, '--port', str(port), '--host', '127.0.0.1', **env)
-        log = tempfile.TemporaryFile()
-        server = subprocess.Popen(args, cwd=self.site, env=child_env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
-        try:
-            deadline = time.monotonic() + 90
-            while True:
-                try:
-                    status(port, f'localhost:{port}')
-                    break
-                except OSError:
-                    if server.poll() is not None or time.monotonic() > deadline:
-                        log.seek(0)
-                        self.fail(f'astro {command} did not start: {log.read().decode(errors="replace")}')
-                    time.sleep(0.25)
+        with tempfile.TemporaryFile() as log:
+            server = subprocess.Popen(args, cwd=self.site, env=child_env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+            try:
+                yield server, port, log
+            finally:
+                with suppress(ProcessLookupError):
+                    os.killpg(server.pid, signal.SIGTERM)
+                server.wait(timeout=30)
+
+    def started(self, server, port):
+        deadline = time.monotonic() + 90
+        while server.poll() is None and time.monotonic() < deadline:
+            try:
+                status(port, f'localhost:{port}')
+                return True
+            except OSError:
+                time.sleep(0.25)
+        return False
+
+    @contextmanager
+    def serve(self, command, **env):
+        with self.launch(command, **env) as (server, port, log):
+            if not self.started(server, port):
+                self.fail(f'astro {command} did not start: {output(log)}')
             yield port
-        finally:
-            os.killpg(server.pid, 15)
-            server.wait(timeout=30)
-            log.close()
 
     def test_dev_serves_the_tailnet_host_portless_shares(self):
         with self.serve('dev', PORTLESS_TAILSCALE_URL=TAILNET_URL) as port:
