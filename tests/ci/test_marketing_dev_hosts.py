@@ -91,11 +91,22 @@ class MarketingDevHostsTest(unittest.TestCase):
                 self.fail(f'astro {command} did not start: {output(log)}')
             yield port
 
+    def dev_startup_error(self, tailscale_url):
+        with self.launch('dev', PORTLESS_TAILSCALE_URL=tailscale_url) as (server, port, log):
+            self.assertFalse(self.started(server, port), f'astro dev served with PORTLESS_TAILSCALE_URL={tailscale_url}')
+            self.assertNotIn(server.returncode, (None, 0))
+            return output(log)
+
     def test_dev_serves_the_tailnet_host_portless_shares(self):
         with self.serve('dev', PORTLESS_TAILSCALE_URL=TAILNET_URL) as port:
             self.assertEqual(200, status(port, f'localhost:{port}'))
             self.assertEqual(200, status(port, TAILNET_HOST))
             self.assertEqual(403, status(port, OTHER_TAILNET_HOST))
+
+    def test_dev_refuses_a_tailnet_url_without_an_exact_hostname(self):
+        for tailscale_url in ['https://.ts.net:8494', 'file:///tmp']:
+            with self.subTest(tailscale_url=tailscale_url):
+                self.dev_startup_error(tailscale_url)
 
     def test_dev_without_tailscale_sharing_blocks_tailnet_hosts(self):
         with self.serve('dev') as port:
