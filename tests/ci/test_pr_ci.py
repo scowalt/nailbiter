@@ -454,6 +454,7 @@ class ToolTests(unittest.TestCase):
         self.assertFalse(result['ci']['complete'])
         self.assertIsNone(result['ci']['required_checks'])
         self.assertIn('incomplete', result['reason'])
+        self.assertNotIn('still pending', result['reason'])
 
     def test_no_runs_are_pending_when_the_required_checks_are_known(self):
         for rules, required in [(RULES[1:], []), (RULES, REQUIRED_JOBS)]:
@@ -670,6 +671,49 @@ class ToolTests(unittest.TestCase):
             after_merge=[pull(auto=AUTO)],
         )
 
+    def merged_elsewhere(self, legacy, pulls):
+        return FakeGitHub(
+            pulls,
+            api={f'repos/{REPO}': (200, SETTINGS | {'allow_auto_merge': True}), f'repos/{REPO}/branches/main/protection': legacy},
+            after_merge=[pull(state='MERGED', merge_commit=MERGE_SHA)],
+        )
+
+    def test_a_pull_request_merged_before_the_reread_is_never_merged_again(self):
+        cases = [
+            ('known', NOT_FOUND, [], ('pending', 11)),
+            ('known', NOT_FOUND, ['--auto'], ('pending', 11)),
+            ('unknown', FORBIDDEN, [], ('incomplete', 12)),
+            ('unknown', FORBIDDEN, ['--auto'], ('pending', 11)),
+        ]
+        for label, legacy, auto, expected in cases:
+            with self.subTest(label, auto=auto):
+                fake = self.merged_elsewhere(legacy, [pull(), pull(state='MERGED')])
+                code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge', *auto)
+                self.assertEqual((result['result'], code), expected)
+                self.assertEqual(result['ci']['complete'], label == 'known')
+                self.assertFalse(result['mutated'])
+                self.assertEqual(fake.merges(), [])
+                if expected[0] == 'pending':
+                    self.assertEqual(result['pull_request']['state'], 'MERGED')
+                    self.assertIn('has not returned the merge commit', result['reason'])
+
+    def test_merge_auto_never_merges_a_pull_request_that_was_already_merged(self):
+        for label, legacy in [('known', NOT_FOUND), ('unknown', FORBIDDEN)]:
+            with self.subTest(label):
+                fake = self.merged_elsewhere(legacy, [pull(state='MERGED')])
+                code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge', '--auto')
+                self.assertEqual((result['result'], code), ('pending', 11))
+                self.assertFalse(result['mutated'])
+                self.assertEqual(fake.merges(), [])
+
+    def test_merge_reports_merged_only_with_the_merge_commit_github_returned(self):
+        fake = self.merged_elsewhere(NOT_FOUND, [pull(state='MERGED'), pull(state='MERGED', merge_commit=MERGE_SHA)])
+        code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge')
+        self.assertEqual((result['result'], code), ('merged', 0))
+        self.assertEqual(result['merge_commit'], MERGE_SHA)
+        self.assertFalse(result['mutated'])
+        self.assertEqual(fake.merges(), [])
+
     def test_unknown_required_checks_are_incomplete_while_runs_are_pending(self):
         for command in ['status', 'wait']:
             with self.subTest(command):
@@ -679,8 +723,29 @@ class ToolTests(unittest.TestCase):
                 self.assertEqual((result['result'], code), ('incomplete', 12))
                 self.assertEqual(result['ci']['runs'][0]['status'], 'in_progress')
                 self.assertIn('incomplete', result['reason'])
+                self.assertIn('Actions runs still pending', result['reason'])
                 self.assertEqual(self.clock.sleeps, [])
                 self.assert_read_only(fake)
+
+    def test_the_incomplete_reason_says_when_any_run_is_still_pending(self):
+        for status in ['in_progress', 'queued']:
+            with self.subTest(status):
+                runs = [run(1), run(2, status=status, workflow=2, name='Docs')]
+                fake = FakeGitHub([pull()], runs={SHA: [runs]}, api={f'repos/{REPO}/branches/main/protection': FORBIDDEN})
+                code, result = self.invoke(fake, 'status', str(NUMBER))
+                self.assertEqual((result['result'], code), ('incomplete', 12))
+                self.assertTrue(result['reason'].endswith('incomplete: the required checks could not be read; Actions runs still pending'))
+
+    def test_only_an_incomplete_reason_with_runs_says_runs_are_still_pending(self):
+        cases = {
+            'known checks': FakeGitHub([pull()], runs={SHA: [[run(1, status='in_progress')]]}),
+            'no runs': FakeGitHub([pull()], runs={SHA: [[]]}, api={f'repos/{REPO}/branches/main/protection': FORBIDDEN}),
+        }
+        for label, fake in cases.items():
+            with self.subTest(label):
+                code, result = self.invoke(fake, 'status', str(NUMBER))
+                self.assertIn(result['result'], ['pending', 'incomplete'])
+                self.assertNotIn('still pending', result['reason'])
 
     def test_a_definite_run_outcome_outranks_unknown_required_checks(self):
         for conclusion, expected in [('failure', 'failed'), ('cancelled', 'cancelled'), ('action_required', 'blocked')]:
