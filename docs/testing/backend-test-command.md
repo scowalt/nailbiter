@@ -32,7 +32,7 @@ Each selected suite must pass at least one test. A suite whose selected tests ar
 
 When suites end differently, the command returns the first code that applies in the order 1, 2, 4.
 
-`dotnet test` with xunit.runner.visualstudio 4.0.1 exits 0 when a filter matches no test. It also exits 0 for a filter that it cannot parse, and prints only an `Incorrect format for TestCaseFilter` message. The command reads each suite's TRX results file and its output, so neither case passes. It counts passed, failed and skipped tests from the results listed in the TRX file, not from its `Counters` summary, which reports a skipped test as `notExecuted="0"`. A run also fails if the failed, error, timeout and aborted totals in `Counters` differ from the number of failed tests listed; the message names both numbers.
+`dotnet test` with xunit.runner.visualstudio 4.0.1 exits 0 when a filter matches no test. It also exits 0 for a filter that it cannot parse, and prints only an `Incorrect format for TestCaseFilter` message. The command reads each suite's TRX results file and its output, so neither case passes. It counts passed, failed and skipped tests from the results listed in the TRX file, not from its `Counters` summary, which reports a skipped test as `notExecuted="0"`. A run also fails if the failed, error, timeout and aborted totals in `Counters` differ from the number of failed tests listed; the message names both numbers. A TRX file without `Counters` fails the run, and the message says that the `Counters` are missing.
 
 ## Output and logs
 

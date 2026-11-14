@@ -224,7 +224,12 @@ def read_results(result, trx, output):
     result.passed = sum(test.get('outcome') == 'Passed' for test in tests)
     result.failed = len(result.failures)
     result.skipped = sum(test.get('outcome') == 'NotExecuted' for test in tests)
-    reported = sum(int(counters.get(name, 0)) for counters in run.iter(f'{TRX}Counters') for name in FAILED_COUNTERS)
+    counters = run.find(f'{TRX}ResultSummary/{TRX}Counters')
+    if counters is None:
+        result.outcome = Exit.TESTS_FAILED
+        result.detail = 'the TRX file has no Counters; read its log'
+        return
+    reported = sum(int(counters.get(name, 0)) for name in FAILED_COUNTERS)
     if reported != result.failed:
         result.outcome = Exit.TESTS_FAILED
         result.detail = f'TRX counters report {reported} failed tests, but it lists {result.failed}; read its log'
