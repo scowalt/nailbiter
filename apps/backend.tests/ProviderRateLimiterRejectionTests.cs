@@ -54,18 +54,16 @@ public sealed class ProviderRateLimiterRejectionTests
         var pinned = ProviderClients.Select(client => client.Name).ToHashSet();
         var resilient = ResilientClients(app.Services);
 
-        Assert.Empty(resilient.Except(pinned).Order());
-        Assert.Empty(pinned.Except(resilient).Order());
+        Assert.Empty(pinned.Except(resilient).Order().Select(name => $"missing {name}")
+            .Concat(resilient.Except(pinned).Order().Select(name => $"unexpected {name}")));
     }
 
     private static IReadOnlySet<string> ResilientClients(IServiceProvider services)
     {
         var handlers = services.GetRequiredService<IHttpMessageHandlerFactory>();
-        return HttpClientRegistrations.Names(services).Where(name =>
-        {
-            using var handler = handlers.CreateHandler(name);
-            return Chain(handler).OfType<ResilienceHandler>().Any();
-        }).ToHashSet();
+        return HttpClientRegistrations.Names(services)
+            .Where(name => Chain(handlers.CreateHandler(name)).OfType<ResilienceHandler>().Any())
+            .ToHashSet();
     }
 
     private static IEnumerable<HttpMessageHandler> Chain(HttpMessageHandler? handler)
