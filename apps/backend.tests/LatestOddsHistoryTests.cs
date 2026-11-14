@@ -41,14 +41,46 @@ public sealed class LatestOddsHistoryTests(ListingTimescale timescale, ITestOutp
     }
 
     [Fact]
+    public async Task Seeding_writes_newest_odds_once_per_game_and_matches_what_the_trigger_builds()
+    {
+        var host = new HostedGameFixture(ListingWorkload.Now, null, timescale.Server);
+        await host.InitializeAsync();
+        try
+        {
+            await ListingWorkload.SeedAsync(host.Services, historyDays: 1);
+            string connectionString;
+            using (var scope = host.Services.CreateScope())
+                connectionString = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database.GetConnectionString()!;
+            NpgsqlConnection.ClearPool(new NpgsqlConnection(connectionString));
+            var writes = await NewestOddsWritesAsync(connectionString);
+            var seeded = await NewestOddsAsync(host.Services);
+
+            await ExecuteAsync(host.Services, """
+                CREATE TEMP TABLE replay AS SELECT * FROM odds_snapshots;
+                TRUNCATE odds_snapshots, newest_odds;
+                INSERT INTO odds_snapshots SELECT * FROM replay;
+                """);
+            var triggered = await NewestOddsAsync(host.Services);
+
+            Assert.True(writes == seeded.Count,
+                $"the seed wrote newest_odds {writes} times for {seeded.Count} games; each snapshot ran the per-row trigger");
+            Assert.Equal(triggered, seeded);
+        }
+        finally
+        {
+            await host.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task Listed_games_keep_their_newest_odds_wherever_they_sit_in_history()
     {
         var host = new HostedGameFixture(ListingWorkload.Now, null, timescale.Server);
         await host.InitializeAsync();
         try
         {
-            await ExecuteAsync(host.Services, "DROP TRIGGER IF EXISTS newest_odds_track ON odds_snapshots; DROP TABLE IF EXISTS newest_odds");
             await ListingWorkload.SeedAsync(host.Services);
+            await ExecuteAsync(host.Services, "DROP TRIGGER newest_odds_track ON odds_snapshots; DROP TABLE newest_odds");
             await host.SeedAsync(Edge("edge-stuck", "in_progress", Now.AddDays(-40)), Quotes("edge-stuck", Now.AddDays(-40), .62));
             await host.SeedAsync(Edge("edge-postponed", "scheduled", Now.AddHours(2)), Quotes("edge-postponed", Now.AddDays(-3), .64));
             await host.SeedAsync(Edge("edge-backfilled", "scheduled", Now.AddHours(2)), []);
@@ -204,6 +236,28 @@ public sealed class LatestOddsHistoryTests(ListingTimescale timescale, ITestOutp
             GameId = id, Timestamp = start.AddMinutes(minute), HomeWinProbability = probability, AwayWinProbability = 1 - probability,
             HomeMoneyline = -100, AwayMoneyline = -100, Source = "Kalshi"
         });
+
+    private static async Task<List<string>> NewestOddsAsync(IServiceProvider services)
+    {
+        using var scope = services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database.SqlQueryRaw<string>(
+            "SELECT game_id || ' at ' || timestamp AS \"Value\" FROM newest_odds ORDER BY game_id").ToListAsync();
+    }
+
+    private static async Task<long> NewestOddsWritesAsync(string connectionString)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (true)
+        {
+            await using var writes = new NpgsqlCommand(
+                "SELECT n_tup_ins + n_tup_upd FROM pg_stat_user_tables WHERE relname = 'newest_odds'", connection);
+            if (await writes.ExecuteScalarAsync() is long count and > 0) return count;
+            Assert.True(DateTime.UtcNow < deadline, "pg_stat_user_tables shows no newest_odds writes from the seed after 30 s");
+            await Task.Delay(100);
+        }
+    }
 
     private static async Task ExecuteAsync(IServiceProvider services, string sql)
     {
