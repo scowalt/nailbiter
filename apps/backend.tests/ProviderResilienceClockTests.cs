@@ -139,6 +139,17 @@ public sealed class ProviderResilienceClockTests
         Assert.InRange(elapsed, TimeSpan.Zero, TotalRequestTimeout - AttemptTimeout);
     }
 
+    [Fact]
+    public async Task Disposing_the_app_ends_a_retry_that_waits_on_the_stopped_clock()
+    {
+        var app = new ClockedApp(Answer.Hang);
+        var fetch = Scoreboards["EspnOdds"].Run(app.Services, CancellationToken.None);
+        await app.RunUntilAsync(fetch, () => app.Provider.Attempts is [{ Ended: not null }], AttemptTimeout * 2);
+
+        await Task.Run(() => app.DisposeAsync().AsTask()).WaitAsync(Guard);
+        await fetch.WaitAsync(Guard);
+    }
+
     [Theory]
     [MemberData(nameof(NonRetryableAnswers))]
     public async Task Non_retryable_scoreboard_answer_is_fetched_once_and_stays_a_warning(string name, HttpStatusCode status)
