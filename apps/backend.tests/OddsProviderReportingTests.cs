@@ -621,9 +621,10 @@ public sealed class OddsProviderReportingTests
     [Theory]
     [InlineData("new games")]
     [InlineData("existing games")]
+    [InlineData("updated games")]
     public async Task Backfill_failed_game_save_leaks_no_rows_into_the_next_game(string games)
     {
-        var existing = games == "existing games";
+        var existing = games != "new games";
         await using var database = await OddsDatabase.StartTimescaleAsync();
         if (existing) await database.SeedAsync(BackfillGame(FirstGame, weekFields: true), BackfillGame(SecondGame, weekFields: true));
         await database.ExecuteAsync($"""
@@ -637,7 +638,7 @@ public sealed class OddsProviderReportingTests
         await using var app = new OddsApp(BackfillProviders(BackfillBoard(SecondGame), NotFound), database.Use());
 
         var result = await app.Services.GetRequiredService<NflBackfillService>().BackfillSeasonAsync(2026,
-            OneWeek(kalshi: true, skipExisting: existing), CancellationToken.None);
+            OneWeek(kalshi: true, skipExisting: games == "existing games"), CancellationToken.None);
 
         Assert.StartsWith($"Game {FirstGame}:", Assert.Single(result.Errors));
         Assert.Equal([$"odds {SecondGame} kalshi_backfill 2"], await SnapshotRowsAsync(database));
@@ -645,8 +646,21 @@ public sealed class OddsProviderReportingTests
         AssertSentOnceAtError(await app.SentEventsAsync(), typeof(NflBackfillService), "Error processing game {GameId}", typeof(PostgresException));
     }
 
-    [Fact]
-    public async Task Backfill_writes_each_game_in_its_own_transaction()
+    [Theory]
+    [InlineData("default", new[]
+    {
+        "401872985 games", "401872985 odds_snapshots",
+        "401872987 games", "401872987 odds_snapshots", "401872987 pregame_odds",
+        "401872988 games", "401872988 odds_snapshots", "401872988 pregame_odds"
+    })]
+    [InlineData("update", new[]
+    {
+        "401872985 games", "401872985 odds_snapshots", "401872985 pregame_odds",
+        "401872986 games", "401872986 pregame_odds",
+        "401872987 games", "401872987 odds_snapshots", "401872987 pregame_odds",
+        "401872988 games", "401872988 odds_snapshots", "401872988 pregame_odds"
+    })]
+    public async Task Backfill_writes_each_game_in_its_own_transaction(string run, string[] tablesWritten)
     {
         await using var database = await StartThreeGameBackfillAsync();
         await database.ExecuteAsync("""
@@ -663,16 +677,12 @@ public sealed class OddsProviderReportingTests
         await using var app = new OddsApp(BackfillProviders(BackfillBoard(SecondGame, ThirdGame, FourthGame), CoreOdds), database.Use());
 
         var result = await app.Services.GetRequiredService<NflBackfillService>().BackfillSeasonAsync(2026,
-            OneWeek(kalshi: true, skipExisting: true), CancellationToken.None);
+            BackfillRuns[run], CancellationToken.None);
 
         Assert.Empty(result.Errors);
         var writes = (await database.QueryAsync("SELECT tx, tbl, game_id FROM backfill_writes ORDER BY seq"))
             .Select(row => (Tx: (long)row[0], Table: (string)row[1], Game: (string)row[2])).ToArray();
-        Assert.Equal([
-                $"{FirstGame} games", $"{FirstGame} odds_snapshots",
-                $"{ThirdGame} games", $"{ThirdGame} odds_snapshots", $"{ThirdGame} pregame_odds",
-                $"{FourthGame} games", $"{FourthGame} odds_snapshots", $"{FourthGame} pregame_odds"
-            ], writes.Select(w => $"{w.Game} {w.Table}").Distinct().Order());
+        Assert.Equal(tablesWritten, writes.Select(w => $"{w.Game} {w.Table}").Distinct().Order());
         Assert.All(writes.GroupBy(w => w.Tx), transaction => Assert.Single(transaction.Select(w => w.Game).Distinct()));
         Assert.All(writes.GroupBy(w => w.Game), game => Assert.Single(game.Select(w => w.Tx).Distinct()));
         Assert.All(writes.GroupBy(w => w.Tx), transaction =>
