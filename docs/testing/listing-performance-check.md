@@ -214,17 +214,17 @@ as follows:
 | Live odds loop, NFL and sports without series data | One `SaveChanges`. When a game row changed, EF Core writes `games` before `odds_snapshots`, so the fence comes first. When none changed, the save writes snapshots alone and never takes the fence. |
 | Live odds loop, MLB, NBA and NHL series | `PlayoffSeriesCollector` takes the fence with `LockProHypeFenceAsync` before it saves. |
 | Pregame loop | Writes `games` and `pregame_odds`, never snapshots. |
-| College collector and `--import-college-history` | Takes the fence with `LockProHypeFenceAsync` in its transaction, after its last provider request and right before its one `SaveChanges`. |
+| College collector | Takes the fence with `LockProHypeFenceAsync` in its transaction, after its last provider request and right before its one `SaveChanges`. |
+| `--import-college-history --apply` | Commits each game in its own transaction. Each transaction takes the fence with `LockProHypeFenceAsync` after that game's provider requests and before its `SaveChanges`. |
 | `scripts/backfills/recover_empty_odds.py` | Writes snapshots only. Its `SELECT ... FOR UPDATE OF g` on `games` does not fire the fence trigger. |
 | NFL backfill | Takes the fence with `LockProHypeFenceAsync` at the start of each game's transaction. |
 
-The rows for the backfill and the college collector are measured; the rest
-are read from the code.
+The rows for the backfill, the college collector and the history import are
+measured; the rest are read from the code.
 
-The college collector and `--import-college-history` share `RunAsync`. It
-opens its transaction and takes its advisory lock before it fetches anything,
-then makes every provider request, and takes the fence only after the last
-one. So the fence is held for the save and the commit alone, never across a
+The college collector's `RunAsync` opens its transaction and takes its
+advisory lock before it fetches anything, then makes every provider request,
+and takes the fence only after the last one. So the fence is held for the save and the commit alone, never across a
 provider request. Before
 [#183](https://github.com/scowalt/nailbiter/issues/183), the save took the
 fence only through the triggers, and the order relied on every saved game
@@ -237,6 +237,70 @@ shapes. A session holds the fence,
 the college save waits on `pro_hype_revision`, and the session then inserts a
 snapshot for the college save's game. Both must commit. A second test checks
 that no provider request runs while the fence is held.
+
+### College history import fence hold
+
+`--import-college-history --apply` used to save the whole 14-day window in the
+collector's one transaction, so it held the fence for the full save
+([#190](https://github.com/scowalt/nailbiter/issues/190)). Every pro writer
+waited that long. `ImportHistoryAsync` now commits the discovery writes (the
+`college_imports` checkpoint and the roster) and then each game in its own
+transaction. Each transaction takes the fence before it writes and holds it
+for one game's save and commit. Provider requests run between transactions,
+so no request runs while the fence is held.
+
+`CollegeHistoryFenceHoldProbe` measures the hold. It runs a synthetic import
+with 210 one-minute candles per game against PostgreSQL 16, while a concurrent
+writer updates a pro `games` row in a loop. These numbers come from three runs
+on a shared development host:
+
+| Import | Snapshots | Fence hold, one transaction | Fence hold per game, longest | Longest pro writer wait, before → after | Import time, before → after |
+|---|---|---|---|---|---|
+| 150 games | 31,500 | 8.2–9.6 s | 80–130 ms | 8.2–9.6 s → 74–120 ms | 9.0–12.4 s → 9.8–12.4 s |
+| 300 games | 63,000 | 15.9–16.2 s | 84–90 ms | 15.9–16.2 s → 78–85 ms | 17.8–18.4 s → 18.7–19.0 s |
+
+Per-day units were also possible. One 70-game unit, about the size of a full
+FBS Saturday, held the fence for 3.9–5.2 s. With per-game units the hold no
+longer grows with the slate. It grows with one game's candles: 210 here, and
+up to about 1,440 for the longest play window the import accepts, 24 hours.
+The extra commits cost about 5% of import time.
+
+The import holds the advisory lock at session level from start to finish, on
+one connection that it keeps open. The live collector's
+`pg_try_advisory_xact_lock` on the same key fails while the import runs, also
+between games, so the live loop cannot change a game in the middle of an
+import. The import releases the lock when it ends, also when it fails or is
+cancelled. If the server ends the session, the lock ends with it.
+
+If a game fails, the import stops. The games before it stay committed, and the
+import logs one entry with the event and the committed count: Warning for a
+bad provider answer and Error for anything else. Caller cancellation is
+rethrown without a log entry. The CLI prints the committed count and exits
+with code 1. The import commits the `college_imports` checkpoint before the
+first game, so a rerun uses the same window. A rerun requests and saves every
+game in the window again and counts them all. It updates stored games in
+place and skips candles it already has, so it ends with the same rows as one
+clean run. The exceptions are retrieval times, such as
+`scoreboard_updated_at` and the pregame `fetched_at`, which take the rerun's
+time. Stopping keeps one event per run and no
+more provider requests after a failure. A database or Kalshi outage would fail
+each game that followed in the same way.
+
+Operating rule: run the import while no pro save is time-critical, and if it
+stops, fix the cause and rerun the same command. A rerun is safe at any point.
+
+To measure again:
+
+```sh
+NAILBITER_COLLEGE_IMPORT_GAMES=150,300 scripts/test-backend csharp \
+  --filter FullyQualifiedName~CollegeHistoryFenceHoldProbe
+```
+
+`Pro_writer_waits_at_most_one_game_on_the_fence_during_a_150_game_import`
+keeps the bound in the normal suite. A concurrent pro writer must wait less
+than 2 s. The single-transaction import made it wait 9.8 s. 2 s is about 15
+times the longest per-game hold measured here, which leaves room for a slow CI
+host, and less than a quarter of the old wait.
 
 The NFL backfill (`BACKFILL_MODE=true`) keeps both rules. It opens a new
 `DbContext` for each game and saves that game's rows in one transaction, which

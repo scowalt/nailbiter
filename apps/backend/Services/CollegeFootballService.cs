@@ -20,31 +20,69 @@ public sealed class CollegeFootballService(
 {
     private static readonly TimeZoneInfo Eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
 
-    private const string TransactionLock = "SELECT pg_try_advisory_xact_lock(674213608) AS \"Value\"";
+    private const long CollectorLockKey = 674213608;
+    private static readonly string TransactionLock = $"SELECT pg_try_advisory_xact_lock({CollectorLockKey}) AS \"Value\"";
+    private static readonly string SessionLock = $"SELECT pg_try_advisory_lock({CollectorLockKey}) AS \"Value\"";
 
     public async Task<CollegeHistoryImport> ImportHistoryAsync(bool apply, CancellationToken ct)
     {
         var now = time.GetUtcNow().UtcDateTime;
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        await LockCollectorAsync(TransactionLock, ct);
+        await db.Database.OpenConnectionAsync(ct);
+        try
+        {
+            await LockCollectorAsync(SessionLock, ct);
+            try { return apply ? await ImportGamesAsync(now, ct) : await DryRunAsync(now, ct); }
+            finally
+            {
+                if (db.Database.GetDbConnection().State == System.Data.ConnectionState.Open)
+                    await db.Database.ExecuteSqlRawAsync($"SELECT pg_advisory_unlock({CollectorLockKey})", CancellationToken.None);
+            }
+        }
+        finally { await db.Database.CloseConnectionAsync(); }
+    }
+
+    private async Task<CollegeHistoryImport> DryRunAsync(DateTime now, CancellationToken ct)
+    {
         var found = await DiscoverAsync(true, now, ct);
-        var changed = new List<Game>();
+        var eligible = 0;
         foreach (var e in found.Events.Values)
+            if (await StoreAsync(e, found.Season, found.Membership, found.Listings, found.Checkpoint, true, ct) is not null) eligible++;
+        db.ChangeTracker.Clear();
+        logger.LogInformation("DRY RUN: {Count} eligible college games; fixed initial window {Start:o} to {End:o}. No writes.", eligible, found.Checkpoint.WindowStart, found.Checkpoint.FirstImportAt);
+        return new(eligible, true);
+    }
+
+    private async Task<CollegeHistoryImport> ImportGamesAsync(DateTime now, CancellationToken ct)
+    {
+        var found = await DiscoverAsync(true, now, ct);
+        await CommitUnitAsync(ct);
+        var committed = 0;
+        foreach (var (id, e) in found.Events)
         {
-            var game = await StoreAsync(e, found.Season, found.Membership, found.Listings, found.Checkpoint, true, ct);
-            if (game is not null) changed.Add(game);
+            try
+            {
+                if (await StoreAsync(e, found.Season, found.Membership, found.Listings, found.Checkpoint, true, ct) is null) continue;
+                await CommitUnitAsync(ct);
+                committed++;
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                logger.Log(CollegeFailure.Level(ex, KalshiFailure.Is), ex,
+                    "College history import stopped at event {Event} after {Committed} committed games; rerun to resume", id, committed);
+                return new(committed, false);
+            }
+            finally { db.ChangeTracker.Clear(); }
         }
-        if (!apply)
-        {
-            logger.LogInformation("DRY RUN: {Count} eligible college games; fixed initial window {Start:o} to {End:o}. No writes.", changed.Count, found.Checkpoint.WindowStart, found.Checkpoint.FirstImportAt);
-            await transaction.RollbackAsync(ct);
-            db.ChangeTracker.Clear();
-            return new(changed.Count, true);
-        }
+        logger.LogInformation("College history import committed {Committed} games", committed);
+        return new(committed, true);
+    }
+
+    private async Task CommitUnitAsync(CancellationToken ct)
+    {
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await db.LockProHypeFenceAsync(ProHypeFenceAccess.WriteGames, ct);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
-        return new(changed.Count, true);
     }
 
     public async Task<int> RunAsync(CancellationToken ct)
