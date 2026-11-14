@@ -568,7 +568,7 @@ public sealed class OddsProviderReportingTests
 
     [Theory]
     [InlineData("ACCESS EXCLUSIVE", "Error processing game {GameId}")]
-    [InlineData("EXCLUSIVE", "Error processing {SeasonType} week {Week}")]
+    [InlineData("EXCLUSIVE", "Error processing game {GameId}")]
     public async Task Backfill_database_failure_is_sent_once_at_error(string lockMode, string template)
     {
         var board = BackfillBoard();
@@ -588,7 +588,7 @@ public sealed class OddsProviderReportingTests
     [InlineData("FROM pregame_odds", "Failed to fetch pregame odds for game {GameId}", 1, 0)]
     [InlineData("FROM odds_snapshots", "Failed to fetch Kalshi historical odds for game {GameId}", 1, 0)]
     [InlineData("FROM games", "Error processing game {GameId}", 0, 1)]
-    [InlineData("INSERT INTO games", "Error processing {SeasonType} week {Week}", 1, 1)]
+    [InlineData("INSERT INTO games", "Error processing game {GameId}", 1, 1)]
     public async Task Backfill_own_fault_is_sent_once_at_error_and_the_backfill_carries_on(string sql, string template, int created, int errors)
     {
         var board = BackfillBoard();
