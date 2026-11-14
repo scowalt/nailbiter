@@ -173,6 +173,18 @@ public sealed class ProviderResilienceClockTests
     }
 
     [Fact]
+    public async Task Waiting_for_an_entry_thread_that_never_begins_disposing_fails_by_name_and_still_disposes_the_app()
+    {
+        var app = new ClockedApp(Answer.Hang, services => services.AddSingleton<LateTimerDisposal>());
+        var disposal = app.Services.GetRequiredService<LateTimerDisposal>();
+
+        var reported = await Record.ExceptionAsync(() => app.WaitForEntryThreadDisposalAsync(disposal.Started));
+
+        Assert.Equal("the entry thread never began disposing the host", Assert.IsType<TimeoutException>(reported).Message);
+        Assert.True(disposal.Finished);
+    }
+
+    [Fact]
     public async Task Disposing_the_app_fails_by_name_at_the_guard_when_a_service_hangs_without_the_clock()
     {
         var app = new ClockedApp(Answer.Hang, services => services.AddSingleton<ClocklessHang>());
