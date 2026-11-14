@@ -175,6 +175,29 @@ for 7-day and 56-day histories. The report shows the counts (`relationScans`,
 `chunkScans`) so a change in that number is visible in review. The excitement
 history read still scans every chunk.
 
+The trigger locks the game's `newest_odds` row on every insert, update and
+delete, and holds that lock until the transaction commits. Two consequences
+follow:
+
+- Concurrent changes to one game are safe. A delete or move locks the row
+  before it compares the deleted time with the pointer, so it waits for the
+  other transaction and then reads its committed rows.
+  `Concurrent_odds_changes_to_one_game_keep_its_newest_odds` pins four such
+  interleavings, and it fails if the trigger drops `FOR UPDATE`.
+- Writers that run at the same time must insert or delete odds for their games
+  in one consistent order, for example ordered by game id. Two transactions
+  that change games A and B in opposite orders now deadlock, and PostgreSQL
+  aborts one of them.
+
+Today's writers meet the rule. The live odds loop scrapes one sport and date
+at a time, and the pregame loop that runs beside it writes `pregame_odds`, not
+snapshots. The college collector and `--import-college-history` share one
+advisory lock and write only college games, which no other writer changes. The
+NFL backfill saves one game per transaction. A new parallel or multi-game
+writer, including a manual script such as
+`scripts/backfills/recover_empty_odds.py`, must keep the rule or run while no
+other writer changes the same games.
+
 ## Report
 
 Text output is a table with one row per path: measured and warmup counts,
