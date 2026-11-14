@@ -597,7 +597,7 @@ public sealed class ProviderResilienceClockTests
                 Clock.Advance(DisposalStep);
                 await Task.Delay(1);
             }
-            await disposing;
+            await disposing.WaitAsync(Guard);
             Provider.Dispose();
         }
     }
