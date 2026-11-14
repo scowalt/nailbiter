@@ -134,12 +134,19 @@ def sandbox(test, prefix):
     return temp
 
 
+def process_table():
+    for stat in Path('/proc').glob('[0-9]*/stat'):
+        with contextlib.suppress(OSError):
+            state, _, group = stat.read_text().rsplit(')', 1)[1].split()[:3]
+            yield int(stat.parent.name), state, int(group)
+
+
 def processes_under(temp):
     marker = str(temp)
-    for process in Path('/proc').glob('[0-9]*'):
+    for pid, _, _ in process_table():
         with contextlib.suppress(OSError):
-            if int(process.name) != os.getpid() and (marker.encode() in (process / 'cmdline').read_bytes() or os.readlink(process / 'cwd').startswith(marker)):
-                yield int(process.name)
+            if pid != os.getpid() and (marker.encode() in Path(f'/proc/{pid}/cmdline').read_bytes() or os.readlink(f'/proc/{pid}/cwd').startswith(marker)):
+                yield pid
 
 
 def stop_processes_under(temp):
@@ -162,6 +169,10 @@ def msbuild_start(log):
         with contextlib.suppress(ValueError):
             return datetime.strptime(started, layout)
     raise AssertionError(f'unrecognised MSBuild start time {started!r}')
+
+
+def assert_built_after(test, waiter_log, holder_trx):
+    test.assertGreaterEqual(msbuild_start(waiter_log), trx_finish(holder_trx).replace(microsecond=0), 'the waiting run built before the holder had finished its tests')
 
 
 class SandboxedTestCase(unittest.TestCase):
@@ -228,13 +239,7 @@ time.sleep(0.6)
 
 
 def group_members(group):
-    members = []
-    for stat in Path('/proc').glob('[0-9]*/stat'):
-        with contextlib.suppress(OSError):
-            state, _, process_group = stat.read_text().rsplit(')', 1)[1].split()[:3]
-            if int(process_group) == group and state != 'Z':
-                members.append(int(stat.parent.name))
-    return members
+    return [pid for pid, state, process_group in process_table() if process_group == group and state != 'Z']
 
 
 def kill_group(group):
@@ -565,9 +570,7 @@ class RealToolchainTests(SandboxedTestCase):
         self.assertIn('waiting for scripts/test-backend fsharp', outputs[1])
         runs = {next(run.glob('*.trx')).stem: run for run in (worktree / 'obj/test-backend/runs').iterdir()}
         self.assertEqual(sorted(runs), ['csharp', 'fsharp'])
-        holder_finished = trx_finish(runs['fsharp'] / 'fsharp.trx')
-        waiter_build_started = msbuild_start(runs['csharp'] / 'build.log')
-        self.assertGreaterEqual(waiter_build_started, holder_finished.replace(microsecond=0), 'the waiting run built before the holder had finished its tests')
+        assert_built_after(self, runs['csharp'] / 'build.log', runs['fsharp'] / 'fsharp.trx')
         build_logs = [(run / 'build.log').read_text() for run in runs.values()]
         compiles = [len(re.findall(r'^\s*\S*/csc\s.*/out:obj/Release/net10\.0/Shared\.dll', log, re.MULTILINE)) for log in build_logs]
         self.assertEqual(sum(compiles), 1, 'the shared library compiles once across both invocations')
