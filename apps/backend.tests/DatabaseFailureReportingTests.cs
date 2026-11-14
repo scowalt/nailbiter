@@ -18,6 +18,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Npgsql;
 using Sentry;
@@ -458,6 +459,20 @@ public sealed class DatabaseFailureReportingTests
         Assert.Empty(await app.SentEventsAfterStopAsync());
     }
 
+    [Theory]
+    [InlineData("Microsoft.EntityFrameworkCore.Query")]
+    [InlineData("Microsoft.EntityFrameworkCore.Update")]
+    public async Task Other_ef_error_logs_with_an_exception_still_reach_glitchtip(string category)
+    {
+        await using var app = new ReportingApp("Host=127.0.0.1;Database=unused", worker: null);
+
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(category)
+            .LogError(new InvalidOperationException("Synthetic EF failure"), "Synthetic EF failure");
+
+        var reported = Assert.Single(await app.SentEventsAfterFailureAsync());
+        Assert.Equal((category, "error"), (reported.Logger, reported.Level));
+    }
+
     private static ReportingApp MoneyPuckApp(SyntheticDatabase database, MoneyPuckQualificationHandler moneyPuck) =>
         new(database.ConnectionString + LockTimeout, typeof(MoneyPuckRefreshBackgroundService),
             services =>
@@ -646,6 +661,8 @@ public sealed class DatabaseFailureReportingTests
         }
 
         public HttpClient Client { get; }
+
+        public IServiceProvider Services => app.Services;
 
         public async Task<IReadOnlyCollection<SentEvent>> SentEventsAfterStopAsync()
         {
