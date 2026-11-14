@@ -57,7 +57,7 @@ cd apps/www
 portless run --tailscale astro dev
 ```
 
-The local URL works. The Tailscale URL returns HTTP 403 until [#146](https://github.com/scowalt/nailbiter/issues/146) is fixed.
+Both URLs that `portless list` prints serve the site. In `astro dev` only, `apps/www/astro.config.mjs` adds the host from `PORTLESS_TAILSCALE_URL` to the allowed hosts. Every other host stays blocked, and `astro build` and `astro preview` are unaffected. `tests/ci/test_marketing_dev_hosts.py` covers this behavior.
 
 For backend development, set `ConnectionStrings__DefaultConnection` to your isolated development database. Do not start the production Compose stack against existing production-named volumes just to run tests. The application does not create its tables. Apply every `apps/backend/Migrations/*.sql` file in name order, as `scripts/ci/deploy-backend.sh` does in production, or the pages return HTTP 500. To create a throwaway database with the TimescaleDB image that `docker-compose.yml` pins, from the repository root:
 
