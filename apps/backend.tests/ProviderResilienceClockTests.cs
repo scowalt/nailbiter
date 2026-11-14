@@ -571,7 +571,11 @@ public sealed class ProviderResilienceClockTests
             return transport.Events.ToArray();
         }
 
-        public Task WaitForEntryThreadDisposalAsync(Task reached) => reached.WaitAsync(Guard);
+        public async Task WaitForEntryThreadDisposalAsync(Task reached)
+        {
+            if (await Task.WhenAny(reached, Task.Delay(Guard)) != reached)
+                await UsingAsync(this, _ => throw new TimeoutException("the entry thread never began disposing the host"));
+        }
 
         public async ValueTask DisposeAsync()
         {
