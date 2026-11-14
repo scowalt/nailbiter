@@ -415,6 +415,20 @@ class SelectionAndBuildTests(SandboxedTestCase):
         self.assertRegex(output, r'csharp\s+FAILED\s+2 passed, 0 failed, 0 skipped')
         self.assertIn('TRX counters report 2 failed tests, but it lists 0', output)
 
+    def test_a_results_file_without_counters_fails_and_says_so(self):
+        cases = {
+            'with a listed failure': (FAILING, 1),
+            'with only passing results': (PASSING, 0),
+        }
+        for case, (suites, exit_code) in cases.items():
+            with self.subTest(case):
+                harness = Harness(self, {'suites': suites, 'runs': {'backend.tests': {'trx': 'no-counters', 'exit': exit_code}}})
+                code, output = harness.run('csharp')
+                self.assertEqual(code, EXIT['tests failed'], output)
+                self.assertRegex(output, r'csharp\s+FAILED')
+                self.assertIn('the TRX file has no Counters; read its log', output)
+                self.assertNotIn('TRX counters report', output)
+
     def test_a_selection_whose_tests_are_all_skipped_ran_no_test(self):
         harness = Harness(self, {'suites': {**PASSING, 'backend.tests': {'HostTests.Waits': 'skip'}}})
         code, output = harness.run('csharp')
