@@ -692,7 +692,7 @@ public sealed class DatabaseFailureReportingTests
         }
     }
 
-    private static class ProgramEntryPoint
+    internal static class ProgramEntryPoint
     {
         private static readonly AsyncLocal<object?> CurrentRun = new();
 
@@ -780,9 +780,9 @@ public sealed class DatabaseFailureReportingTests
         async ValueTask IAsyncDisposable.DisposeAsync() => await ReleaseAsync();
     }
 
-    private sealed record SentEvent(string? Logger, string? Level, (string Type, string Value)[] Exceptions, string?[] BreadcrumbCategories);
+    internal sealed record SentEvent(string? Logger, string? Level, (string Type, string Value)[] Exceptions, string?[] BreadcrumbCategories);
 
-    private sealed class SentTransport : ITransport
+    internal sealed class SentTransport : ITransport
     {
         public ConcurrentQueue<SentEvent> Events { get; } = new();
 
