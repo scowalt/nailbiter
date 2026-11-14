@@ -534,6 +534,33 @@ class ConcurrencyTests(SandboxedTestCase):
                 self.assertEqual(group_members(group), [], 'the test host stops with its invocation')
 
 
+class SandboxCleanupTests(SandboxedTestCase):
+    def test_cleanup_stops_the_sandbox_processes_and_their_groups_and_nothing_else(self):
+        temp = sandbox(self, 'nailbiter-test-backend-cleanup-')
+        (temp / 'sub').mkdir()
+        sibling = Path(f'{temp}2')
+        sibling.mkdir()
+        self.addCleanup(shutil.rmtree, sibling, ignore_errors=True)
+
+        def start(cwd, *args, **options):
+            process = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)', *args], cwd=cwd, **options)
+            self.addCleanup(process.wait)
+            self.addCleanup(process.kill)
+            return process
+
+        leader = start(temp, process_group=0)
+        nested = start(temp / 'sub')
+        grouped = start(sibling, process_group=leader.pid)
+        bystander = start(sibling)
+        mentioner = start(sibling, str(temp / 'sub'))
+        stop_processes_under(temp)
+        for name, process in {'leader': leader, 'nested': nested, 'grouped': grouped}.items():
+            with self.subTest(stopped=name):
+                self.assertEqual(process.wait(timeout=10), -signal.SIGKILL)
+        for name, process in {'bystander': bystander, 'mentioner': mentioner}.items():
+            with self.subTest(survives=name):
+                self.assertIsNone(process.poll())
+
 
 def dotnet_sdk_root():
     if not shutil.which('dotnet'):
