@@ -275,6 +275,15 @@ type NflBackfillService
                 return 0
         }
 
+    member private _.SaveGameAsync(db: ExcitementDbContext, ct: CancellationToken) : Task =
+        task {
+            if db.ChangeTracker.HasChanges() then
+                use! transaction = db.Database.BeginTransactionAsync(ct)
+                do! db.LockProHypeFenceAsync(ProHypeFenceAccess.WriteGames, ct)
+                let! _ = db.SaveChangesAsync(ct)
+                do! transaction.CommitAsync(ct)
+        }
+
     member private this.ProcessGameAsync
         (espnEvent: EspnEvent,
          seasonYear: int,
@@ -341,8 +350,7 @@ type NflBackfillService
                                     result.KalshiOddsSnapshotsCreated <-
                                         result.KalshiOddsSnapshotsCreated + kalshiSnapshots
 
-                            let! _ = db.SaveChangesAsync(ct)
-                            ()
+                            do! this.SaveGameAsync(db, ct)
                         else
                             existingGame.HomeTeam <- home.Team.DisplayName
                             existingGame.AwayTeam <- away.Team.DisplayName
@@ -398,8 +406,7 @@ type NflBackfillService
                                     result.KalshiOddsSnapshotsCreated + kalshiSnapshots
 
                             if not options.DryRun then
-                                let! _ = db.SaveChangesAsync(ct)
-                                ()
+                                do! this.SaveGameAsync(db, ct)
                     else
                         let homeScore =
                             match Int32.TryParse(home.Score) with
@@ -465,8 +472,7 @@ type NflBackfillService
                                 result.KalshiOddsSnapshotsCreated + kalshiSnapshots
 
                         if not options.DryRun then
-                            let! _ = db.SaveChangesAsync(ct)
-                            ()
+                            do! this.SaveGameAsync(db, ct)
         }
         :> Task
 
