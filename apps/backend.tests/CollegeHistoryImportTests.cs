@@ -63,6 +63,7 @@ public sealed class CollegeHistoryImportTests
         Assert.Equal(2, committedBeforeLive);
         Assert.Equal("Another college collector/import is running", Assert.IsType<InvalidOperationException>(live).Message);
         Assert.Equal((4, true), (import.Games, import.Complete));
+        Assert.Equal(0, await database.AdvisoryLocksAsync());
         await database.CollectLiveAsync();
     }
 
@@ -83,6 +84,7 @@ public sealed class CollegeHistoryImportTests
         CollegeHistoryImport stopped;
         await using (var db = CollegeHistoryDatabase.Context(database.LockTimeoutConnectionString))
             stopped = await database.Provider.Service(db, logs).ImportHistoryAsync(true, CancellationToken.None);
+        Assert.Equal(0, await database.AdvisoryLocksAsync());
         await fence!.DisposeAsync();
 
         Assert.Equal((3, false), (stopped.Games, stopped.Complete));
@@ -115,6 +117,7 @@ public sealed class CollegeHistoryImportTests
         await using (var db = database.Context())
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => database.Provider.Service(db, logs).ImportHistoryAsync(true, cancel.Token));
 
+        Assert.Equal(0, await database.AdvisoryLocksAsync());
         Assert.DoesNotContain(logs.Entries, entry => entry.Level >= LogLevel.Warning);
         Assert.Equal(2, await database.CountAsync("games") - 1);
         await database.CollectLiveAsync();

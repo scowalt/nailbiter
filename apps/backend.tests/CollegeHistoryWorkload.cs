@@ -278,17 +278,27 @@ internal sealed class CollegeHistoryDatabase : IAsyncDisposable
         return rows;
     }
 
-    public async Task<IAsyncDisposable> HoldFenceAsync()
+    public Task<IAsyncDisposable> HoldFenceAsync() => HoldAsync("SELECT id FROM pro_hype_revision WHERE id = 1 FOR UPDATE");
+
+    public async Task<IAsyncDisposable> HoldAsync(string sql)
     {
         var connection = new NpgsqlConnection(ConnectionString);
         await connection.OpenAsync();
         var transaction = await connection.BeginTransactionAsync();
-        await using var fence = new NpgsqlCommand("SELECT id FROM pro_hype_revision WHERE id = 1 FOR UPDATE", connection, transaction);
-        await fence.ExecuteNonQueryAsync();
-        return new HeldFence(connection, transaction);
+        await using var hold = new NpgsqlCommand(sql, connection, transaction);
+        await hold.ExecuteNonQueryAsync();
+        return new Held(connection, transaction);
     }
 
-    private sealed class HeldFence(NpgsqlConnection connection, NpgsqlTransaction transaction) : IAsyncDisposable
+    public async Task<long> AdvisoryLocksAsync()
+    {
+        await using var connection = new NpgsqlConnection(ConnectionString + ";Pooling=false");
+        await connection.OpenAsync();
+        await using var command = new NpgsqlCommand("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory'", connection);
+        return (long)(await command.ExecuteScalarAsync())!;
+    }
+
+    private sealed class Held(NpgsqlConnection connection, NpgsqlTransaction transaction) : IAsyncDisposable
     {
         public async ValueTask DisposeAsync()
         {
