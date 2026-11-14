@@ -37,6 +37,7 @@ public sealed class PlayoffAndProHypeReportingTests
     private const string NhlModelRejected = "Rejected NHL PlayoffStatus model refresh for season {Season}: {Reason}";
     private const int NhlSeason = 2027;
     private const string ProCompetitionFailure = "Pro context request failed for {Sport}/{Season}; previous timestamps preserved";
+    private const string ProCompetitionLoopFailure = "Pro competition refresh failed";
     private const string ProHypeFailure = "Pro hype capture failed";
     private const string LockTimeout = ";Options=-c lock_timeout=500";
     private static readonly TimeSpan HangDeadline = TimeSpan.FromSeconds(60);
@@ -254,6 +255,29 @@ public sealed class PlayoffAndProHypeReportingTests
         Assert.Empty(sent);
         Assert.DoesNotContain(app.Logs, l => l.Exception is ObjectDisposedException);
         Assert.DoesNotContain(app.Logs, l => l.Level >= LogLevel.Warning && l.Category.StartsWith("backend", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Pro_competition_disposed_object_outside_shutdown_is_sent_once_at_error_and_the_loop_keeps_running()
+    {
+        await using var app = new ReportingApp(_ => Unexpected, typeof(ProCompetitionRefreshBackgroundService), configure: services =>
+        {
+            services.RemoveAll<ExcitementDbContext>();
+            services.AddScoped(provider =>
+            {
+                var db = new ExcitementDbContext(provider.GetRequiredService<DbContextOptions<ExcitementDbContext>>());
+                db.Dispose();
+                return db;
+            });
+        });
+        var loop = app.Services.GetServices<IHostedService>().OfType<ProCompetitionRefreshBackgroundService>().Single().ExecuteTask!;
+        var logged = app.WaitForLogAsync(typeof(ProCompetitionRefreshBackgroundService), ProCompetitionLoopFailure);
+
+        await Task.WhenAny(logged, loop).WaitAsync(HangDeadline);
+
+        Assert.False(loop.IsCompleted, "the refresh loop exited instead of waiting for its next iteration");
+        await logged;
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(ProCompetitionRefreshBackgroundService), ProCompetitionLoopFailure, typeof(ObjectDisposedException));
     }
 
     [Fact]
