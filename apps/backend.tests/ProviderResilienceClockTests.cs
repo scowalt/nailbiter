@@ -164,6 +164,8 @@ public sealed class ProviderResilienceClockTests
         var disposal = app.Services.GetRequiredService<LateTimerDisposal>();
         Assert.Equal(0, app.Clock.LiveTimers);
 
+        app.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
+        await disposal.Started.WaitAsync(Guard);
         await Task.Run(() => app.DisposeAsync().AsTask()).WaitAsync(Guard);
 
         Assert.True(disposal.Finished);
@@ -427,10 +429,15 @@ public sealed class ProviderResilienceClockTests
     {
         private static readonly TimeSpan RealWork = TimeSpan.FromMilliseconds(200);
 
+        private readonly TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Started => started.Task;
+
         public bool Finished { get; private set; }
 
         public async ValueTask DisposeAsync()
         {
+            started.TrySetResult();
             await Task.Delay(RealWork);
             await Task.Delay(DisposalStep, clock);
             Finished = true;
