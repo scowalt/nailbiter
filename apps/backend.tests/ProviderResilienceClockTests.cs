@@ -278,7 +278,8 @@ public sealed class ProviderResilienceClockTests
             }
             catch (Exception disposal)
             {
-                throw new XunitException(failure.Message, new AggregateException(failure, disposal));
+                var message = failure is IAssertionException ? failure.Message : $"{failure.GetType().FullName} : {failure.Message}";
+                throw new XunitException(message, new AggregateException(failure, disposal));
             }
             throw;
         }
