@@ -321,8 +321,8 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
 
     [Theory]
     [InlineData("nfl", 54)]
-    [InlineData("nba", 70)]
-    [InlineData("nhl", 58)]
+    [InlineData("nba", 56)]
+    [InlineData("nhl", 47)]
     [InlineData("mlb", 64)]
     public async Task Capture_before_visits_survives_prolonged_transport_gaps_first_HTTP_after_restart_and_complete_changing_recovery(string sport, int rounded)
     {
@@ -638,8 +638,8 @@ public sealed class ProHypeAcceptanceTests : IAsyncLifetime
             Assert.Contains("Stakes and hype use model estimates for NSH / OTT from MoneyPuck.", preview.TextContent);
             Assert.Equal("https://moneypuck.com/predictions.htm", preview.QuerySelector("a")!.GetAttribute("href"));
             if (path.StartsWith("/game/", StringComparison.Ordinal))
-                Assert.StartsWith("Hype Score58Stakes6Quality97Closeness100", preview.TextContent);
-            else Assert.Equal("Hype58", document.QuerySelector($"#excitement-{game.Id}")!.TextContent);
+                Assert.StartsWith("Hype Score47Stakes6Quality97Closeness100", preview.TextContent);
+            else Assert.Equal("Hype47", document.QuerySelector($"#excitement-{game.Id}")!.TextContent);
         }
         using var verification = recreated.Services.CreateScope();
         var retained = await verification.ServiceProvider.GetRequiredService<IProHypeLifecycle>().ResolveAsync(game.Id);

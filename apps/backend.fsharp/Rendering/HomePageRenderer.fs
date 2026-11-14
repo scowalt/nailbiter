@@ -114,10 +114,10 @@ module HomePageRenderer =
         match game.Status with
         | "in_progress" -> "live"
         | "scheduled" ->
-            let hype = availableHype game hypeScores
-            if hype.HasValue && hype.Value >= 70.0 then "best"
-            elif hype.HasValue && hype.Value >= 40.0 then "good"
-            else "more"
+            match availableHype game hypeScores |> FormatHelpers.getHypeLevel with
+            | FormatHelpers.HypeHigh -> "best"
+            | FormatHelpers.HypeMedium -> "good"
+            | FormatHelpers.HypeLow -> "more"
         | _ -> "other"
 
     let private gameCard (game: Game) (odds: IDictionary<string, OddsSnapshot>) (scores: IDictionary<string, Nullable<float>>) (hypeScores: IDictionary<string, Nullable<float>>) (teamRanks: IDictionary<string, TeamRankInfo>) (hypeCredits: IDictionary<string, DerivedHypeCredit>) =

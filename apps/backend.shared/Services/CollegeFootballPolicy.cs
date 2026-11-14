@@ -56,6 +56,11 @@ public static class CollegeFootballPolicy
         return Math.Clamp((40 * Bubble(h, a) + 30 * Math.Min(h, a)) * urgency + 20 * progress * relevance, 0, 90);
     }
 
+    public static double? Hype(double? stakes, double? quality, double? closeness, double? relevance) =>
+        stakes is double s && quality is double q && closeness is double c && relevance is double r
+            ? .45 * s + .35 * q + .20 * c * r
+            : null;
+
     public static double? CfpRelevance(Game game, double? homeQualification, double? awayQualification)
     {
         if (game.CollegeCompetition is "cfp" or "conference_championship" or "bowl") return 1;

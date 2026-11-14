@@ -22,7 +22,7 @@ public interface IProHypeLifecycle
 public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> databaseOptions, HypeScoreService scorer, TimeProvider clock,
     IOptions<PlayoffRatingsOptions> options, IServiceScopeFactory scopes) : IProHypeLifecycle
 {
-    private const int RegularSeasonFormulaVersion = 5;
+    private const int RegularSeasonFormulaVersion = 6;
     private const int NflRegularSeasonFormulaVersion = 6;
     private const int SeedingFreeCompetitionFormulaVersion = 2;
     private readonly IModel model = Mapping(databaseOptions);

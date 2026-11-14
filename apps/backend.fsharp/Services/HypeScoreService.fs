@@ -533,7 +533,8 @@ type HypeScoreService
                 |> Option.ofNullable |> Option.defaultValue Double.NaN
         elif sport = "cfb" then
             if not components.IsComplete then Double.NaN
-            else components.StakesScore * 0.45 + components.QualityScore * 0.35 + components.ClosenessScore * components.CfpRelevance * 0.20
+            else CollegeFootballPolicy.Hype(Nullable components.StakesScore, Nullable components.QualityScore,
+                                            Nullable components.ClosenessScore, Nullable components.CfpRelevance).Value
         else
         let struct (stakesWeight, qualityWeight, closenessWeight) =
             match weights.TryGetValue(sport.ToLower()) with
