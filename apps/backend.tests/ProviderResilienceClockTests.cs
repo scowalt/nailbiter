@@ -156,6 +156,18 @@ public sealed class ProviderResilienceClockTests
         await fetch.WaitAsync(Guard);
     }
 
+    [Fact]
+    public async Task Disposing_the_app_keeps_the_clock_moving_while_disposal_is_pending_with_no_live_timer()
+    {
+        var app = new ClockedApp(Answer.Hang, services => services.AddSingleton<LateTimerDisposal>());
+        var disposal = app.Services.GetRequiredService<LateTimerDisposal>();
+        Assert.Equal(0, app.Clock.LiveTimers);
+
+        await Task.Run(() => app.DisposeAsync().AsTask()).WaitAsync(Guard);
+
+        Assert.True(disposal.Finished);
+    }
+
     [Theory]
     [MemberData(nameof(NonRetryableAnswers))]
     public async Task Non_retryable_scoreboard_answer_is_fetched_once_and_stays_a_warning(string name, HttpStatusCode status)
@@ -358,6 +370,20 @@ public sealed class ProviderResilienceClockTests
         }
     }
 
+    private sealed class LateTimerDisposal(TimeProvider clock) : IAsyncDisposable
+    {
+        private static readonly TimeSpan RealWork = TimeSpan.FromMilliseconds(200);
+
+        public bool Finished { get; private set; }
+
+        public async ValueTask DisposeAsync()
+        {
+            await Task.Delay(RealWork);
+            await Task.Delay(DisposalStep, clock);
+            Finished = true;
+        }
+    }
+
     private sealed class ClockedApp : IAsyncDisposable
     {
         private readonly AppFactory entry = new();
@@ -365,7 +391,7 @@ public sealed class ProviderResilienceClockTests
         private readonly SentTransport transport = new();
         private readonly LogRecorder logs = new();
 
-        public ClockedApp(Answer answer, TimeSpan descheduleAfterArming = default)
+        public ClockedApp(Answer answer, Action<IServiceCollection>? configure = null, TimeSpan descheduleAfterArming = default)
         {
             Clock = new SteppedClock(descheduleAfterArming);
             Provider = new ControlledProvider(answer, Clock);
@@ -387,6 +413,7 @@ public sealed class ProviderResilienceClockTests
                         options.Dsn = "https://public@sentry.invalid/1";
                         options.Transport = transport;
                     });
+                    configure?.Invoke(services);
                 });
             });
         }
