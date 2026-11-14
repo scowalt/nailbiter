@@ -5,6 +5,7 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using backend.Data;
+using backend.Models;
 using backend.Services;
 using backend.Services.Backfill;
 using backend.Services.Espn;
@@ -48,12 +49,30 @@ public sealed class OddsProviderReportingTests
     private static readonly DateTime HistoricalStart = new(2026, 9, 13, 17, 0, 0, DateTimeKind.Utc);
     private static readonly DateTimeOffset Now = new(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
     private static readonly DateTimeOffset PregameNow = new(2026, 10, 4, 19, 56, 0, TimeSpan.Zero);
+    private const string FirstGame = "401872985";
+    private const string SecondGame = "401872986";
+    private const string ThirdGame = "401872987";
+    private const string FourthGame = "401872988";
+    private static readonly Answer KalshiCandles = new Reply(HttpStatusCode.OK, """
+        {"candlesticks":[
+            {"end_period_ts":1791730800,"price":{"close_dollars":"0.4000"},"volume_fp":"5"},
+            {"end_period_ts":1791734400,"price":{"close_dollars":"0.6000"},"volume_fp":"5"}]}
+        """);
+    private static readonly Answer CoreOdds = new Reply(HttpStatusCode.OK,
+        """{"items":[{"homeTeamOdds":{"close":{"moneyLine":{"american":"-150"}}},"awayTeamOdds":{"close":{"moneyLine":{"american":"+130"}}}}]}""");
 
     private static readonly Dictionary<string, (Answer Answer, Action<IServiceCollection> Configure, Type Exception)> Faults = new()
     {
         ["own fault"] = (Fault, _ => { }, typeof(InvalidOperationException)),
         ["client deadline"] = (Hang, services => services.ConfigureAll<HttpClientFactoryOptions>(options =>
             options.HttpClientActions.Add(client => client.Timeout = TimeSpan.FromMilliseconds(200))), typeof(TaskCanceledException)),
+    };
+
+    private static readonly Dictionary<string, BackfillOptions> BackfillRuns = new()
+    {
+        ["default"] = OneWeek(kalshi: true, skipExisting: true),
+        ["update"] = OneWeek(kalshi: true),
+        ["dry run"] = OneWeek(kalshi: true, skipExisting: true, dryRun: true),
     };
 
     private static readonly Dictionary<string, Answer> UnusableAnswers = new()
@@ -549,7 +568,7 @@ public sealed class OddsProviderReportingTests
 
     [Theory]
     [InlineData("ACCESS EXCLUSIVE", "Error processing game {GameId}")]
-    [InlineData("EXCLUSIVE", "Error processing {SeasonType} week {Week}")]
+    [InlineData("EXCLUSIVE", "Error processing game {GameId}")]
     public async Task Backfill_database_failure_is_sent_once_at_error(string lockMode, string template)
     {
         var board = BackfillBoard();
@@ -569,7 +588,7 @@ public sealed class OddsProviderReportingTests
     [InlineData("FROM pregame_odds", "Failed to fetch pregame odds for game {GameId}", 1, 0)]
     [InlineData("FROM odds_snapshots", "Failed to fetch Kalshi historical odds for game {GameId}", 1, 0)]
     [InlineData("FROM games", "Error processing game {GameId}", 0, 1)]
-    [InlineData("INSERT INTO games", "Error processing {SeasonType} week {Week}", 1, 1)]
+    [InlineData("INSERT INTO games", "Error processing game {GameId}", 1, 1)]
     public async Task Backfill_own_fault_is_sent_once_at_error_and_the_backfill_carries_on(string sql, string template, int created, int errors)
     {
         var board = BackfillBoard();
@@ -597,6 +616,111 @@ public sealed class OddsProviderReportingTests
 
         Assert.StartsWith("Fatal error: ", Assert.Single(result.Errors));
         AssertSentOnceAtError(await app.SentEventsAsync(), typeof(NflBackfillService), "Backfill failed with error", typeof(InvalidOperationException));
+    }
+
+    [Theory]
+    [InlineData("new games")]
+    [InlineData("existing games")]
+    [InlineData("updated games")]
+    public async Task Backfill_failed_game_save_leaks_no_rows_into_the_next_game(string games)
+    {
+        var existing = games != "new games";
+        await using var database = await OddsDatabase.StartTimescaleAsync();
+        if (existing) await database.SeedAsync(BackfillGame(FirstGame, weekFields: true), BackfillGame(SecondGame, weekFields: true));
+        await database.ExecuteAsync($"""
+            CREATE FUNCTION fail_backfill_save() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+                RAISE EXCEPTION 'synthetic save failure for %', NEW.game_id;
+            END $$;
+            CREATE TRIGGER fail_backfill_save BEFORE INSERT ON odds_snapshots FOR EACH ROW
+                WHEN (NEW.game_id = '{FirstGame}') EXECUTE FUNCTION fail_backfill_save();
+            """);
+        await using var app = new OddsApp(BackfillProviders(BackfillBoard(SecondGame), NotFound), database.Use());
+
+        var result = await app.Services.GetRequiredService<NflBackfillService>().BackfillSeasonAsync(2026,
+            OneWeek(kalshi: true, skipExisting: games == "existing games"), CancellationToken.None);
+
+        Assert.StartsWith($"Game {FirstGame}:", Assert.Single(result.Errors));
+        Assert.Equal([$"odds {SecondGame} kalshi_backfill 2"], await SnapshotRowsAsync(database));
+        Assert.Equal(existing ? new[] { FirstGame, SecondGame } : [SecondGame], await database.TextAsync("SELECT id FROM games ORDER BY id"));
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(NflBackfillService), "Error processing game {GameId}", typeof(PostgresException));
+    }
+
+    [Theory]
+    [InlineData("default", new[]
+    {
+        "401872985 games", "401872985 odds_snapshots",
+        "401872987 games", "401872987 odds_snapshots", "401872987 pregame_odds",
+        "401872988 games", "401872988 odds_snapshots", "401872988 pregame_odds"
+    })]
+    [InlineData("update", new[]
+    {
+        "401872985 games", "401872985 odds_snapshots", "401872985 pregame_odds",
+        "401872986 games", "401872986 pregame_odds",
+        "401872987 games", "401872987 odds_snapshots", "401872987 pregame_odds",
+        "401872988 games", "401872988 odds_snapshots", "401872988 pregame_odds"
+    })]
+    public async Task Backfill_writes_each_game_in_its_own_transaction(string run, string[] tablesWritten)
+    {
+        await using var database = await StartThreeGameBackfillAsync();
+        await database.ExecuteAsync("""
+            CREATE TABLE backfill_writes (seq bigserial PRIMARY KEY, tx bigint NOT NULL, tbl text NOT NULL, game_id text NOT NULL);
+            CREATE FUNCTION audit_backfill_write() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+                INSERT INTO backfill_writes (tx, tbl, game_id) VALUES (txid_current(), TG_ARGV[0], to_jsonb(NEW) ->> TG_ARGV[1]);
+                RETURN NULL;
+            END $$;
+            CREATE TRIGGER audit_games AFTER INSERT OR UPDATE ON games FOR EACH ROW EXECUTE FUNCTION audit_backfill_write('games', 'id');
+            CREATE TRIGGER audit_pregame_odds AFTER INSERT OR UPDATE ON pregame_odds FOR EACH ROW EXECUTE FUNCTION audit_backfill_write('pregame_odds', 'game_id');
+            CREATE TRIGGER audit_odds_snapshots AFTER INSERT OR UPDATE ON odds_snapshots FOR EACH ROW EXECUTE FUNCTION audit_backfill_write('odds_snapshots', 'game_id');
+            """);
+        await using var app = new OddsApp(BackfillProviders(BackfillBoard(SecondGame, ThirdGame, FourthGame), CoreOdds), database.Use());
+
+        var result = await app.Services.GetRequiredService<NflBackfillService>().BackfillSeasonAsync(2026,
+            BackfillRuns[run], CancellationToken.None);
+
+        Assert.Empty(result.Errors);
+        var writes = (await database.QueryAsync("SELECT tx, tbl, game_id FROM backfill_writes ORDER BY seq"))
+            .Select(row => (Tx: (long)row[0], Table: (string)row[1], Game: (string)row[2])).ToArray();
+        Assert.Equal(tablesWritten, writes.Select(w => $"{w.Game} {w.Table}").Distinct().Order());
+        Assert.All(writes.GroupBy(w => w.Tx), transaction => Assert.Single(transaction.Select(w => w.Game).Distinct()));
+        Assert.All(writes.GroupBy(w => w.Game), game => Assert.Single(game.Select(w => w.Tx).Distinct()));
+        Assert.All(writes.GroupBy(w => w.Tx), transaction =>
+            Assert.DoesNotContain(transaction.SkipWhile(w => w.Table == "games"), w => w.Table == "games"));
+    }
+
+    [Theory]
+    [InlineData("default", new[] { 1, 0, 2, 1, 4 }, new[]
+    {
+        "game 401872985 2026 2 1 Week 1", "game 401872986 2026 2 1 Week 1", "game 401872987 2026 2 1 Week 1",
+        "pregame 401872987 espn_backfill",
+        "odds 401872985 kalshi_backfill 2", "odds 401872986 kalshi_backfill 1", "odds 401872987 kalshi_backfill 2"
+    })]
+    [InlineData("update", new[] { 1, 2, 0, 3, 4 }, new[]
+    {
+        "game 401872985 2026 2 1 Week 1", "game 401872986 2026 2 1 Week 1", "game 401872987 2026 2 1 Week 1",
+        "pregame 401872985 espn_backfill", "pregame 401872986 espn_backfill", "pregame 401872987 espn_backfill",
+        "odds 401872985 kalshi_backfill 2", "odds 401872986 kalshi_backfill 1", "odds 401872987 kalshi_backfill 2"
+    })]
+    [InlineData("dry run", new[] { 1, 0, 2, 0, 0 }, new[]
+    {
+        "game 401872985 2026 2 1 Week 1", "game 401872986 2026 2 1 Week 1",
+        "odds 401872986 kalshi_backfill 1"
+    })]
+    public async Task Backfill_counters_and_rows_stay_the_same(string run, int[] counters, string[] rows)
+    {
+        await using var database = await StartThreeGameBackfillAsync();
+        await using var app = new OddsApp(BackfillProviders(BackfillBoard(SecondGame, ThirdGame), CoreOdds), database.Use());
+
+        var result = await app.Services.GetRequiredService<NflBackfillService>().BackfillSeasonAsync(2026, BackfillRuns[run], CancellationToken.None);
+
+        Assert.Empty(result.Errors);
+        Assert.Equal(counters, new[] { result.GamesCreated, result.GamesUpdated, result.GamesSkipped, result.PregameOddsCreated, result.KalshiOddsSnapshotsCreated });
+        Assert.Equal(rows, (string[])[
+            .. await database.TextAsync("SELECT concat_ws(' ', 'game', id, season_year, season_type, week_number, week_label) FROM games ORDER BY id"),
+            .. await database.TextAsync("SELECT concat_ws(' ', 'pregame', game_id, source) FROM pregame_odds ORDER BY game_id"),
+            .. await SnapshotRowsAsync(database)
+        ]);
     }
 
     [Fact]
@@ -688,14 +812,56 @@ public sealed class OddsProviderReportingTests
     private static Fetch LiveOdds(string sport, string home, string away, DateTime start, string template) => new(typeof(KalshiOddsService), template,
         async (services, ct) => await services.GetRequiredService<KalshiOddsService>().GetLiveOddsAsync(sport, home, away, start, ct));
 
-    private static BackfillOptions OneWeek(bool kalshi = false) => new()
+    private static BackfillOptions OneWeek(bool kalshi = false, bool skipExisting = false, bool dryRun = false) => new()
     {
         SeasonType = 2,
         StartWeek = 1,
         EndWeek = 1,
+        SkipExisting = skipExisting,
+        DryRun = dryRun,
         BackfillKalshiOdds = kalshi,
         KalshiCandlestickInterval = 60
     };
+
+    private static Func<Uri, Answer> BackfillProviders(string board, Answer coreOdds) => uri =>
+        uri.AbsolutePath.EndsWith("/scoreboard", StringComparison.Ordinal) ? new Reply(HttpStatusCode.OK, board)
+        : uri.AbsolutePath.EndsWith("/candlesticks", StringComparison.Ordinal) ? KalshiCandles
+        : uri.Host == "sports.core.api.espn.com" ? coreOdds
+        : NotFound;
+
+    private static Game BackfillGame(string id, bool weekFields) => new()
+    {
+        Id = id,
+        Sport = "nfl",
+        HomeTeam = "Pittsburgh Steelers",
+        AwayTeam = "Indianapolis Colts",
+        HomeTeamAbbreviation = "PIT",
+        AwayTeamAbbreviation = "IND",
+        ScheduledStart = new DateTime(2026, 10, 11, 17, 0, 0, DateTimeKind.Utc),
+        SeasonYear = weekFields ? 2026 : null,
+        SeasonType = weekFields ? 2 : null,
+        WeekNumber = weekFields ? 1 : null,
+        WeekLabel = weekFields ? "Week 1" : null
+    };
+
+    private static async Task<OddsDatabase> StartThreeGameBackfillAsync()
+    {
+        var database = await OddsDatabase.StartTimescaleAsync();
+        await database.SeedAsync(BackfillGame(FirstGame, weekFields: false), BackfillGame(SecondGame, weekFields: true), new OddsSnapshot
+        {
+            GameId = SecondGame,
+            Timestamp = new DateTime(2026, 10, 11, 12, 0, 0, DateTimeKind.Utc),
+            HomeMoneyline = -110,
+            AwayMoneyline = -110,
+            HomeWinProbability = 0.5,
+            AwayWinProbability = 0.5,
+            Source = "kalshi_backfill"
+        });
+        return database;
+    }
+
+    private static Task<List<string>> SnapshotRowsAsync(OddsDatabase database) => database.TextAsync(
+        "SELECT concat_ws(' ', 'odds', game_id, source, count(*)) FROM odds_snapshots GROUP BY game_id, source ORDER BY game_id, source");
 
     private static string BackfillBoard(params string[] moreGameIds)
     {
@@ -797,18 +963,60 @@ public sealed class OddsProviderReportingTests
 
     private sealed record LoggedEntry(string Category, LogLevel Level, Exception? Exception, string? Message);
 
-    private sealed class OddsDatabase : IAsyncDisposable
+    private sealed class OddsDatabase(PostgreSqlContainer container) : IAsyncDisposable
     {
-        private readonly PostgreSqlContainer container = IsolatedPostgreSql.CreateContainer();
+        public static Task<OddsDatabase> StartAsync() => StartAsync(IsolatedPostgreSql.CreateContainer(), _ => Task.CompletedTask);
 
-        public static async Task<OddsDatabase> StartAsync()
+        public static Task<OddsDatabase> StartTimescaleAsync() => StartAsync(
+            IsolatedPostgreSql.CreateBuilder(ListingWorkload.Image()).WithCommand(ListingWorkload.ServerSettings).Build(), ListingWorkload.PrepareTemplateAsync);
+
+        private static async Task<OddsDatabase> StartAsync(PostgreSqlContainer container, Func<string, Task> prepare)
         {
-            var database = new OddsDatabase();
-            await database.container.StartAsync();
-            await using var db = new ExcitementDbContext(new DbContextOptionsBuilder<ExcitementDbContext>().UseNpgsql(database.container.GetConnectionString()).Options);
-            await TestSchema.CreateAsync(db.Database);
+            var database = new OddsDatabase(container);
+            await container.StartAsync();
+            await using (var db = database.Context())
+                await db.Database.EnsureCreatedAsync();
+            await prepare(container.GetConnectionString());
+            await using (var db = database.Context())
+                await TestSchema.CreateAsync(db.Database);
             return database;
         }
+
+        public async Task SeedAsync(params object[] rows)
+        {
+            await using var db = Context();
+            db.AddRange(rows);
+            await db.SaveChangesAsync();
+        }
+
+        public async Task ExecuteAsync(string sql)
+        {
+            await using var connection = new NpgsqlConnection(container.GetConnectionString());
+            await connection.OpenAsync();
+            await using var command = new NpgsqlCommand(sql, connection);
+            await command.ExecuteNonQueryAsync();
+        }
+
+        public async Task<List<object[]>> QueryAsync(string sql)
+        {
+            await using var connection = new NpgsqlConnection(container.GetConnectionString());
+            await connection.OpenAsync();
+            await using var command = new NpgsqlCommand(sql, connection);
+            await using var reader = await command.ExecuteReaderAsync();
+            var rows = new List<object[]>();
+            while (await reader.ReadAsync())
+            {
+                var row = new object[reader.FieldCount];
+                reader.GetValues(row);
+                rows.Add(row);
+            }
+            return rows;
+        }
+
+        public async Task<List<string>> TextAsync(string sql) => [.. (await QueryAsync(sql)).Select(row => (string)row[0])];
+
+        private ExcitementDbContext Context() =>
+            new(new DbContextOptionsBuilder<ExcitementDbContext>().UseNpgsql(container.GetConnectionString()).Options);
 
         public Action<IServiceCollection> Use(string options = "", IInterceptor? interceptor = null) => services =>
         {

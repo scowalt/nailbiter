@@ -324,8 +324,6 @@ type NflBackfillService
                                 existingGame.SeasonType <- Nullable seasonType
                                 existingGame.WeekLabel <- weekLabel
                                 existingGame.SeasonYear <- Nullable seasonYear
-                                let! _ = db.SaveChangesAsync(ct)
-                                ()
 
                             if options.BackfillKalshiOdds && not options.DryRun then
                                 let! kalshiSnapshots =
@@ -343,8 +341,8 @@ type NflBackfillService
                                     result.KalshiOddsSnapshotsCreated <-
                                         result.KalshiOddsSnapshotsCreated + kalshiSnapshots
 
-                                    let! _ = db.SaveChangesAsync(ct)
-                                    ()
+                            let! _ = db.SaveChangesAsync(ct)
+                            ()
                         else
                             existingGame.HomeTeam <- home.Team.DisplayName
                             existingGame.AwayTeam <- away.Team.DisplayName
@@ -398,6 +396,10 @@ type NflBackfillService
 
                                 result.KalshiOddsSnapshotsCreated <-
                                     result.KalshiOddsSnapshotsCreated + kalshiSnapshots
+
+                            if not options.DryRun then
+                                let! _ = db.SaveChangesAsync(ct)
+                                ()
                     else
                         let homeScore =
                             match Int32.TryParse(home.Score) with
@@ -461,6 +463,10 @@ type NflBackfillService
 
                             result.KalshiOddsSnapshotsCreated <-
                                 result.KalshiOddsSnapshotsCreated + kalshiSnapshots
+
+                        if not options.DryRun then
+                            let! _ = db.SaveChangesAsync(ct)
+                            ()
         }
         :> Task
 
@@ -489,10 +495,10 @@ type NflBackfillService
                     weekNumber
                 )
 
-                use scope = serviceProvider.CreateScope()
-                let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
-
                 for espnEvent in scoreboard.Events do
+                    use scope = serviceProvider.CreateScope()
+                    let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
+
                     try
                         do!
                             this.ProcessGameAsync(
@@ -510,10 +516,6 @@ type NflBackfillService
                     | ex ->
                         logger.LogError(ex, "Error processing game {GameId}", espnEvent.Id)
                         result.Errors.Add($"Game {espnEvent.Id}: {ex.Message}")
-
-                if not options.DryRun then
-                    let! _ = db.SaveChangesAsync(ct)
-                    ()
         }
         :> Task
 

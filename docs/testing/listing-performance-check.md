@@ -195,21 +195,36 @@ date at a time, and the pregame loop that runs beside it writes
 `--import-college-history` share one advisory lock and write only college
 games, which no other writer changes.
 
-The NFL backfill (`BACKFILL_MODE=true`) does not keep the rule. It runs as a
+The NFL backfill (`BACKFILL_MODE=true`) keeps this rule between games. It
+still has one lock-order conflict with the live loop, so run the backfill
+while the live loop does not write the same games. The backfill runs as a
 separate process, and nothing stops it from running while the deployed
-backend's live loop writes. It shares one `DbContext` across a week. It saves
-the Kalshi snapshots of an existing game at once, but the snapshots of the
-games it creates wait for one save at the end of the week, in scoreboard order
-rather than game id order. The live loop cannot lock a created game's
-`newest_odds` row before that save commits, because the game row does not
-exist for it yet. So the usual week save locks no row that the live loop can
-hold. A deadlock is still possible in narrow cases. For example, a failed save
-leaves its rows tracked, the next save then carries two existing live games,
-and the live loop locks the same two games in the other order. PostgreSQL then aborts one
-transaction and rolls it back. Run the backfill while the live loop does not
-write the same games. Apply the same rule to any other parallel or multi-game
-writer, including a manual script such as
-`scripts/backfills/recover_empty_odds.py`.
+backend's live loop writes.
+
+The backfill opens a new `DbContext` for each game and saves that game's rows
+in one transaction. EF Core writes the game row before that game's pregame
+odds and Kalshi snapshots, so the foreign key holds. Each backfill transaction
+locks the `newest_odds` row of one game at most, so it cannot lock two games
+in the opposite order to another writer. A failed save rolls back that game's
+rows alone. Its context is then discarded, so the next game's save carries
+only that game's rows. `Backfill_writes_each_game_in_its_own_transaction` and
+`Backfill_failed_game_save_leaks_no_rows_into_the_next_game` check both
+against TimescaleDB, in skip mode and in update mode.
+
+The conflict that remains involves one game and the fence from migration
+`035_ProHypeLifecycle.sql`. Every write to `games` or `pregame_odds` locks row
+1 of `pro_hype_revision`. In update mode (`SkipExisting=false`), when the
+backfill leaves a game's row unchanged, it inserts that game's snapshots
+before its pregame odds. So it locks the game's `newest_odds` row before the
+fence. A live save that updates a game row locks the fence first and then the
+`newest_odds` rows of its snapshots. If both write the same game at the same
+time, PostgreSQL aborts one transaction with `40P01`. The backfill reports the
+failed game at Error and rolls back its rows, and a rerun repairs it.
+[#178](https://github.com/scowalt/nailbiter/issues/178) tracks the fix.
+
+Any other parallel or multi-game writer, including a manual script such as
+`scripts/backfills/recover_empty_odds.py`, must also write its games in one
+consistent order.
 
 ## Report
 
