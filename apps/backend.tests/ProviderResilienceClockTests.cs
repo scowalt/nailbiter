@@ -168,6 +168,28 @@ public sealed class ProviderResilienceClockTests
         Assert.True(disposal.Finished);
     }
 
+    [Fact]
+    public async Task A_failed_test_body_stays_the_primary_failure_when_disposal_also_fails()
+    {
+        var failure = Record.Exception(() => Assert.Equal(StandardAttempts, HungAttemptsWithinTotal));
+        var disposal = new TimeoutException("still disposing at 00:00:20 with 1 live timers");
+
+        var reported = await Record.ExceptionAsync(() => UsingAsync(new FailingDisposal(disposal), _ => throw failure));
+
+        Assert.StartsWith(failure.Message, reported.Message, StringComparison.Ordinal);
+        Assert.Equal([failure, disposal], Assert.IsAssignableFrom<AggregateException>(reported).InnerExceptions);
+    }
+
+    [Fact]
+    public async Task A_disposal_failure_after_a_passing_test_body_still_fails_the_test()
+    {
+        var disposal = new TimeoutException("still disposing at 00:00:20 with 1 live timers");
+
+        var reported = await Record.ExceptionAsync(() => UsingAsync(new FailingDisposal(disposal), _ => Task.CompletedTask));
+
+        Assert.Same(disposal, reported);
+    }
+
     [Theory]
     [MemberData(nameof(NonRetryableAnswers))]
     public async Task Non_retryable_scoreboard_answer_is_fetched_once_and_stays_a_warning(string name, HttpStatusCode status)
@@ -384,6 +406,11 @@ public sealed class ProviderResilienceClockTests
                 return Inner.DisposeAsync();
             }
         }
+    }
+
+    private sealed class FailingDisposal(Exception failure) : IAsyncDisposable
+    {
+        public ValueTask DisposeAsync() => ValueTask.FromException(failure);
     }
 
     private sealed class LateTimerDisposal(TimeProvider clock) : IAsyncDisposable
