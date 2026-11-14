@@ -203,32 +203,60 @@ date at a time, and the pregame loop that runs beside it writes
 `--import-college-history` share one advisory lock and write only college
 games, which no other writer changes.
 
-The NFL backfill (`BACKFILL_MODE=true`) keeps this rule between games. It
-still has one lock-order conflict with the live loop, so run the backfill
-while the live loop does not write the same games. The backfill runs as a
-separate process, and nothing stops it from running while the deployed
-backend's live loop writes.
+A second lock joins this one. Every write to `games`, `pregame_odds` or
+`team_ratings` locks row 1 of `pro_hype_revision`, the fence from migration
+`035_ProHypeLifecycle.sql`. A transaction that takes both locks must take the
+fence first and the `newest_odds` rows after it. The writers meet this order
+as follows:
 
-The backfill opens a new `DbContext` for each game and saves that game's rows
-in one transaction. EF Core writes the game row before that game's pregame
-odds and Kalshi snapshots, so the foreign key holds. Each backfill transaction
-locks the `newest_odds` row of one game at most, so it cannot lock two games
-in the opposite order to another writer. A failed save rolls back that game's
-rows alone. Its context is then discarded, so the next game's save carries
-only that game's rows. `Backfill_writes_each_game_in_its_own_transaction` and
+| Writer | How it orders the fence and `newest_odds` |
+|---|---|
+| Live odds loop, NFL and sports without series data | One `SaveChanges`. When a game row changed, EF Core writes `games` before `odds_snapshots`, so the fence comes first. When none changed, the save writes snapshots alone and never takes the fence. |
+| Live odds loop, MLB, NBA and NHL series | `PlayoffSeriesCollector` takes the fence with `LockProHypeFenceAsync` before it saves. |
+| Pregame loop | Writes `games` and `pregame_odds`, never snapshots. |
+| College collector and `--import-college-history` | Every game whose snapshots or pregame odds it saves is inserted or gets a new `ScoreboardUpdatedAt`, so EF Core writes `games` first. Keep that update unconditional: without it, EF Core writes `odds_snapshots` before `pregame_odds` and the fence comes second. |
+| `scripts/backfills/recover_empty_odds.py` | Writes snapshots only. Its `SELECT ... FOR UPDATE OF g` on `games` does not fire the fence trigger. |
+| NFL backfill | Takes the fence with `LockProHypeFenceAsync` at the start of each game's transaction. |
+
+The rows for the backfill are measured; the rest are read from the code.
+
+The NFL backfill (`BACKFILL_MODE=true`) keeps both rules. It opens a new
+`DbContext` for each game and saves that game's rows in one transaction, which
+takes the fence before any write. EF Core writes the game row before that
+game's pregame odds and Kalshi snapshots, so the foreign key holds. Each
+backfill transaction locks the `newest_odds` row of one game at most, so it
+cannot lock two games in the opposite order to another writer. A failed save
+rolls back that game's rows alone. Its context is then discarded, so the next
+game's save carries only that game's rows.
+`Backfill_writes_each_game_in_its_own_transaction` and
 `Backfill_failed_game_save_leaks_no_rows_into_the_next_game` check both
-against TimescaleDB, in skip mode and in update mode.
+against TimescaleDB, in skip mode and in update mode. The week result counts a
+game, its pregame odds and its Kalshi snapshots only when the game is processed
+without an error. A game whose save fails is counted in `Errors` alone, also in
+skip mode. `Backfill_counters_count_only_the_games_whose_save_committed` fails
+one save and checks the counters against the rows in the database.
 
-The conflict that remains involves one game and the fence from migration
-`035_ProHypeLifecycle.sql`. Every write to `games` or `pregame_odds` locks row
-1 of `pro_hype_revision`. In update mode (`SkipExisting=false`), when the
-backfill leaves a game's row unchanged, it inserts that game's snapshots
-before its pregame odds. So it locks the game's `newest_odds` row before the
-fence. A live save that updates a game row locks the fence first and then the
-`newest_odds` rows of its snapshots. If both write the same game at the same
-time, PostgreSQL aborts one transaction with `40P01`. The backfill reports the
-failed game at Error and rolls back its rows, and a rerun repairs it.
-[#178](https://github.com/scowalt/nailbiter/issues/178) tracks the fix.
+Before [#178](https://github.com/scowalt/nailbiter/issues/178), the backfill
+took the fence inside `SaveChanges`. In update mode (`SkipExisting=false`),
+when it left a game's row unchanged and the game had no pregame odds yet, EF
+Core inserted the snapshots before the pregame odds. So the backfill locked the
+game's `newest_odds` row before the fence, the reverse of a live save that
+updates a game row. If both wrote the same game at the same time, PostgreSQL
+aborted one transaction with `40P01`: the backfill's game, which a rerun
+repairs, or the live loop's save for its sport and date. The CLI sets
+`SkipExisting=false` only for a dry run, which saves nothing, so only a caller
+of the service could reach this.
+`Backfill_update_of_an_unchanged_game_without_pregame_odds_does_not_deadlock_a_live_save`
+holds the fence in a live transaction, waits until the backfill blocks on it,
+then has the live transaction insert a snapshot for the backfill's game. Both
+must commit.
+
+Every backfill path now takes the fence before it writes, but that test covers
+only the update path for an unchanged game. The skip path, which the CLI uses
+for every run that writes, and new games have no two-session test. So still run
+the backfill while the live loop does not write the same games. The backfill
+runs as a separate process, and nothing stops it from running while the
+deployed backend's live loop writes.
 
 Any other parallel or multi-game writer, including a manual script such as
 `scripts/backfills/recover_empty_odds.py`, must also write its games in one

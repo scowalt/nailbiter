@@ -588,7 +588,7 @@ public sealed class OddsProviderReportingTests
     [InlineData("FROM pregame_odds", "Failed to fetch pregame odds for game {GameId}", 1, 0)]
     [InlineData("FROM odds_snapshots", "Failed to fetch Kalshi historical odds for game {GameId}", 1, 0)]
     [InlineData("FROM games", "Error processing game {GameId}", 0, 1)]
-    [InlineData("INSERT INTO games", "Error processing game {GameId}", 1, 1)]
+    [InlineData("INSERT INTO games", "Error processing game {GameId}", 0, 1)]
     public async Task Backfill_own_fault_is_sent_once_at_error_and_the_backfill_carries_on(string sql, string template, int created, int errors)
     {
         var board = BackfillBoard();
@@ -721,6 +721,86 @@ public sealed class OddsProviderReportingTests
             .. await database.TextAsync("SELECT concat_ws(' ', 'pregame', game_id, source) FROM pregame_odds ORDER BY game_id"),
             .. await SnapshotRowsAsync(database)
         ]);
+    }
+
+    [Theory]
+    [InlineData("new games", new[] { 1, 0, 0, 1, 2 })]
+    [InlineData("existing games", new[] { 0, 0, 1, 0, 2 })]
+    [InlineData("updated games", new[] { 0, 1, 0, 1, 2 })]
+    public async Task Backfill_counters_count_only_the_games_whose_save_committed(string games, int[] counters)
+    {
+        await using var database = await OddsDatabase.StartTimescaleAsync();
+        if (games != "new games") await database.SeedAsync(BackfillGame(FirstGame, weekFields: true), BackfillGame(SecondGame, weekFields: true));
+        await database.ExecuteAsync($"""
+            CREATE FUNCTION fail_backfill_save() RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+                RAISE EXCEPTION 'synthetic save failure for %', NEW.game_id;
+            END $$;
+            CREATE TRIGGER fail_backfill_save BEFORE INSERT ON odds_snapshots FOR EACH ROW
+                WHEN (NEW.game_id = '{FirstGame}') EXECUTE FUNCTION fail_backfill_save();
+            """);
+        await using var app = new OddsApp(BackfillProviders(BackfillBoard(SecondGame), CoreOdds), database.Use());
+
+        var result = await app.Services.GetRequiredService<NflBackfillService>().BackfillSeasonAsync(2026,
+            OneWeek(kalshi: true, skipExisting: games == "existing games"), CancellationToken.None);
+
+        Assert.StartsWith($"Game {FirstGame}:", Assert.Single(result.Errors));
+        Assert.Equal(counters, new[] { result.GamesCreated, result.GamesUpdated, result.GamesSkipped, result.PregameOddsCreated, result.KalshiOddsSnapshotsCreated });
+        Assert.Equal(
+            (result.GamesCreated, result.PregameOddsCreated, result.KalshiOddsSnapshotsCreated),
+            ((games == "new games" ? 0 : -2) + int.Parse((await database.TextAsync("SELECT count(*)::text FROM games"))[0]),
+                int.Parse((await database.TextAsync("SELECT count(*)::text FROM pregame_odds WHERE source = 'espn_backfill'"))[0]),
+                int.Parse((await database.TextAsync("SELECT count(*)::text FROM odds_snapshots WHERE source = 'kalshi_backfill'"))[0])));
+        AssertSentOnceAtError(await app.SentEventsAsync(), typeof(NflBackfillService), "Error processing game {GameId}", typeof(PostgresException));
+    }
+
+    [Fact]
+    public async Task Backfill_update_of_an_unchanged_game_without_pregame_odds_does_not_deadlock_a_live_save()
+    {
+        await using var database = await OddsDatabase.StartTimescaleAsync();
+        await database.ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", "035_ProHypeLifecycle.sql")));
+        await database.SeedAsync(BackfillGame(SecondGame, weekFields: true));
+        await using (var setup = new OddsApp(BackfillProviders(BackfillBoard(), NotFound), database.Use()))
+            Assert.Empty((await setup.Services.GetRequiredService<NflBackfillService>().BackfillSeasonAsync(2026, OneWeek(), CancellationToken.None)).Errors);
+        await database.SeedAsync(
+            LiveSnapshot(FirstGame, new DateTime(2026, 10, 11, 12, 0, 0, DateTimeKind.Utc)),
+            LiveSnapshot(FirstGame, new DateTime(2026, 11, 13, 0, 0, 0, DateTimeKind.Utc)));
+        Assert.Equal(["0"], await database.TextAsync($"SELECT count(*)::text FROM pregame_odds WHERE game_id = '{FirstGame}'"));
+
+        await using var live = new NpgsqlConnection(database.ConnectionString);
+        await live.OpenAsync();
+        await using var liveSave = await live.BeginTransactionAsync();
+        await using (var touchGame = new NpgsqlCommand($"UPDATE games SET status = status WHERE id = '{SecondGame}'", live, liveSave))
+            await touchGame.ExecuteNonQueryAsync();
+        await using var app = new OddsApp(BackfillProviders(BackfillBoard(), CoreOdds), database.Use());
+        var backfill = app.Services.GetRequiredService<NflBackfillService>().BackfillSeasonAsync(2026, OneWeek(kalshi: true), CancellationToken.None);
+        var blockedOn = await BlockedQueryAsync(database, live.ProcessID, backfill);
+        string liveOutcome;
+        try
+        {
+            await using var insert = new NpgsqlCommand($"""
+                INSERT INTO odds_snapshots (game_id, timestamp, home_moneyline, away_moneyline, home_win_probability, away_win_probability, source)
+                VALUES ('{FirstGame}', '2026-11-13 11:00:00+00', -120, 100, 0.55, 0.45, 'espn')
+                """, live, liveSave) { CommandTimeout = 60 };
+            await insert.ExecuteNonQueryAsync();
+            await liveSave.CommitAsync();
+            liveOutcome = "committed";
+        }
+        catch (PostgresException e)
+        {
+            liveOutcome = $"{e.SqlState} {e.MessageText}";
+        }
+        var result = await backfill.WaitAsync(TimeSpan.FromSeconds(60));
+
+        var sent = await app.SentEventsAsync();
+        Assert.True(blockedOn is not null, "the backfill never waited for the live save's fence");
+        Assert.Equal(("committed", "", ""), (liveOutcome, string.Join(" | ", result.Errors),
+            string.Join(" | ", sent.SelectMany(e => e.Exceptions).Where(e => e.Type == typeof(PostgresException).FullName).Select(e => e.Value))));
+        Assert.Contains("pro_hype_revision", blockedOn);
+        Assert.Equal([$"pregame {FirstGame} espn_backfill"], await database.TextAsync("SELECT concat_ws(' ', 'pregame', game_id, source) FROM pregame_odds"));
+        Assert.Equal([$"odds {FirstGame} espn 3", $"odds {FirstGame} kalshi_backfill 2"], await SnapshotRowsAsync(database));
+        Assert.Equal(["2026-11-13 11:00:00+00"], await database.TextAsync($"SELECT timestamp::text FROM newest_odds WHERE game_id = '{FirstGame}'"));
+        Assert.Empty(sent);
     }
 
     [Fact]
@@ -858,6 +938,32 @@ public sealed class OddsProviderReportingTests
             Source = "kalshi_backfill"
         });
         return database;
+    }
+
+    private static OddsSnapshot LiveSnapshot(string game, DateTime at) => new()
+    {
+        GameId = game,
+        Timestamp = at,
+        HomeMoneyline = -110,
+        AwayMoneyline = -110,
+        HomeWinProbability = 0.5,
+        AwayWinProbability = 0.5,
+        Source = "espn"
+    };
+
+    private static async Task<string?> BlockedQueryAsync(OddsDatabase database, int livePid, Task backfill)
+    {
+        var timer = Stopwatch.StartNew();
+        while (!backfill.IsCompleted && timer.Elapsed < TimeSpan.FromSeconds(60))
+        {
+            var waiting = await database.TextAsync($"""
+                SELECT left(regexp_replace(query, '\s+', ' ', 'g'), 120) FROM pg_stat_activity
+                WHERE wait_event_type = 'Lock' AND backend_type = 'client backend' AND pid <> {livePid}
+                """);
+            if (waiting.Count > 0) return waiting[0];
+            await Task.Delay(20);
+        }
+        return null;
     }
 
     private static Task<List<string>> SnapshotRowsAsync(OddsDatabase database) => database.TextAsync(
@@ -1014,6 +1120,8 @@ public sealed class OddsProviderReportingTests
         }
 
         public async Task<List<string>> TextAsync(string sql) => [.. (await QueryAsync(sql)).Select(row => (string)row[0])];
+
+        public string ConnectionString => container.GetConnectionString();
 
         private ExcitementDbContext Context() =>
             new(new DbContextOptionsBuilder<ExcitementDbContext>().UseNpgsql(container.GetConnectionString()).Options);
