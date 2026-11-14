@@ -234,7 +234,8 @@ public sealed class CollegeFootballTests : IAsyncLifetime
     private async Task<int> Run(bool history = false, bool apply = true)
     {
         using var scope = app.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<CollegeFootballService>().RunAsync(history, apply, CancellationToken.None);
+        var service = scope.ServiceProvider.GetRequiredService<CollegeFootballService>();
+        return history ? (await service.ImportHistoryAsync(apply, CancellationToken.None)).Games : await service.RunAsync(CancellationToken.None);
     }
     private async Task<List<Game>> Games()
     {

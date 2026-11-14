@@ -12,18 +12,115 @@ internal static class CollegeFailure
         ex is HttpRequestException && !outage(ex) || ex is JsonException or InvalidDataException ? LogLevel.Warning : LogLevel.Error;
 }
 
+public sealed record CollegeHistoryImport(int Games, bool Complete);
+
 public sealed class CollegeFootballService(
     ExcitementDbContext db, CollegeEspnClient espn, CollegeKalshiClient kalshi,
     IGameUpdateService updates, TimeProvider time, ILogger<CollegeFootballService> logger)
 {
     private static readonly TimeZoneInfo Eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
 
-    public async Task<int> RunAsync(bool initialHistory, bool apply, CancellationToken ct)
+    private const string TransactionLock = "SELECT pg_try_advisory_xact_lock(674213608) AS \"Value\"";
+
+    public async Task<CollegeHistoryImport> ImportHistoryAsync(bool apply, CancellationToken ct)
     {
         var now = time.GetUtcNow().UtcDateTime;
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
-        if (!await db.Database.SqlQueryRaw<bool>("SELECT pg_try_advisory_xact_lock(674213608) AS \"Value\"").SingleAsync(ct))
+        await LockCollectorAsync(TransactionLock, ct);
+        var found = await DiscoverAsync(true, now, ct);
+        var changed = new List<Game>();
+        foreach (var e in found.Events.Values)
+        {
+            var game = await StoreAsync(e, found.Season, found.Membership, found.Listings, found.Checkpoint, true, ct);
+            if (game is not null) changed.Add(game);
+        }
+        if (!apply)
+        {
+            logger.LogInformation("DRY RUN: {Count} eligible college games; fixed initial window {Start:o} to {End:o}. No writes.", changed.Count, found.Checkpoint.WindowStart, found.Checkpoint.FirstImportAt);
+            await transaction.RollbackAsync(ct);
+            db.ChangeTracker.Clear();
+            return new(changed.Count, true);
+        }
+        await db.LockProHypeFenceAsync(ProHypeFenceAccess.WriteGames, ct);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return new(changed.Count, true);
+    }
+
+    public async Task<int> RunAsync(CancellationToken ct)
+    {
+        var now = time.GetUtcNow().UtcDateTime;
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await LockCollectorAsync(TransactionLock, ct);
+        var found = await DiscoverAsync(false, now, ct);
+        var known = await db.Games.Where(g => g.Sport == "cfb" && g.SeasonYear == found.Season
+            && g.Status != "canceled" && (g.Status != "final" || g.WeekNumber == null)).ToListAsync(ct);
+        foreach (var game in known.Where(g => !found.Events.ContainsKey(g.Id)))
+        {
+            try { found.Events[game.Id] = await espn.EventAsync(game.Id, ct); }
+            catch (Exception ex) when (!ct.IsCancellationRequested) { logger.Log(CollegeFailure.Level(ex, ProviderFailure.Is), ex, "College event {Event} missing; preserving stored state", game.Id); }
+        }
+        var changed = new List<Game>();
+        foreach (var e in found.Events.Values)
+        {
+            var game = await StoreAsync(e, found.Season, found.Membership, found.Listings, found.Checkpoint, false, ct);
+            if (game is not null) changed.Add(game);
+        }
+        await db.LockProHypeFenceAsync(ProHypeFenceAccess.WriteGames, ct);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        var publishable = changed.Where(g => g.Status != "scheduled").ToList();
+        if (publishable.Count == 0) return changed.Count;
+        var gameIds = publishable.Select(g => g.Id).ToList();
+        var scores = await new GameDataService(db, time).GetExcitementScoresForGamesAsync(
+            Microsoft.FSharp.Collections.ListModule.OfSeq(gameIds), ct);
+        var latestByGame = await db.OddsSnapshots.Where(o => gameIds.Contains(o.GameId) && !o.IsHistorical)
+            .GroupBy(o => o.GameId)
+            .Select(g => g.OrderByDescending(o => o.Timestamp).ThenByDescending(o => o.Id).First())
+            .ToDictionaryAsync(o => o.GameId, ct);
+        foreach (var game in publishable)
+        {
+            latestByGame.TryGetValue(game.Id, out var latest);
+            var usable = latest is not null && CollegeFootballPolicy.UsableLiveOdds(game, latest, now);
+            await updates.PublishUpdateAsync(new GameUpdate
+            {
+                GameId = game.Id,
+                Sport = Sport.CFB,
+                HomeTeam = game.HomeTeam,
+                AwayTeam = game.AwayTeam,
+                HomeTeamAbbreviation = game.HomeTeamAbbreviation,
+                AwayTeamAbbreviation = game.AwayTeamAbbreviation,
+                HomeTeamId = game.HomeTeamId,
+                AwayTeamId = game.AwayTeamId,
+                HomeColor = game.HomeColor,
+                AwayColor = game.AwayColor,
+                HomeScore = game.HomeScore,
+                AwayScore = game.AwayScore,
+                Status = GameStatusExtensions.FromDbValue(game.Status) ?? GameStatus.SCHEDULED,
+                IsOvertime = game.IsOvertime,
+                Period = game.Period,
+                GameClock = game.GameClock,
+                HomeWinProbability = usable ? latest!.HomeWinProbability : null,
+                AwayWinProbability = usable ? latest!.AwayWinProbability : null,
+                OddsSource = usable ? latest!.Source : null,
+                ExcitementScore = scores[game.Id],
+                UpdatedAt = now
+            }, ct);
+        }
+        return changed.Count;
+    }
+
+    private async Task LockCollectorAsync(string sql, CancellationToken ct)
+    {
+        if (!await db.Database.SqlQueryRaw<bool>(sql).SingleAsync(ct))
             throw new InvalidOperationException("Another college collector/import is running");
+    }
+
+    private sealed record Discovery(int Season, CollegeImport Checkpoint, Dictionary<string, CollegeTeam> Membership,
+        List<JsonElement> Listings, Dictionary<string, JsonElement> Events);
+
+    private async Task<Discovery> DiscoverAsync(bool initialHistory, DateTime now, CancellationToken ct)
+    {
         var checkpoint = await db.CollegeImports.SingleOrDefaultAsync(ct);
         var season = initialHistory && checkpoint is not null ? checkpoint.Season : CollegeFootballPolicy.SeasonAt(now);
         var today = TimeZoneInfo.ConvertTimeFromUtc(now, Eastern).Date;
@@ -73,7 +170,6 @@ public sealed class CollegeFootballService(
                 logger.Log(CollegeFailure.Level(ex, ProviderFailure.Is), ex, "College roster refresh unavailable; retaining verified season membership and expiring old metric evidence");
             }
         }
-        var membership = teams.ToDictionary(t => t.EspnId);
         var since = initialHistory ? checkpoint.WindowStart : now.AddDays(-2);
         List<JsonElement> listings;
         try { listings = await kalshi.ListingsAsync(since, initialHistory, ct); }
@@ -91,71 +187,7 @@ public sealed class CollegeFootballService(
             var schedule = day == today ? todaySchedule : await espn.ScheduleAsync(day, season, true, ct);
             foreach (var e in schedule.Events) events[e.At("id").Text()] = e;
         }
-        if (!initialHistory)
-        {
-            var known = await db.Games.Where(g => g.Sport == "cfb" && g.SeasonYear == season
-                && g.Status != "canceled" && (g.Status != "final" || g.WeekNumber == null)).ToListAsync(ct);
-            foreach (var game in known.Where(g => !events.ContainsKey(g.Id)))
-            {
-                try { events[game.Id] = await espn.EventAsync(game.Id, ct); }
-                catch (Exception ex) when (!ct.IsCancellationRequested) { logger.Log(CollegeFailure.Level(ex, ProviderFailure.Is), ex, "College event {Event} missing; preserving stored state", game.Id); }
-            }
-        }
-        var changed = new List<Game>();
-        foreach (var e in events.Values)
-        {
-            var game = await StoreAsync(e, season, membership, listings, checkpoint, initialHistory, ct);
-            if (game is not null) changed.Add(game);
-        }
-        if (!apply)
-        {
-            logger.LogInformation("DRY RUN: {Count} eligible college games; fixed initial window {Start:o} to {End:o}. No writes.", changed.Count, checkpoint.WindowStart, checkpoint.FirstImportAt);
-            await transaction.RollbackAsync(ct);
-            db.ChangeTracker.Clear();
-            return changed.Count;
-        }
-        await db.LockProHypeFenceAsync(ProHypeFenceAccess.WriteGames, ct);
-        await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        var publishable = changed.Where(g => !initialHistory && g.Status != "scheduled").ToList();
-        if (publishable.Count == 0) return changed.Count;
-        var gameIds = publishable.Select(g => g.Id).ToList();
-        var scores = await new GameDataService(db, time).GetExcitementScoresForGamesAsync(
-            Microsoft.FSharp.Collections.ListModule.OfSeq(gameIds), ct);
-        var latestByGame = await db.OddsSnapshots.Where(o => gameIds.Contains(o.GameId) && !o.IsHistorical)
-            .GroupBy(o => o.GameId)
-            .Select(g => g.OrderByDescending(o => o.Timestamp).ThenByDescending(o => o.Id).First())
-            .ToDictionaryAsync(o => o.GameId, ct);
-        foreach (var game in publishable)
-        {
-            latestByGame.TryGetValue(game.Id, out var latest);
-            var usable = latest is not null && CollegeFootballPolicy.UsableLiveOdds(game, latest, now);
-            await updates.PublishUpdateAsync(new GameUpdate
-            {
-                GameId = game.Id,
-                Sport = Sport.CFB,
-                HomeTeam = game.HomeTeam,
-                AwayTeam = game.AwayTeam,
-                HomeTeamAbbreviation = game.HomeTeamAbbreviation,
-                AwayTeamAbbreviation = game.AwayTeamAbbreviation,
-                HomeTeamId = game.HomeTeamId,
-                AwayTeamId = game.AwayTeamId,
-                HomeColor = game.HomeColor,
-                AwayColor = game.AwayColor,
-                HomeScore = game.HomeScore,
-                AwayScore = game.AwayScore,
-                Status = GameStatusExtensions.FromDbValue(game.Status) ?? GameStatus.SCHEDULED,
-                IsOvertime = game.IsOvertime,
-                Period = game.Period,
-                GameClock = game.GameClock,
-                HomeWinProbability = usable ? latest!.HomeWinProbability : null,
-                AwayWinProbability = usable ? latest!.AwayWinProbability : null,
-                OddsSource = usable ? latest!.Source : null,
-                ExcitementScore = scores[game.Id],
-                UpdatedAt = now
-            }, ct);
-        }
-        return changed.Count;
+        return new(season, checkpoint, teams.ToDictionary(t => t.EspnId), listings, events);
     }
 
     private async Task<Game?> StoreAsync(JsonElement e, int season, Dictionary<string, CollegeTeam> membership,
@@ -330,7 +362,7 @@ public sealed class CollegeFootballBackgroundService(IServiceScopeFactory scopes
             try
             {
                 using var scope = scopes.CreateScope();
-                await scope.ServiceProvider.GetRequiredService<CollegeFootballService>().RunAsync(false, true, stoppingToken);
+                await scope.ServiceProvider.GetRequiredService<CollegeFootballService>().RunAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception ex) { logger.LogError(ex, "College refresh failed; stored games retained"); }

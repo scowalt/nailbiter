@@ -219,7 +219,7 @@ public sealed class ExcitementLiveWiringTests : IAsyncLifetime
     private async Task RunCollege(CancellationToken ct)
     {
         using var scope = host.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<CollegeFootballService>().RunAsync(false, true, ct);
+        await scope.ServiceProvider.GetRequiredService<CollegeFootballService>().RunAsync(ct);
     }
 
     private async Task RunProfessional(string sport, CancellationToken ct)

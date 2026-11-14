@@ -675,7 +675,7 @@ public sealed class ProviderFailureReportingTests
     private static async Task<int> RunCollegeAsync(ReportingApp app)
     {
         using var scope = app.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<CollegeFootballService>().RunAsync(false, true, CancellationToken.None);
+        return await scope.ServiceProvider.GetRequiredService<CollegeFootballService>().RunAsync(CancellationToken.None);
     }
 
     private const string CollegeScoreboard = """

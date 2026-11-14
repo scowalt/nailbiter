@@ -98,7 +98,7 @@ public sealed class CollegeFenceOrderTests : IAsyncLifetime
         var espn = new CollegeEspnClient(new HttpClient(provider), clock, new MemoryCache(new MemoryCacheOptions()), NullLogger<CollegeEspnClient>.Instance);
         var kalshi = new CollegeKalshiClient(new HttpClient(provider), NullLogger<CollegeKalshiClient>.Instance);
         await new CollegeFootballService(db, espn, kalshi, new NoUpdates(), clock, NullLogger<CollegeFootballService>.Instance)
-            .RunAsync(false, true, CancellationToken.None);
+            .RunAsync(CancellationToken.None);
     }
 
     private static async Task<string> OutcomeAsync(Task save)
