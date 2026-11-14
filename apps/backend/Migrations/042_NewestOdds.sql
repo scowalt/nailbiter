@@ -3,10 +3,11 @@ BEGIN;
 CREATE OR REPLACE FUNCTION newest_odds_track() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
     newest timestamptz;
+    current_newest timestamptz;
 BEGIN
     IF TG_OP IN ('UPDATE', 'DELETE') THEN
-        PERFORM 1 FROM newest_odds WHERE game_id = OLD.game_id AND timestamp = OLD.timestamp FOR UPDATE;
-        IF FOUND THEN
+        SELECT timestamp INTO current_newest FROM newest_odds WHERE game_id = OLD.game_id FOR UPDATE;
+        IF current_newest = OLD.timestamp THEN
             SELECT max(timestamp) INTO newest FROM odds_snapshots WHERE game_id = OLD.game_id;
             IF newest IS NULL THEN
                 DELETE FROM newest_odds WHERE game_id = OLD.game_id;
