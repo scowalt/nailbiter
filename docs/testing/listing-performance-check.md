@@ -214,11 +214,29 @@ as follows:
 | Live odds loop, NFL and sports without series data | One `SaveChanges`. When a game row changed, EF Core writes `games` before `odds_snapshots`, so the fence comes first. When none changed, the save writes snapshots alone and never takes the fence. |
 | Live odds loop, MLB, NBA and NHL series | `PlayoffSeriesCollector` takes the fence with `LockProHypeFenceAsync` before it saves. |
 | Pregame loop | Writes `games` and `pregame_odds`, never snapshots. |
-| College collector and `--import-college-history` | Every game whose snapshots or pregame odds it saves is inserted or gets a new `ScoreboardUpdatedAt`, so EF Core writes `games` first. Keep that update unconditional: without it, EF Core writes `odds_snapshots` before `pregame_odds` and the fence comes second. |
+| College collector and `--import-college-history` | Takes the fence with `LockProHypeFenceAsync` in its transaction, after its last provider request and right before its one `SaveChanges`. |
 | `scripts/backfills/recover_empty_odds.py` | Writes snapshots only. Its `SELECT ... FOR UPDATE OF g` on `games` does not fire the fence trigger. |
 | NFL backfill | Takes the fence with `LockProHypeFenceAsync` at the start of each game's transaction. |
 
-The rows for the backfill are measured; the rest are read from the code.
+The rows for the backfill and the college collector are measured; the rest
+are read from the code.
+
+The college collector and `--import-college-history` share `RunAsync`. It
+opens its transaction and takes its advisory lock before it fetches anything,
+then makes every provider request, and takes the fence only after the last
+one. So the fence is held for the save and the commit alone, never across a
+provider request. Before
+[#183](https://github.com/scowalt/nailbiter/issues/183), the save took the
+fence only through the triggers, and the order relied on every saved game
+getting a new `ScoreboardUpdatedAt` so that EF Core wrote `games` first. In
+production the clock moves between runs, so that update always happens. With
+a frozen clock a save leaves every game row unchanged. EF Core then inserts
+`odds_snapshots` before it updates `pregame_odds` and locks a game's
+`newest_odds` row before the fence. `CollegeFenceOrderTests` covers both
+shapes. A session holds the fence,
+the college save waits on `pro_hype_revision`, and the session then inserts a
+snapshot for the college save's game. Both must commit. A second test checks
+that no provider request runs while the fence is held.
 
 The NFL backfill (`BACKFILL_MODE=true`) keeps both rules. It opens a new
 `DbContext` for each game and saves that game's rows in one transaction, which
