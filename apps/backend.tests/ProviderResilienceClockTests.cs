@@ -305,7 +305,7 @@ public sealed class ProviderResilienceClockTests
 
             public void Deschedule(TimeSpan dueTime)
             {
-                if (dueTime != Timeout.InfiniteTimeSpan) Thread.Sleep(descheduleAfterArming);
+                if (dueTime != Timeout.InfiniteTimeSpan && descheduleAfterArming > TimeSpan.Zero) Thread.Sleep(descheduleAfterArming);
             }
 
             public void Fired()
