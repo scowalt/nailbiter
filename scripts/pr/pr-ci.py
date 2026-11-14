@@ -196,6 +196,8 @@ class Ci:
             parts.append(f"required check jobs: {', '.join(unsuccessful)}")
         if self.state is Result.INCOMPLETE:
             parts.append('incomplete: the required checks could not be read')
+            if any(run_outcome(run) is Result.PENDING for run in self.runs):
+                parts.append('Actions runs still pending')
         if self.state is Result.PASSED:
             parts.append('third-party checks and reviews are enforced by GitHub at merge time')
         return '; '.join(parts)
@@ -480,7 +482,7 @@ def merge_command(session):
         if result is not Result.PASSED:
             return result, reason
     result, reason = session.observe(refresh_ci=False)
-    if result not in (Result.PENDING, Result.PASSED):
+    if classify_pull(session.pull, session.expected_sha) or result not in (Result.PENDING, Result.PASSED):
         return result, reason
     refusal = merge_blocker(session.pull)
     if refusal:
