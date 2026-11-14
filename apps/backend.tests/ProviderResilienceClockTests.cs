@@ -34,6 +34,7 @@ public sealed class ProviderResilienceClockTests
     private static readonly TimeSpan TotalRequestTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan Guard = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan Step = TimeSpan.FromMilliseconds(10);
+    private static readonly TimeSpan DisposalStep = TimeSpan.FromSeconds(1);
 
     private static readonly Dictionary<string, Fetch> Scoreboards = new()
     {
@@ -124,6 +125,30 @@ public sealed class ProviderResilienceClockTests
         Assert.Equal(typeof(HttpRequestException).FullName, reported.ExceptionTypes[^1]);
         var finalAttempt = Assert.Single(app.Logs, l => l.Category == "Polly" && l.Message.Contains($"Attempt: '{StandardAttempts - 1}'", StringComparison.Ordinal));
         Assert.Equal(LogLevel.Warning, finalAttempt.Level);
+    }
+
+    [Fact]
+    public async Task Retry_reaches_the_provider_when_the_thread_that_armed_its_attempt_timeout_is_descheduled()
+    {
+        var scoreboard = Scoreboards["EspnOdds"];
+        await using var app = new ClockedApp(Answer.Status(HttpStatusCode.TooManyRequests), descheduleAfterArming: TimeSpan.FromMilliseconds(50));
+
+        var fetch = scoreboard.Run(app.Services, CancellationToken.None);
+        var elapsed = await app.RunAsync(fetch);
+
+        Assert.Equal(StandardAttempts, app.Provider.Attempts.Count);
+        Assert.InRange(elapsed, TimeSpan.Zero, TotalRequestTimeout - AttemptTimeout);
+    }
+
+    [Fact]
+    public async Task Disposing_the_app_ends_a_retry_that_waits_on_the_stopped_clock()
+    {
+        var app = new ClockedApp(Answer.Hang);
+        var fetch = Scoreboards["EspnOdds"].Run(app.Services, CancellationToken.None);
+        await app.RunUntilAsync(fetch, () => app.Provider.Attempts is [{ Ended: not null }], AttemptTimeout * 2);
+
+        await Task.Run(() => app.DisposeAsync().AsTask()).WaitAsync(Guard);
+        await fetch.WaitAsync(Guard);
     }
 
     [Theory]
@@ -220,7 +245,7 @@ public sealed class ProviderResilienceClockTests
         public sealed record Reply(HttpStatusCode Code) : Answer;
     }
 
-    private sealed class SteppedClock() : FakeTimeProvider(Origin)
+    private sealed class SteppedClock(TimeSpan descheduleAfterArming) : FakeTimeProvider(Origin)
     {
         private static readonly DateTimeOffset Origin = new(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
         private readonly List<TrackedTimer> timers = [];
@@ -237,14 +262,18 @@ public sealed class ProviderResilienceClockTests
             get { lock (timers) return timers.Count(t => t.Live); }
         }
 
-        public bool HasLiveTimerSince(int created)
+        public bool AwaitsFirstTimerSince(int created)
         {
-            lock (timers) return timers.Skip(created).Any(t => t.Live);
+            lock (timers)
+            {
+                var since = timers.Skip(created).ToArray();
+                return since.Any(t => t.Live) && !since.Any(t => t.HasFired);
+            }
         }
 
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
         {
-            var timer = new TrackedTimer();
+            var timer = new TrackedTimer(descheduleAfterArming);
             timer.Arm(dueTime, period);
             timer.Inner = base.CreateTimer(s =>
             {
@@ -252,17 +281,21 @@ public sealed class ProviderResilienceClockTests
                 callback(s);
             }, state, dueTime, period);
             lock (timers) timers.Add(timer);
+            timer.Deschedule(dueTime);
             return timer;
         }
 
-        private sealed class TrackedTimer : ITimer
+        private sealed class TrackedTimer(TimeSpan descheduleAfterArming) : ITimer
         {
             private TimeSpan period;
             private volatile bool live;
+            private volatile bool fired;
 
             public ITimer Inner { get; set; } = null!;
 
             public bool Live => live;
+
+            public bool HasFired => fired;
 
             public void Arm(TimeSpan dueTime, TimeSpan period)
             {
@@ -270,12 +303,23 @@ public sealed class ProviderResilienceClockTests
                 live = dueTime != Timeout.InfiniteTimeSpan;
             }
 
-            public void Fired() => live = period != Timeout.InfiniteTimeSpan && period != TimeSpan.Zero;
+            public void Deschedule(TimeSpan dueTime)
+            {
+                if (dueTime != Timeout.InfiniteTimeSpan && descheduleAfterArming > TimeSpan.Zero) Thread.Sleep(descheduleAfterArming);
+            }
+
+            public void Fired()
+            {
+                fired = true;
+                live = period != Timeout.InfiniteTimeSpan && period != TimeSpan.Zero;
+            }
 
             public bool Change(TimeSpan dueTime, TimeSpan period)
             {
                 Arm(dueTime, period);
-                return Inner.Change(dueTime, period);
+                var changed = Inner.Change(dueTime, period);
+                Deschedule(dueTime);
+                return changed;
             }
 
             public void Dispose()
@@ -299,8 +343,9 @@ public sealed class ProviderResilienceClockTests
         private readonly SentTransport transport = new();
         private readonly LogRecorder logs = new();
 
-        public ClockedApp(Answer answer)
+        public ClockedApp(Answer answer, TimeSpan descheduleAfterArming = default)
         {
+            Clock = new SteppedClock(descheduleAfterArming);
             Provider = new ControlledProvider(answer, Clock);
             app = entry.WithWebHostBuilder(builder =>
             {
@@ -324,7 +369,7 @@ public sealed class ProviderResilienceClockTests
             });
         }
 
-        public SteppedClock Clock { get; } = new();
+        public SteppedClock Clock { get; }
 
         public async Task<TimeSpan> RunAsync(Task work)
         {
@@ -358,7 +403,7 @@ public sealed class ProviderResilienceClockTests
         {
             [] => false,
             [.., { Ended: null }] => Provider.Hangs,
-            [.., var last] => Clock.HasLiveTimerSince(last.TimersAtEnd)
+            [.., var last] => Clock.AwaitsFirstTimerSince(last.TimersAtEnd)
         };
 
         public ControlledProvider Provider { get; }
@@ -375,8 +420,19 @@ public sealed class ProviderResilienceClockTests
 
         public async ValueTask DisposeAsync()
         {
-            await app.DisposeAsync();
-            await entry.DisposeAsync();
+            var disposing = Task.Run(async () =>
+            {
+                await app.DisposeAsync();
+                await entry.DisposeAsync();
+            });
+            var deadline = DateTime.UtcNow + Guard;
+            while (!disposing.IsCompleted || Clock.LiveTimers > 0)
+            {
+                if (DateTime.UtcNow > deadline) throw new TimeoutException($"still disposing at {Clock.Elapsed} with {Clock.LiveTimers} live timers");
+                Clock.Advance(DisposalStep);
+                await Task.Delay(1);
+            }
+            await disposing;
             Provider.Dispose();
         }
     }
