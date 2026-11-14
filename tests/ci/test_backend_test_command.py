@@ -158,12 +158,17 @@ def process_table():
             yield int(stat.parent.name), state, int(group)
 
 
+def working_directory(pid):
+    with contextlib.suppress(OSError):
+        return os.readlink(f'/proc/{pid}/cwd')
+
+
 def processes_under(temp):
     marker = str(temp)
-    for pid, _, _ in process_table():
-        with contextlib.suppress(OSError):
-            if pid != os.getpid() and (marker.encode() in Path(f'/proc/{pid}/cmdline').read_bytes() or os.readlink(f'/proc/{pid}/cwd').startswith(marker)):
-                yield pid
+    table = list(process_table())
+    inside = {pid for pid, _, _ in table if (cwd := working_directory(pid)) and (cwd == marker or cwd.startswith(f'{marker}/'))}
+    groups = {group for pid, _, group in table if pid in inside} - {os.getpgrp()}
+    return [pid for pid, _, group in table if (pid in inside or group in groups) and pid != os.getpid()]
 
 
 def stop_processes_under(temp):
@@ -618,6 +623,7 @@ class RealToolchainTests(SandboxedTestCase):
             **os.environ,
             'PATH': f'{dotnet_sdk_root()}:{temp / "bin"}:{os.environ["PATH"]}',
             'MSBUILDDISABLENODEREUSE': '1',
+            'UseSharedCompilation': 'false',
         }
         start = lambda suite: subprocess.Popen([sys.executable, SCRIPT, suite], cwd=worktree, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         fsharp = start('fsharp')
