@@ -227,11 +227,13 @@ then makes every provider request, and takes the fence only after the last
 one. So the fence is held for the save and the commit alone, never across a
 provider request. Before
 [#183](https://github.com/scowalt/nailbiter/issues/183), the save took the
-fence only through the triggers. Every saved game gets a new
-`ScoreboardUpdatedAt`, so EF Core wrote `games` first and the order held. A
-save that left every game row unchanged inserted `odds_snapshots` before it
-updated `pregame_odds`, so it locked a game's `newest_odds` row before the
-fence. `CollegeFenceOrderTests` covers both shapes. A session holds the fence,
+fence only through the triggers, and the order relied on every saved game
+getting a new `ScoreboardUpdatedAt` so that EF Core wrote `games` first. In
+production the clock moves between runs, so that update always happens. With
+a frozen clock a save leaves every game row unchanged. EF Core then inserts
+`odds_snapshots` before it updates `pregame_odds` and locks a game's
+`newest_odds` row before the fence. `CollegeFenceOrderTests` covers both
+shapes. A session holds the fence,
 the college save waits on `pro_hype_revision`, and the session then inserts a
 snapshot for the college save's game. Both must commit. A second test checks
 that no provider request runs while the fence is held.
