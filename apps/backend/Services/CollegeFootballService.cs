@@ -114,6 +114,7 @@ public sealed class CollegeFootballService(
             db.ChangeTracker.Clear();
             return changed.Count;
         }
+        await db.LockProHypeFenceAsync(ProHypeFenceAccess.WriteGames, ct);
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
         var publishable = changed.Where(g => !initialHistory && g.Status != "scheduled").ToList();
