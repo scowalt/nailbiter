@@ -196,6 +196,8 @@ class Ci:
             parts.append(f"required check jobs: {', '.join(unsuccessful)}")
         if self.state is Result.INCOMPLETE:
             parts.append('incomplete: the required checks could not be read')
+            if any(run_outcome(run) is Result.PENDING for run in self.runs):
+                parts.append('Actions runs still pending')
         if self.state is Result.PASSED:
             parts.append('third-party checks and reviews are enforced by GitHub at merge time')
         return '; '.join(parts)
@@ -242,7 +244,7 @@ def classify_ci(runs, sha, required_checks, read_jobs):
     return Ci(state, current, tuple(sorted(run['id'] for run in own if run not in current)), required)
 
 
-def classify(pull, sha, ci):
+def classify_pull(pull, sha):
     head = pull['headRefOid']
     if head != sha:
         return Result.SUPERSEDED, f'the head moved from {sha[:12]} to {head[:12]}; this revision will not be merged'
@@ -257,7 +259,11 @@ def classify(pull, sha, ci):
         return Result.QUEUED, f"auto-merge ({pull['autoMergeRequest']['mergeMethod'].lower()}) is enabled; GitHub merges when its policy is met"
     if pull['mergeQueueEntry']:
         return Result.QUEUED, f"in the merge queue ({pull['mergeQueueEntry']['state'].lower()})"
-    return ci.state, ci.summary(sha) + ('; the pull request is a draft' if pull['isDraft'] else '')
+    return None
+
+
+def classify(pull, sha, ci):
+    return classify_pull(pull, sha) or (ci.state, ci.summary(sha) + ('; the pull request is a draft' if pull['isDraft'] else ''))
 
 
 def merge_blocker(pull):
@@ -476,7 +482,7 @@ def merge_command(session):
         if result is not Result.PASSED:
             return result, reason
     result, reason = session.observe(refresh_ci=False)
-    if result not in (Result.PENDING, Result.PASSED):
+    if classify_pull(session.pull, session.expected_sha) or result not in (Result.PENDING, Result.PASSED):
         return result, reason
     refusal = merge_blocker(session.pull)
     if refusal:
