@@ -34,6 +34,7 @@ public sealed class ProviderResilienceClockTests
     private static readonly TimeSpan TotalRequestTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan Guard = TimeSpan.FromSeconds(20);
     private static readonly TimeSpan Step = TimeSpan.FromMilliseconds(10);
+    private static readonly TimeSpan DisposalStep = TimeSpan.FromSeconds(1);
 
     private static readonly Dictionary<string, Fetch> Scoreboards = new()
     {
@@ -419,8 +420,19 @@ public sealed class ProviderResilienceClockTests
 
         public async ValueTask DisposeAsync()
         {
-            await app.DisposeAsync();
-            await entry.DisposeAsync();
+            var disposing = Task.Run(async () =>
+            {
+                await app.DisposeAsync();
+                await entry.DisposeAsync();
+            });
+            var deadline = DateTime.UtcNow + Guard;
+            while (!disposing.IsCompleted || Clock.LiveTimers > 0)
+            {
+                if (DateTime.UtcNow > deadline) throw new TimeoutException($"still disposing at {Clock.Elapsed} with {Clock.LiveTimers} live timers");
+                Clock.Advance(DisposalStep);
+                await Task.Delay(1);
+            }
+            await disposing;
             Provider.Dispose();
         }
     }
