@@ -613,7 +613,7 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
     }
 }
 
-public sealed class ProCompetitionRefreshBackgroundService(IServiceScopeFactory scopes,
+public sealed class ProCompetitionRefreshBackgroundService(IServiceScopeFactory scopes, TimeProvider time,
     ILogger<ProCompetitionRefreshBackgroundService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -628,7 +628,7 @@ public sealed class ProCompetitionRefreshBackgroundService(IServiceScopeFactory 
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
             catch (ObjectDisposedException) when (stoppingToken.IsCancellationRequested) { return; }
             catch (Exception ex) { logger.LogError(ex, "Pro competition refresh failed"); }
-            await Task.Delay(TimeSpan.FromMinutes(15), stoppingToken);
+            await Task.Delay(TimeSpan.FromMinutes(15), time, stoppingToken);
         }
     }
 }

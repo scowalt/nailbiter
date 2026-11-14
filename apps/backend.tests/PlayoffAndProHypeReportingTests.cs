@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
+using System.Threading.Channels;
 using backend.Data;
 using backend.Models;
 using backend.Services;
@@ -258,8 +259,9 @@ public sealed class PlayoffAndProHypeReportingTests
     }
 
     [Fact]
-    public async Task Pro_competition_disposed_object_outside_shutdown_is_sent_once_at_error_and_the_loop_keeps_running()
+    public async Task Pro_competition_disposed_object_outside_shutdown_is_sent_once_per_iteration_at_error_and_the_loop_runs_again_after_fifteen_minutes()
     {
+        var clock = new LoopClock(new DateTimeOffset(2026, 11, 14, 12, 0, 0, TimeSpan.Zero));
         await using var app = new ReportingApp(_ => Unexpected, typeof(ProCompetitionRefreshBackgroundService), configure: services =>
         {
             services.RemoveAll<ExcitementDbContext>();
@@ -269,15 +271,20 @@ public sealed class PlayoffAndProHypeReportingTests
                 db.Dispose();
                 return db;
             });
+            services.RemoveAll<TimeProvider>();
+            services.AddSingleton<TimeProvider>(clock);
         });
         var loop = app.Services.GetServices<IHostedService>().OfType<ProCompetitionRefreshBackgroundService>().Single().ExecuteTask!;
-        var logged = app.WaitForLogAsync(typeof(ProCompetitionRefreshBackgroundService), ProCompetitionLoopFailure);
 
-        await Task.WhenAny(logged, loop).WaitAsync(HangDeadline);
-
-        Assert.False(loop.IsCompleted, "the refresh loop exited instead of waiting for its next iteration");
-        await logged;
+        await WhileLoopRunsAsync(loop, app.WaitForLogAsync(typeof(ProCompetitionRefreshBackgroundService), ProCompetitionLoopFailure));
         AssertSentOnceAtError(await app.SentEventsAsync(), typeof(ProCompetitionRefreshBackgroundService), ProCompetitionLoopFailure, typeof(ObjectDisposedException));
+        Assert.Equal(TimeSpan.FromMinutes(15), await WhileLoopRunsAsync(loop, clock.NextWaitAsync()));
+
+        clock.Advance(TimeSpan.FromMinutes(15));
+
+        await WhileLoopRunsAsync(loop, app.WaitForLogAsync(typeof(ProCompetitionRefreshBackgroundService), ProCompetitionLoopFailure, occurrence: 2));
+        Assert.Equal(TimeSpan.FromMinutes(15), await WhileLoopRunsAsync(loop, clock.NextWaitAsync()));
+        AssertSentOnceAtError((await app.SentEventsAsync()).Skip(1).ToArray(), typeof(ProCompetitionRefreshBackgroundService), ProCompetitionLoopFailure, typeof(ObjectDisposedException));
     }
 
     [Fact]
@@ -420,6 +427,13 @@ public sealed class PlayoffAndProHypeReportingTests
             clock.Advance(TimeSpan.FromSeconds(30));
             await Task.Delay(50, deadline.Token);
         }
+    }
+
+    private static async Task<T> WhileLoopRunsAsync<T>(Task loop, Task<T> step)
+    {
+        await Task.WhenAny(step, loop);
+        Assert.False(loop.IsCompleted, "the refresh loop exited instead of waiting for its next iteration");
+        return await step;
     }
 
     private static void AssertSentOnceAtError(IReadOnlyCollection<SentEvent> sent, Type logger, string template, Type exception)
@@ -574,14 +588,15 @@ public sealed class PlayoffAndProHypeReportingTests
 
         public IEnumerable<LoggedEntry> Logs => logs.Entries;
 
-        public async Task<LoggedEntry> WaitForLogAsync(Type category, string template)
+        public async Task<LoggedEntry> WaitForLogAsync(Type category, string template, int occurrence = 1)
         {
-            using var deadline = new CancellationTokenSource(HangDeadline);
+            var waited = Stopwatch.StartNew();
             while (true)
             {
-                var entry = logs.Entries.FirstOrDefault(l => l.Category == category.FullName && l.Template == template);
+                var entry = logs.Entries.Where(l => l.Category == category.FullName && l.Template == template).ElementAtOrDefault(occurrence - 1);
                 if (entry is not null) return entry;
-                await Task.Delay(50, deadline.Token);
+                Assert.True(waited.Elapsed < HangDeadline, $"no log {occurrence} of \"{template}\" from {category.Name} within {HangDeadline}");
+                await Task.Delay(50);
             }
         }
 
@@ -604,6 +619,26 @@ public sealed class PlayoffAndProHypeReportingTests
             await app.DisposeAsync();
             await entry.DisposeAsync();
             Provider.Dispose();
+        }
+    }
+
+    private sealed class LoopClock(DateTimeOffset now) : FakeTimeProvider(now)
+    {
+        private readonly Channel<TimeSpan> loopWaits = Channel.CreateUnbounded<TimeSpan>();
+
+        public async Task<TimeSpan> NextWaitAsync()
+        {
+            var wait = loopWaits.Reader.ReadAsync().AsTask();
+            await Task.WhenAny(wait, Task.Delay(HangDeadline));
+            Assert.True(wait.IsCompleted, $"no wait on the injected clock within {HangDeadline}");
+            return await wait;
+        }
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = base.CreateTimer(callback, state, dueTime, period);
+            if (state is not CancellationTokenSource) loopWaits.Writer.TryWrite(dueTime);
+            return timer;
         }
     }
 
