@@ -184,6 +184,18 @@ public sealed class ProviderResilienceClockTests
     }
 
     [Fact]
+    public async Task A_failed_test_body_that_is_not_an_assertion_keeps_its_type_in_the_primary_failure()
+    {
+        var failure = new TaskCanceledException("the fetch was cancelled");
+        var disposal = new TimeoutException("still disposing at 00:00:20 with 1 live timers");
+
+        var reported = await Record.ExceptionAsync(() => UsingAsync(new FailingDisposal(disposal), _ => throw failure));
+
+        Assert.StartsWith("System.Threading.Tasks.TaskCanceledException : the fetch was cancelled", reported.Message, StringComparison.Ordinal);
+        Assert.Equal([failure, disposal], Assert.IsType<AggregateException>(reported.InnerException).InnerExceptions);
+    }
+
+    [Fact]
     public async Task A_disposal_failure_after_a_passing_test_body_still_fails_the_test()
     {
         var disposal = new TimeoutException("still disposing at 00:00:20 with 1 live timers");
