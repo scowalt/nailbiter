@@ -1,7 +1,9 @@
 import { defineConfig } from "astro/config";
 
 const exactTailscaleHost = (tailscaleUrl) => {
-  const { hostname } = new URL(tailscaleUrl);
+  const hostname = URL.canParse(tailscaleUrl)
+    ? new URL(tailscaleUrl).hostname
+    : "";
   if (hostname === "" || hostname.startsWith(".")) {
     throw new Error(
       `PORTLESS_TAILSCALE_URL must be an absolute URL with one exact hostname, but it is "${tailscaleUrl}". Unset it, or start the dev server with "portless run --tailscale astro dev".`,
