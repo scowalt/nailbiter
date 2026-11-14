@@ -21,27 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="../backend/Migrations/022_WorldCupOvertime.sql" Link="Migrations/022_WorldCupOvertime.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/030_MlbHighlights.sql" Link="Migrations/030_MlbHighlights.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/031_HighlightsLifecycle.sql" Link="Migrations/031_HighlightsLifecycle.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/032_CollegePregameProbabilities.sql" Link="Migrations/032_CollegePregameProbabilities.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/033_MoneyPuckDailyRefresh.sql" Link="Migrations/033_MoneyPuckDailyRefresh.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/034_PlayoffSeriesObservation.sql" Link="Migrations/034_PlayoffSeriesObservation.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/035_ProHypeLifecycle.sql" Link="Migrations/035_ProHypeLifecycle.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/036_MoneyPuckRefusalExpiry.sql" Link="Migrations/036_MoneyPuckRefusalExpiry.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/037_NhlGuruRankings.sql" Link="Migrations/037_NhlGuruRankings.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/038_GameBroadcasts.sql" Link="Migrations/038_GameBroadcasts.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/039_StartHype.sql" Link="Migrations/039_StartHype.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/040_CollegePolls.sql" Link="Migrations/040_CollegePolls.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/041_PlayoffStatusCollection.sql" Link="Migrations/041_PlayoffStatusCollection.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/042_NewestOdds.sql" Link="Migrations/042_NewestOdds.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/002_TeamRatings.sql" Link="Migrations/002_TeamRatings.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/025_TeamRatingSourceSeason.sql" Link="Migrations/025_TeamRatingSourceSeason.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/026_PlayoffFinalOutcome.sql" Link="Migrations/026_PlayoffFinalOutcome.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/027_CollegeFootball.sql" Link="Migrations/027_CollegeFootball.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/029_PlayoffQuoteEvidence.sql" Link="Migrations/029_PlayoffQuoteEvidence.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/028_ProHypeEvidence.sql" Link="Migrations/028_ProHypeEvidence.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="../backend/Migrations/029_MoneyPuckPublication.sql" Link="Migrations/029_MoneyPuckPublication.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../backend/Migrations/*.sql" Link="Migrations/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/Excitement/*.json;Fixtures/Excitement/*.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/ProHype/*.json;Fixtures/ProHype/*.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/NflPlayoffLeverage/*.html;Fixtures/NflPlayoffLeverage/*.csv" CopyToOutputDirectory="PreserveNewest" />
