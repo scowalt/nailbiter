@@ -10,6 +10,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Polly.RateLimiting;
 using Sentry;
 using Sentry.AspNetCore;
@@ -22,13 +23,40 @@ namespace backend.tests;
 [Collection(nameof(SentryGlobalHubCollection))]
 public sealed class ProviderRateLimiterRejectionTests
 {
-    [Fact]
-    public void Standard_pipeline_caps_each_client_at_1000_concurrent_requests_with_no_queue()
-    {
-        var limiter = new HttpStandardResilienceOptions().RateLimiter.DefaultRateLimiterOptions;
+    private static readonly Type[] ProviderClients =
+    [
+        typeof(backend.Services.Espn.EspnOddsService),
+        typeof(backend.Services.Kalshi.KalshiOddsService),
+        typeof(CollegeEspnClient),
+        typeof(CollegeKalshiClient),
+        typeof(backend.Services.Espn.EspnPowerIndexService),
+        typeof(backend.Services.PlayoffStatus.PlayoffStatusService),
+        typeof(backend.Services.PowerRankingsGuru.PowerRankingsGuruService),
+        typeof(backend.Services.Kalshi.KalshiPlayoffRatingsService),
+        typeof(ProCompetitionEvidenceService),
+        typeof(backend.Services.Espn.EspnStandingsService),
+        typeof(backend.Services.Backfill.NflBackfillService),
+        typeof(backend.Services.OpenF1.OpenF1Service),
+        typeof(backend.Services.EspnF1.EspnF1Service),
+        typeof(backend.Services.Kalshi.KalshiF1OddsService),
+        typeof(backend.Services.EspnNascar.EspnNascarService),
+        typeof(backend.Services.Kalshi.KalshiNascarOddsService),
+        typeof(NascarLiveFeedService),
+        typeof(backend.Services.EspnIndyCar.EspnIndyCarService)
+    ];
 
-        Assert.Equal(1000, limiter.PermitLimit);
-        Assert.Equal(0, limiter.QueueLimit);
+    private static string StandardPipeline(Type client) => $"{client.Name}-standard";
+
+    [Fact]
+    public void Each_provider_client_caps_itself_at_1000_concurrent_requests_with_no_queue()
+    {
+        using var app = new AppFactory();
+        var options = app.Services.GetRequiredService<IOptionsMonitor<HttpStandardResilienceOptions>>();
+
+        var limiters = ProviderClients.Select(client => options.Get(StandardPipeline(client)).RateLimiter)
+            .Select(limiter => (limiter.RateLimiter is null, limiter.DefaultRateLimiterOptions.PermitLimit, limiter.DefaultRateLimiterOptions.QueueLimit));
+
+        Assert.All(limiters, limiter => Assert.Equal((true, 1000, 0), limiter));
     }
 
     [Fact]
@@ -95,7 +123,7 @@ public sealed class ProviderRateLimiterRejectionTests
                         services.Remove(worker);
                     services.ConfigureAll<HttpClientFactoryOptions>(options =>
                         options.HttpMessageHandlerBuilderActions.Add(handlers => handlers.PrimaryHandler = Provider));
-                    services.ConfigureAll<HttpStandardResilienceOptions>(options =>
+                    services.Configure<HttpStandardResilienceOptions>(StandardPipeline(typeof(NascarLiveFeedService)), options =>
                         options.RateLimiter.DefaultRateLimiterOptions.PermitLimit = 1);
                     services.AddSingleton<ILoggerProvider>(logs);
                     services.PostConfigure<SentryAspNetCoreOptions>(options =>
