@@ -434,6 +434,30 @@ public sealed class DatabaseFailureReportingTests
         AssertConnectionFailureReportedOnce(await app.SentEventsAfterFailureAsync(), database.Cause);
     }
 
+    [Fact]
+    public async Task Pro_competition_refresh_fault_during_shutdown_is_reported_once_at_error()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        var open = new OpenFailsAfterShutdown(new NpgsqlException("Synthetic connection failure after shutdown began"));
+        await using var app = new ReportingApp(database.ConnectionString, typeof(ProCompetitionRefreshBackgroundService),
+            services => services.ConfigureDbContext<ExcitementDbContext>(options => options.AddInterceptors(open)));
+        await open.Reached.Task.WaitAsync(TimeSpan.FromSeconds(15));
+
+        AssertSentOnceAtError<ProCompetitionRefreshBackgroundService, NpgsqlException>(await app.SentEventsAfterStopAsync());
+    }
+
+    [Fact]
+    public async Task Pro_competition_refresh_cancelled_by_shutdown_sends_nothing()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        var open = new OpenFailsAfterShutdown(fault: null);
+        await using var app = new ReportingApp(database.ConnectionString, typeof(ProCompetitionRefreshBackgroundService),
+            services => services.ConfigureDbContext<ExcitementDbContext>(options => options.AddInterceptors(open)));
+        await open.Reached.Task.WaitAsync(TimeSpan.FromSeconds(15));
+
+        Assert.Empty(await app.SentEventsAfterStopAsync());
+    }
+
     private static ReportingApp MoneyPuckApp(SyntheticDatabase database, MoneyPuckQualificationHandler moneyPuck) =>
         new(database.ConnectionString + LockTimeout, typeof(MoneyPuckRefreshBackgroundService),
             services =>
@@ -505,6 +529,20 @@ public sealed class DatabaseFailureReportingTests
         {
             if (onlyConnection is not null) await onlyConnection.DisposeAsync();
             if (database is not null) await database.DisposeAsync();
+        }
+    }
+
+    private sealed class OpenFailsAfterShutdown(Exception? fault) : DbConnectionInterceptor
+    {
+        public TaskCompletionSource Reached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask<InterceptionResult> ConnectionOpeningAsync(DbConnection connection,
+            ConnectionEventData eventData, InterceptionResult result, CancellationToken cancellationToken = default)
+        {
+            Reached.TrySetResult();
+            try { await Task.Delay(Timeout.Infinite, cancellationToken); }
+            catch (OperationCanceledException) when (fault is not null) { throw fault; }
+            return result;
         }
     }
 
@@ -608,6 +646,12 @@ public sealed class DatabaseFailureReportingTests
         }
 
         public HttpClient Client { get; }
+
+        public async Task<IReadOnlyCollection<SentEvent>> SentEventsAfterStopAsync()
+        {
+            await app.DisposeAsync();
+            return transport.Events.ToArray();
+        }
 
         public async Task<IReadOnlyCollection<SentEvent>> SentEventsAsync()
         {
