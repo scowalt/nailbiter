@@ -172,6 +172,22 @@ public sealed class ProviderResilienceClockTests
     }
 
     [Fact]
+    public async Task Disposing_the_app_fails_by_name_at_the_guard_when_a_service_hangs_without_the_clock()
+    {
+        var app = new ClockedApp(Answer.Hang, services => services.AddSingleton<ClocklessHang>());
+        var hang = app.Services.GetRequiredService<ClocklessHang>();
+
+        app.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
+        await hang.Started.WaitAsync(Guard);
+        var reported = await Record.ExceptionAsync(() => app.DisposeAsync().AsTask().WaitAsync(Guard * 2));
+        hang.Release();
+        await app.DisposeAsync().AsTask().WaitAsync(Guard);
+
+        Assert.StartsWith($"the host was still disposing its services after {Guard}", Assert.IsType<TimeoutException>(reported).Message, StringComparison.Ordinal);
+        Assert.Equal(0, app.Clock.TimersCreated);
+    }
+
+    [Fact]
     public async Task A_failed_test_body_stays_the_primary_failure_when_disposal_also_fails()
     {
         var failure = Record.Exception(() => Assert.Equal(StandardAttempts, HungAttemptsWithinTotal));
@@ -454,6 +470,22 @@ public sealed class ProviderResilienceClockTests
             await Task.Delay(RealWork);
             await Task.Delay(DisposalStep, clock);
             Finished = true;
+        }
+    }
+
+    private sealed class ClocklessHang : IAsyncDisposable
+    {
+        private readonly TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Started => started.Task;
+
+        public void Release() => released.TrySetResult();
+
+        public async ValueTask DisposeAsync()
+        {
+            started.TrySetResult();
+            await released.Task;
         }
     }
 
