@@ -10,6 +10,7 @@ using backend.Services.EspnNascar;
 using backend.Services.Nascar;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -342,28 +343,12 @@ public sealed class ProviderResilienceClockTests
         public sealed record Reply(HttpStatusCode Code) : Answer;
     }
 
-    private sealed class SteppedClock(TimeSpan descheduleAfterArming) : FakeTimeProvider(Origin), IAsyncDisposable
+    private sealed class SteppedClock(TimeSpan descheduleAfterArming) : FakeTimeProvider(Origin)
     {
         private static readonly DateTimeOffset Origin = new(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
         private readonly List<TrackedTimer> timers = [];
-        private readonly TaskCompletionSource returned = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private volatile bool lent;
 
         public TimeSpan Elapsed => GetUtcNow() - Origin;
-
-        public Task Returned => lent ? returned.Task : Task.CompletedTask;
-
-        public TimeProvider Lend()
-        {
-            lent = true;
-            return this;
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            returned.TrySetResult();
-            return default;
-        }
 
         public int TimersCreated
         {
@@ -495,6 +480,7 @@ public sealed class ProviderResilienceClockTests
         private readonly WebApplicationFactory<Program> app;
         private readonly SentTransport transport = new();
         private readonly LogRecorder logs = new();
+        private readonly HostDisposal hostDisposal = new();
 
         public ClockedApp(Answer answer, Action<IServiceCollection>? configure = null, TimeSpan descheduleAfterArming = default)
         {
@@ -503,13 +489,14 @@ public sealed class ProviderResilienceClockTests
             app = entry.WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("Production");
+                builder.ConfigureAppConfiguration((_, configuration) => configuration.Add(hostDisposal));
                 builder.ConfigureServices(services =>
                 {
                     foreach (var worker in services.Where(s => s.ServiceType == typeof(IHostedService)
                         && s.ImplementationType?.Namespace?.StartsWith("backend", StringComparison.Ordinal) == true).ToArray())
                         services.Remove(worker);
                     services.RemoveAll<TimeProvider>();
-                    services.AddSingleton<TimeProvider>(_ => Clock.Lend());
+                    services.AddSingleton<TimeProvider>(Clock);
                     services.ConfigureAll<HttpClientFactoryOptions>(options =>
                         options.HttpMessageHandlerBuilderActions.Add(handlers => handlers.PrimaryHandler = Provider));
                     services.AddSingleton<ILoggerProvider>(logs);
@@ -578,18 +565,34 @@ public sealed class ProviderResilienceClockTests
             {
                 await app.DisposeAsync();
                 await entry.DisposeAsync();
-                await Clock.Returned;
+                await hostDisposal.Disposed;
             });
             var deadline = DateTime.UtcNow + Guard;
             while (!disposing.IsCompleted || Clock.LiveTimers > 0)
             {
-                if (DateTime.UtcNow > deadline) throw new TimeoutException($"still disposing at {Clock.Elapsed} with {Clock.LiveTimers} live timers");
+                if (DateTime.UtcNow > deadline)
+                {
+                    _ = disposing.ContinueWith(abandoned => abandoned.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                    var still = hostDisposal.Disposed.IsCompleted ? "the app was still disposing after the host disposed its services" : "the host was still disposing its services";
+                    throw new TimeoutException($"{still} after {Guard}, with the clock at {Clock.Elapsed} and {Clock.LiveTimers} live timers");
+                }
                 Clock.Advance(DisposalStep);
                 await Task.Delay(1);
             }
             await disposing;
             Provider.Dispose();
         }
+    }
+
+    private sealed class HostDisposal : ConfigurationProvider, IConfigurationSource, IDisposable
+    {
+        private readonly TaskCompletionSource disposed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Disposed => disposed.Task;
+
+        public IConfigurationProvider Build(IConfigurationBuilder builder) => this;
+
+        public void Dispose() => disposed.TrySetResult();
     }
 
     private sealed class ControlledProvider(Answer answer, SteppedClock clock) : HttpMessageHandler
