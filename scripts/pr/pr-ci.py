@@ -70,7 +70,7 @@ EXIT_CODES = {
     Result.PASSED: 0, Result.MERGED: 0, Result.ERROR: 3, Result.QUEUED: 10, Result.PENDING: 11, Result.INCOMPLETE: 12,
     Result.FAILED: 20, Result.CANCELLED: 21, Result.BLOCKED: 22, Result.SUPERSEDED: 23, Result.TIMEOUT: 24,
 }
-CI_PRECEDENCE = (Result.FAILED, Result.CANCELLED, Result.BLOCKED, Result.PENDING, Result.PASSED)
+CI_PRECEDENCE = (Result.FAILED, Result.CANCELLED, Result.BLOCKED, Result.INCOMPLETE, Result.PENDING, Result.PASSED)
 
 
 class GitHubError(Exception):
@@ -179,10 +179,11 @@ class Ci:
     required: dict | None
 
     def summary(self, sha):
-        if not self.runs:
-            return f'no Actions runs yet for {sha[:12]}'
-        parts = ['Actions-only evidence: ' + '; '.join(f"{run['name']} {run['event']} {run['conclusion'] or run['status']}" for run in self.runs)]
-        runs_passed = all(run_outcome(run) is Result.PASSED for run in self.runs)
+        parts = [
+            'Actions-only evidence: ' + '; '.join(f"{run['name']} {run['event']} {run['conclusion'] or run['status']}" for run in self.runs)
+            if self.runs else f'no Actions runs yet for {sha[:12]}'
+        ]
+        runs_passed = self.runs and all(run_outcome(run) is Result.PASSED for run in self.runs)
         missing = [name for name, jobs in (self.required or {}).items() if not jobs]
         if runs_passed and missing:
             parts.append(f"no Actions job yet for required checks: {', '.join(missing)}")
@@ -235,9 +236,9 @@ def classify_ci(runs, sha, required_checks, read_jobs):
             required[job['name']].append({'run_id': run_id, 'conclusion': job['conclusion']})
         if not all(required.values()):
             outcomes.add(Result.PENDING)
+    if required is None:
+        outcomes.add(Result.INCOMPLETE)
     state = next(result for result in CI_PRECEDENCE if result in outcomes)
-    if state is Result.PASSED and required is None:
-        state = Result.INCOMPLETE
     return Ci(state, current, tuple(sorted(run['id'] for run in own if run not in current)), required)
 
 
