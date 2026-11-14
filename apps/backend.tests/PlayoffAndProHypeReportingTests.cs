@@ -448,7 +448,7 @@ public sealed class PlayoffAndProHypeReportingTests
             var database = new Database();
             await database.container.StartAsync();
             await using var db = new ExcitementDbContext(new DbContextOptionsBuilder<ExcitementDbContext>().UseNpgsql(database.ConnectionString).Options);
-            await db.Database.EnsureCreatedAsync();
+            await TestSchema.CreateAsync(db.Database);
             db.Games.AddRange(games);
             await db.SaveChangesAsync();
             return database;

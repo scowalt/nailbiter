@@ -46,7 +46,7 @@ public sealed class PreseasonVisibilityTests : IAsyncLifetime
         }));
         client = app.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         using var scope = app.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database.EnsureCreatedAsync();
+        await TestSchema.CreateAsync(scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database);
     }
 
     [Fact]

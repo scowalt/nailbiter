@@ -167,7 +167,7 @@ public sealed class HighlightsLifecycleTests : IAsyncLifetime
     {
         using var scope = host.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
-        await db.Database.EnsureCreatedAsync();
+        await TestSchema.CreateAsync(db.Database);
         seed(db);
         await db.SaveChangesAsync();
     }

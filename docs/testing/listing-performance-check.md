@@ -165,9 +165,51 @@ Core command interceptor recording SQL and parameters:
   no scheduled game, and none missing.
 - No provider request was attempted.
 
-The latest-odds query scans every chunk once by design. The report shows the
-counts (`relationScans`, `chunkScans`) so a change in that number is visible in
-review.
+The latest-odds read looks up each listed game's newest snapshot time in the
+`newest_odds` table, which a trigger from `042_NewestOdds.sql` keeps current on
+every insert, update and delete of `odds_snapshots`. It then reads
+`odds_snapshots` at those times only, so TimescaleDB plans just the chunks that
+hold the listed games' newest snapshots, however long the history is.
+`LatestOddsHistoryTests` checks that the planned chunks are exactly those chunks
+for 7-day and 56-day histories. The report shows the counts (`relationScans`,
+`chunkScans`) so a change in that number is visible in review. The excitement
+history read still scans every chunk.
+
+The trigger locks the game's `newest_odds` row on every insert, update and
+delete, and holds that lock until the transaction commits. Two consequences
+follow:
+
+- Concurrent changes to one game are safe. A delete or move locks the row
+  before it compares the deleted time with the pointer, so it waits for the
+  other transaction and then reads its committed rows.
+  `Concurrent_odds_changes_to_one_game_keep_its_newest_odds` pins four such
+  interleavings, and it fails if the trigger drops `FOR UPDATE`.
+- Writers that run at the same time must insert or delete odds for their games
+  in one consistent order, for example ordered by game id. Two transactions
+  that change games A and B in opposite orders now deadlock, and PostgreSQL
+  aborts one of them.
+
+The app's own writers meet the rule. The live odds loop scrapes one sport and
+date at a time, and the pregame loop that runs beside it writes
+`pregame_odds`, not snapshots. The college collector and
+`--import-college-history` share one advisory lock and write only college
+games, which no other writer changes.
+
+The NFL backfill (`BACKFILL_MODE=true`) does not keep the rule. It runs as a
+separate process, and nothing stops it from running while the deployed
+backend's live loop writes. It shares one `DbContext` across a week. It saves
+the Kalshi snapshots of an existing game at once, but the snapshots of the
+games it creates wait for one save at the end of the week, in scoreboard order
+rather than game id order. The live loop cannot lock a created game's
+`newest_odds` row before that save commits, because the game row does not
+exist for it yet. So the usual week save locks no row that the live loop can
+hold. A deadlock is still possible in narrow cases. For example, a failed save
+leaves its rows tracked, the next save then carries two existing live games,
+and the live loop locks the same two games in the other order. PostgreSQL then aborts one
+transaction and rolls it back. Run the backfill while the live loop does not
+write the same games. Apply the same rule to any other parallel or multi-game
+writer, including a manual script such as
+`scripts/backfills/recover_empty_odds.py`.
 
 ## Report
 

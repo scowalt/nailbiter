@@ -515,7 +515,7 @@ public sealed class ProCompetitionReportingTests
             await database.StartAsync();
             var app = new ReportingApp(database, respond, configure);
             using var scope = app.Services.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database.EnsureCreatedAsync();
+            await TestSchema.CreateAsync(scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database);
             return app;
         }
 

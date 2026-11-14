@@ -95,7 +95,7 @@ public sealed class PowerRankingsGuruPartialTableTests
         var database = IsolatedPostgreSql.CreateContainer();
         await database.StartAsync();
         await using var db = Open(database);
-        await db.Database.EnsureCreatedAsync();
+        await TestSchema.CreateAsync(db.Database);
         return database;
     }
 

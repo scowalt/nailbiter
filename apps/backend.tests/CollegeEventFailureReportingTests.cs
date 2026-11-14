@@ -370,7 +370,7 @@ public sealed class CollegeEventFailureReportingTests
             var app = new CollegeApp(database, summary, resilience, answer, configure);
             using var scope = app.app.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
-            await db.Database.EnsureCreatedAsync();
+            await TestSchema.CreateAsync(db.Database);
             db.Games.AddRange(KnownGame(Failing), KnownGame(Healthy));
             if (staleTeams)
                 db.CollegeTeams.AddRange(

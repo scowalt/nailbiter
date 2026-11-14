@@ -27,7 +27,7 @@ public sealed class RetrospectiveEloTests : IAsyncLifetime
             services.AddDbContext<ExcitementDbContext>(options => options.UseNpgsql(database.GetConnectionString()));
         }));
         using var scope = app.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database.EnsureCreatedAsync();
+        await TestSchema.CreateAsync(scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database);
     }
 
     public async Task DisposeAsync()

@@ -72,7 +72,7 @@ internal sealed class HostedGameFixture : IAsyncLifetime
         FixtureTimings.Record(timingOwner, "host", Stopwatch.GetElapsedTime(hostStarted));
         using var scope = Services.CreateScope();
         await FixtureTimings.MeasureAsync(timingOwner, "schema",
-            () => scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database.EnsureCreatedAsync());
+            () => TestSchema.CreateAsync(scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database));
         initializedAt = Stopwatch.GetTimestamp();
     }
 

@@ -103,7 +103,7 @@ public sealed class EspnStandingsReportingTests
         await database.StartAsync();
         var options = new DbContextOptionsBuilder<ExcitementDbContext>().UseNpgsql(database.GetConnectionString()).Options;
         await using (var db = new ExcitementDbContext(options))
-            await db.Database.EnsureCreatedAsync();
+            await TestSchema.CreateAsync(db.Database);
         await using var holder = new NpgsqlConnection(database.GetConnectionString());
         await holder.OpenAsync();
         await using var tableLock = await holder.BeginTransactionAsync();

@@ -37,7 +37,7 @@ public sealed class GameOddsTests : IAsyncLifetime
         client = app.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("https://localhost") });
         using var scope = app.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
-        await db.Database.EnsureCreatedAsync();
+        await TestSchema.CreateAsync(db.Database);
         db.Games.AddRange(Game("target"), Game("other"), Game("empty"));
         foreach (var i in Enumerable.Range(0, 105).Reverse())
         {

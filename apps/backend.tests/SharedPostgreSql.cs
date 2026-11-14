@@ -51,6 +51,8 @@ public sealed class SharedPostgreSql : IAsyncLifetime
         await using (var db = new ExcitementDbContext(options))
             await db.Database.EnsureCreatedAsync();
         if (prepareTemplate is not null) await prepareTemplate(ConnectionString(Template, pooling: false));
+        await using (var db = new ExcitementDbContext(options))
+            await TestSchema.CreateAsync(db.Database);
     }
 
     private string ConnectionString(string database, bool pooling) =>

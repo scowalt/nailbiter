@@ -21,7 +21,7 @@ public sealed class PlayoffSeriesLockOrderTests : IAsyncLifetime
         await database.StartAsync();
         options = new DbContextOptionsBuilder<ExcitementDbContext>().UseNpgsql(database.GetConnectionString()).Options;
         await using var db = new ExcitementDbContext(options);
-        await db.Database.EnsureCreatedAsync();
+        await TestSchema.CreateAsync(db.Database);
         foreach (var migration in new[] { "034_PlayoffSeriesObservation.sql", "035_ProHypeLifecycle.sql" })
             await db.Database.ExecuteSqlRawAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "Migrations", migration)));
         db.Games.Add(game);

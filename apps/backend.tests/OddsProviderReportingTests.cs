@@ -806,7 +806,7 @@ public sealed class OddsProviderReportingTests
             var database = new OddsDatabase();
             await database.container.StartAsync();
             await using var db = new ExcitementDbContext(new DbContextOptionsBuilder<ExcitementDbContext>().UseNpgsql(database.container.GetConnectionString()).Options);
-            await db.Database.EnsureCreatedAsync();
+            await TestSchema.CreateAsync(db.Database);
             return database;
         }
 

@@ -94,7 +94,7 @@ public sealed class HighlightsApplicationTests : IAsyncLifetime
         host = CreateHost();
         using var scope = host.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
-        await db.Database.EnsureCreatedAsync();
+        await TestSchema.CreateAsync(db.Database);
         db.Games.Add(new Game { Id = "fixture-game", Sport = "mlb", Status = "final", HomeTeam = "Atlanta Braves", AwayTeam = "Los Angeles Dodgers", HomeTeamAbbreviation = "ATL", AwayTeamAbbreviation = "LAD", HomeTeamId = "15", AwayTeamId = "19", SeasonYear = 2026, ScheduledStart = new DateTime(2026, 10, 6, 22, 0, 0, DateTimeKind.Utc), CompletionConfirmedAt = clock.Now.UtcDateTime, HighlightsDiscoveryExpiresAt = new DateTime(2026, 10, 10, 3, 0, 0, DateTimeKind.Utc) });
         await db.SaveChangesAsync();
     }

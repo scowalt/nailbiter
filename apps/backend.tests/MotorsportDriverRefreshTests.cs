@@ -54,7 +54,7 @@ public sealed class MotorsportDriverRefreshTests : IAsyncLifetime
             services.AddHttpClient<EspnIndyCarService>().ConfigurePrimaryHttpMessageHandler(() => espn);
         }));
         using var scope = app.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database.EnsureCreatedAsync();
+        await TestSchema.CreateAsync(scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database);
     }
 
     public async Task DisposeAsync()

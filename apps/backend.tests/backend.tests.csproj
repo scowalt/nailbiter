@@ -34,6 +34,7 @@
     <None Include="../backend/Migrations/039_StartHype.sql" Link="Migrations/039_StartHype.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../backend/Migrations/040_CollegePolls.sql" Link="Migrations/040_CollegePolls.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../backend/Migrations/041_PlayoffStatusCollection.sql" Link="Migrations/041_PlayoffStatusCollection.sql" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../backend/Migrations/042_NewestOdds.sql" Link="Migrations/042_NewestOdds.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../backend/Migrations/002_TeamRatings.sql" Link="Migrations/002_TeamRatings.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../backend/Migrations/025_TeamRatingSourceSeason.sql" Link="Migrations/025_TeamRatingSourceSeason.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../backend/Migrations/026_PlayoffFinalOutcome.sql" Link="Migrations/026_PlayoffFinalOutcome.sql" CopyToOutputDirectory="PreserveNewest" />

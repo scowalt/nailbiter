@@ -72,7 +72,7 @@ public sealed class IsolatedPostgreSqlTests
             using var client = factory.CreateClient();
             using var scope = factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
-            await db.Database.EnsureCreatedAsync();
+            await TestSchema.CreateAsync(db.Database);
             Assert.Contains("\"status\":\"healthy\"", await client.GetStringAsync("/health"));
         }
     }

@@ -44,7 +44,7 @@ internal static class ListingWorkload
     public static readonly DateTimeOffset Now = new(2026, 10, 13, 23, 30, 0, TimeSpan.Zero);
     public static readonly string[] Paths = ["/", "/nhl?date=2026-10-13", "/nba?date=2026-10-13"];
     public static readonly string[] ServerSettings = ["-c", "timescaledb.telemetry_level=off", "-c", "timescaledb.max_background_workers=0"];
-    private const int HistoryDays = 28;
+    public const int HistoryDays = 28;
     private const int GameMinutes = 180;
     private const int PregameSnapshots = 36;
     private static readonly TimeZoneInfo EasternTime = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
@@ -83,9 +83,9 @@ internal static class ListingWorkload
         await command.ExecuteNonQueryAsync();
     }
 
-    public static async Task<ListingWorkloadManifest> SeedAsync(IServiceProvider services)
+    public static async Task<ListingWorkloadManifest> SeedAsync(IServiceProvider services, int historyDays = HistoryDays)
     {
-        var seeded = Games().ToList();
+        var seeded = Games(historyDays).ToList();
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
         db.Games.AddRange(seeded.Select(entry => entry.Game));
@@ -138,10 +138,10 @@ internal static class ListingWorkload
         return new(image, row.GetString(0), row.GetString(1), row.GetString(2), row.GetInt64(3), row.GetInt64(4), statuses, row.GetInt64(5), row.GetInt64(6), Now);
     }
 
-    private static IEnumerable<Seeded> Games()
+    private static IEnumerable<Seeded> Games(int historyDays)
     {
         var phase = 0;
-        for (var day = 1; day <= HistoryDays; day++)
+        for (var day = 1; day <= historyDays; day++)
             foreach (var sport in HistorySports)
                 for (var slot = 0; slot < 6; slot++)
                     yield return Create($"history-{sport}-{day:00}-{slot}", sport, "final", Eastern(-day, 13 + slot), phase++, null);
