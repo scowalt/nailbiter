@@ -90,7 +90,8 @@ internal static class ListingWorkload
         var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
         db.Games.AddRange(seeded.Select(entry => entry.Game));
         await db.SaveChangesAsync();
-        await db.Database.OpenConnectionAsync();
+        await using var transaction = await db.Database.BeginTransactionAsync();
+        await db.Database.ExecuteSqlRawAsync("SET LOCAL session_replication_role = replica");
         await using (var writer = await ((NpgsqlConnection)db.Database.GetDbConnection()).BeginBinaryImportAsync(
             "COPY odds_snapshots (game_id, timestamp, home_moneyline, away_moneyline, home_win_probability, away_win_probability, source, is_historical) FROM STDIN (FORMAT BINARY)"))
         {
@@ -109,6 +110,9 @@ internal static class ListingWorkload
                 }
             await writer.CompleteAsync();
         }
+        await db.Database.ExecuteSqlRawAsync(
+            "INSERT INTO newest_odds (game_id, timestamp) SELECT game_id, max(timestamp) FROM odds_snapshots GROUP BY game_id");
+        await transaction.CommitAsync();
         return new(seeded.Where(entry => entry.Game.Id.StartsWith("today-", StringComparison.Ordinal)).Select(Expect).ToList());
     }
 

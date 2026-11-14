@@ -79,8 +79,8 @@ public sealed class LatestOddsHistoryTests(ListingTimescale timescale, ITestOutp
         await host.InitializeAsync();
         try
         {
-            await ExecuteAsync(host.Services, "DROP TRIGGER IF EXISTS newest_odds_track ON odds_snapshots; DROP TABLE IF EXISTS newest_odds");
             await ListingWorkload.SeedAsync(host.Services);
+            await ExecuteAsync(host.Services, "DROP TRIGGER newest_odds_track ON odds_snapshots; DROP TABLE newest_odds");
             await host.SeedAsync(Edge("edge-stuck", "in_progress", Now.AddDays(-40)), Quotes("edge-stuck", Now.AddDays(-40), .62));
             await host.SeedAsync(Edge("edge-postponed", "scheduled", Now.AddHours(2)), Quotes("edge-postponed", Now.AddDays(-3), .64));
             await host.SeedAsync(Edge("edge-backfilled", "scheduled", Now.AddHours(2)), []);

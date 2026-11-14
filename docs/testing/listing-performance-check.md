@@ -126,7 +126,15 @@ unavailable".
   add one snapshot per played minute. Each scheduled game's newest pregame
   snapshot has a distinct probability, so a stale latest-odds row shows a wrong
   percentage.
-- Snapshots are loaded with binary `COPY`. Chunks older than seven days are
+- Snapshots are loaded with binary `COPY` in one transaction with
+  `session_replication_role = replica`, so neither the `game_id` foreign key
+  check nor the `newest_odds` trigger runs for each row. One
+  `INSERT … SELECT game_id, max(timestamp) … GROUP BY game_id` then fills
+  `newest_odds` before the commit. Those row triggers fire at the end of the
+  `COPY` statement, so on a busy host a 56-day seed with them ran past the
+  30-second Npgsql command timeout. `LatestOddsHistoryTests` checks that the
+  seed writes `newest_odds` once per game and that the result equals the table
+  the trigger builds from the same rows. Chunks older than seven days are
   then compressed and the database is analyzed. The run has 29 chunks, 21 of
   them compressed, and about 122,600 snapshots.
 
