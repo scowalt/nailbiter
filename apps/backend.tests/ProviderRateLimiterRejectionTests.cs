@@ -48,6 +48,33 @@ public sealed class ProviderRateLimiterRejectionTests
     private static string StandardPipeline(Type client) => $"{client.Name}-standard";
 
     [Fact]
+    public void Provider_clients_are_exactly_the_registered_clients_with_a_resilience_handler()
+    {
+        using var app = new AppFactory();
+        var pinned = ProviderClients.Select(client => client.Name).ToHashSet();
+        var resilient = ResilientClients(app.Services);
+
+        Assert.Empty(resilient.Except(pinned).Order());
+        Assert.Empty(pinned.Except(resilient).Order());
+    }
+
+    private static IReadOnlySet<string> ResilientClients(IServiceProvider services)
+    {
+        var handlers = services.GetRequiredService<IHttpMessageHandlerFactory>();
+        return HttpClientRegistrations.Names(services).Where(name =>
+        {
+            using var handler = handlers.CreateHandler(name);
+            return Chain(handler).OfType<ResilienceHandler>().Any();
+        }).ToHashSet();
+    }
+
+    private static IEnumerable<HttpMessageHandler> Chain(HttpMessageHandler? handler)
+    {
+        for (; handler is not null; handler = (handler as DelegatingHandler)?.InnerHandler)
+            yield return handler;
+    }
+
+    [Fact]
     public void Each_provider_client_caps_itself_at_1000_concurrent_requests_with_no_queue()
     {
         using var app = new AppFactory();
