@@ -211,8 +211,8 @@ public static class ProHypePolicy
         if (!stakes.HasValue || !quality.HasValue || !closeness.HasValue) return null;
         var (s, q, c) = sport switch
         {
-            "nhl" => (.425, .425, .15),
-            "nba" => (.30, .40, .30),
+            "nhl" => (.55, .30, .15),
+            "nba" => (.45, .25, .30),
             "nfl" => (.45, .35, .20),
             "mlb" => (.35, .30, .35),
             _ => throw new ArgumentException("Unsupported pro league", nameof(sport))

@@ -262,7 +262,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
     {
         await Seed();
         var captured = await Resolve();
-        Assert.Equal(58, Math.Round(captured.Total!.Value));
+        Assert.Equal(47, Math.Round(captured.Total!.Value));
         clock.Advance(TimeSpan.FromDays(3));
         await app.DisposeAsync();
         app = CreateHost();
@@ -281,6 +281,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
     [InlineData(2)]
     [InlineData(3)]
     [InlineData(4)]
+    [InlineData(5)]
     public async Task Regular_season_scores_from_another_formula_version_are_not_retained(int? version)
     {
         await Seed();
@@ -321,7 +322,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
             (await db.PregameOdds.SingleAsync()).FetchedAt = clock.GetUtcNow().UtcDateTime;
         });
         var recovered = await Resolve();
-        Assert.Equal(56.9831666939, recovered.Total!.Value, 10);
+        Assert.Equal(45.2576867841, recovered.Total!.Value, 10);
         Assert.Equal(3.04595910896665, recovered.Components.StakesScore, 10);
         clock.Advance(TimeSpan.FromHours(2));
         await app.DisposeAsync();
@@ -333,11 +334,15 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
     }
 
     [Theory]
-    [InlineData("nfl", false)]
-    [InlineData("nba", true)]
-    [InlineData("nhl", true)]
-    [InlineData("mlb", true)]
-    public async Task The_NFL_seeding_formula_discards_only_NFL_scores_saved_before_it(string sport, bool retained)
+    [InlineData("nfl", 5, false)]
+    [InlineData("nfl", 6, true)]
+    [InlineData("nba", 5, false)]
+    [InlineData("nba", 6, true)]
+    [InlineData("nhl", 5, false)]
+    [InlineData("nhl", 6, true)]
+    [InlineData("mlb", 5, false)]
+    [InlineData("mlb", 6, true)]
+    public async Task Each_league_retains_only_scores_saved_under_its_current_regular_season_formula(string sport, int version, bool retained)
     {
         await Seed(sport);
         var captured = await Resolve();
@@ -346,7 +351,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
         {
             var state = await db.ProHypeSnapshots.SingleAsync();
             var saved = JsonNode.Parse(state.SnapshotJson!)!;
-            saved["FormulaVersion"] = 5;
+            saved["FormulaVersion"] = version;
             state.SnapshotJson = saved.ToJsonString();
         });
         clock.Advance(TimeSpan.FromHours(3));
@@ -846,7 +851,7 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
         using (var scope = app.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
         var captured = await Resolve();
-        Assert.Equal(58.3695932866, captured.Total!.Value, 10);
+        Assert.Equal(47.0518859041, captured.Total!.Value, 10);
         Assert.Equal(ProQualificationEvidenceKind.PlayoffStatusModel, captured.Components.HomeQualificationEvidenceKind);
         clock.Advance(TimeSpan.FromMinutes(1));
         await Change(db =>

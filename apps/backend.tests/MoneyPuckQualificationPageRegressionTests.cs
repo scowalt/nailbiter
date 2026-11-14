@@ -77,7 +77,7 @@ public sealed class MoneyPuckQualificationPageRegressionTests(ITestOutputHelper 
             var region = detail ? doc.Body! : comparison.ParentElement!;
             var score = detail ? doc.QuerySelector("#detail-hype")! : comparison.QuerySelector($"#excitement-{game.Id}")!;
             Assert.Equal(!complete, score.TextContent.Contains("Hype unavailable", StringComparison.Ordinal));
-            if (complete) Assert.Equal("58", detail ? score.QuerySelector(".hype-score")!.TextContent : score.TextContent.Replace(" ", "").Replace("Hype", ""));
+            if (complete) Assert.Equal("47", detail ? score.QuerySelector(".hype-score")!.TextContent : score.TextContent.Replace(" ", "").Replace("Hype", ""));
             var credits = region.QuerySelectorAll("a[href='https://moneypuck.com/predictions.htm']");
             Assert.Equal(selected, credits.Length > 0);
             foreach (var link in credits)
@@ -259,7 +259,7 @@ public sealed class MoneyPuckQualificationPageRegressionTests(ITestOutputHelper 
             Assert.True(hype.IsComplete, hype.StakesExplanation);
             Assert.Equal(6.1963342467, hype.StakesScore, 8);
             Assert.Equal(96.849798, hype.QualityScore, 5); Assert.Equal(100, hype.ClosenessScore);
-            Assert.Equal(58.32208, (await service.CalculateHypeScoreAsync(game, null))!.Value, 5);
+            Assert.Equal(46.99039, (await service.CalculateHypeScoreAsync(game, null))!.Value, 5);
         }
         var beforePages = (h.Handler.Requests.Count, providers.Requests);
         await AssertPages(h, game, selected: true, complete: true);

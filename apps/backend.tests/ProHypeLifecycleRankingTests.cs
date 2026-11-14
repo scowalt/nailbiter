@@ -47,7 +47,7 @@ public sealed class ProHypeLifecycleRankingTests : IAsyncLifetime
         using (var scope = harness.App.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
         var original = await Resolve();
-        Assert.Equal(58.090581083346706, original.Total!.Value, 10);
+        Assert.Equal(46.690811288126092, original.Total!.Value, 10);
         var components = JsonSerializer.Serialize(original.Components);
         harness.Clock.Now = harness.Clock.Now.AddHours(48);
         Assert.True(game.ScheduledStart > harness.Clock.Now.UtcDateTime);
@@ -125,7 +125,7 @@ public sealed class ProHypeLifecycleRankingTests : IAsyncLifetime
         using (var scope = harness.App.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
         var original = await Resolve();
-        Assert.Equal(58.090581083346706, original.Total!.Value, 10);
+        Assert.Equal(46.690811288126092, original.Total!.Value, 10);
         harness.Clock.Now = harness.Clock.Now.AddHours(48);
         Assert.Equal(original.Total, (await Resolve()).Total);
         var csv = harness.Handler.RankingCsv;
@@ -173,7 +173,7 @@ public sealed class ProHypeLifecycleRankingTests : IAsyncLifetime
         using (var scope = harness.App.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
         var original = await Resolve();
-        Assert.Equal(58.090581083346706, original.Total!.Value, 10);
+        Assert.Equal(46.690811288126092, original.Total!.Value, 10);
         harness.Clock.Now = harness.Clock.Now.AddHours(48);
         harness.Handler.RankingCsv = harness.Handler.RankingCsv.Replace("ANA,0.5\nBOS,0.5", "BOS,0.5\nANA,0.5");
         Assert.Equal(0, await harness.Service.RefreshNhlRatingsForSeasonAsync(2027, default));
@@ -192,7 +192,7 @@ public sealed class ProHypeLifecycleRankingTests : IAsyncLifetime
         using (var scope = harness.App.Services.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
         var original = await Resolve();
-        Assert.Equal(58.090581083346706, original.Total!.Value, 10);
+        Assert.Equal(46.690811288126092, original.Total!.Value, 10);
         using (var scope = harness.App.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();

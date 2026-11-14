@@ -75,10 +75,10 @@ public sealed class ProHypeTests
     internal static JsonElement Fixture(string file) => JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "ProHype", file + ".json"))).RootElement;
 
     [Theory]
-    [InlineData(0, 1, 2, .5, false, 58)]
-    [InlineData(0, 14, 15, .55, false, 34)]
+    [InlineData(0, 1, 2, .5, false, 47)]
+    [InlineData(0, 14, 15, .55, false, 28)]
     [InlineData(83, 16, 17, .55, false, 47)]
-    [InlineData(0, 1, 2, .5, true, 98)]
+    [InlineData(0, 1, 2, .5, true, 99)]
     public void Exact_approved_calibrations(int played, int homeRank, int awayRank, double probability, bool championship, int expected)
     {
         var g = Game(); var e = Evidence(g); e.HomeProgress.Completed = e.AwayProgress.Completed = played;
@@ -95,7 +95,7 @@ public sealed class ProHypeTests
         var result = Score(g, e, Ranks(g, 23, 24), Odds(g, .475), Q(.07), Q(.17));
         Assert.Equal(95, result.Closeness.Value!.Value, 10);
         Assert.Equal(23.214285714285715, result.Quality.Value!.Value, 10);
-        Assert.Equal(17, Math.Round(result.Total!.Value));
+        Assert.Equal(14, Math.Round(result.Total!.Value));
     }
 
     [Theory]

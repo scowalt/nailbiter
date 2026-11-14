@@ -177,8 +177,8 @@ public sealed class ProHypeCaptureTests : IAsyncLifetime
 
     [Theory]
     [InlineData("nfl", 54, .8)]
-    [InlineData("nba", 70, 6.384034163378589)]
-    [InlineData("nhl", 58, 6.3081393271862405)]
+    [InlineData("nba", 56, 6.384034163378589)]
+    [InlineData("nhl", 47, 6.3081393271862405)]
     [InlineData("mlb", 64, 4.5504108020051035)]
     public async Task Registered_background_capture_precedes_any_viewer_and_survives_expiry_and_restart(string sport, int expected, double stakes)
     {

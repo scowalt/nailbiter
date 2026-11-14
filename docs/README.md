@@ -39,6 +39,7 @@ Each document below is the authoritative source for its topic. [AGENTS.md](../AG
 - [testing/ryuk-host-port-stress.md](testing/ryuk-host-port-stress.md): the Testcontainers Ryuk host-port probe.
 - [testing/listing-performance-check.md](testing/listing-performance-check.md): the home and league listing check, in Timescale fixture mode or against an explicit URL.
 - [testing/pro-hype-continuity.md](testing/pro-hype-continuity.md), [testing/suspense-weighted-excitement.md](testing/suspense-weighted-excitement.md) and [testing/mlb-highlights-acceptance.md](testing/mlb-highlights-acceptance.md): feature verification matrices.
+- [testing/hype-slates.md](testing/hype-slates.md): owner-reviewed hype slates kept as regression cases.
 - [../tests/fixtures/README.md](../tests/fixtures/README.md): synthetic fixture provenance.
 
 ## Historical records
