@@ -111,7 +111,7 @@ def toolchain_environment():
         environment.update(json.loads(mise.stdout))
     except json.JSONDecodeError:
         return None, f'mise env --json did not print JSON; run scripts/setup.sh\n{mise.stdout.strip()[:500]}'
-    environment.update(DOTNET_CLI_TELEMETRY_OPTOUT='1', DOTNET_NOLOGO='1')
+    environment.update(DOTNET_CLI_TELEMETRY_OPTOUT='1', DOTNET_NOLOGO='1', LC_ALL='C.UTF-8', DOTNET_CLI_UI_LANGUAGE='en-US')
     if not shutil.which('dotnet', path=environment.get('PATH')):
         return None, 'dotnet is not installed for this worktree; run scripts/setup.sh'
     return environment, ''

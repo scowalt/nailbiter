@@ -182,10 +182,7 @@ def trx_finish(trx):
 
 def msbuild_start(log):
     started = re.match(r'Build started (.+)\.', log.read_text()).group(1)
-    for layout in ('%m/%d/%Y %I:%M:%S %p', '%m/%d/%Y %H:%M:%S'):
-        with contextlib.suppress(ValueError):
-            return datetime.strptime(started, layout)
-    raise AssertionError(f'unrecognised MSBuild start time {started!r}')
+    return datetime.strptime(started, '%m/%d/%Y %H:%M:%S')
 
 
 def assert_built_after(test, waiter_log, holder_trx):

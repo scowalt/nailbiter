@@ -9,7 +9,7 @@ scripts/test-backend csharp --filter FullyQualifiedName~NflPlayoffLeverage
 scripts/test-backend --configuration Debug
 ```
 
-Run `scripts/setup.sh` once in a new worktree first. The command takes the pinned .NET SDK from `mise env`, so it does not need `mise exec`. It passes the rest of your environment to `dotnet` unchanged, so variables such as `TESTCONTAINERS_RYUK_DISABLED` and `DOCKER_HOST` still apply.
+Run `scripts/setup.sh` once in a new worktree first. The command takes the pinned .NET SDK from `mise env`, so it does not need `mise exec`. It runs `dotnet` with `LC_ALL=C.UTF-8` and `DOTNET_CLI_UI_LANGUAGE=en-US`, so the build and the tests use the invariant culture and English messages whatever your locale, `VSLANG` or `DOTNET_CLI_UI_LANGUAGE`. The command reads that output: under `de_DE`, for example, the test adapter reports an invalid filter in German, which the command would otherwise count as a filter that matched no test. It passes the rest of your environment to `dotnet` unchanged, so variables such as `TESTCONTAINERS_RYUK_DISABLED` and `DOCKER_HOST` still apply.
 
 ## Selection
 
