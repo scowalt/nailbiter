@@ -20,6 +20,7 @@ EXIT = {'passed': 0, 'tests failed': 1, 'invalid selection': 2, 'build failed': 
 
 FAKE_DOTNET = r'''
 import json, os, re, sys, time
+from datetime import datetime
 from pathlib import Path
 from xml.sax.saxutils import escape, quoteattr
 
@@ -34,9 +35,15 @@ def journal(**entry):
 def option(name):
     return argv[argv.index(name) + 1] if name in argv else None
 
+culture = next((os.environ[name] for name in ('LC_ALL', 'LC_MESSAGES', 'LANG') if os.environ.get(name)), 'C').split('.')[0]
+language = (os.environ.get('DOTNET_CLI_UI_LANGUAGE') or {'1031': 'de-DE'}.get(os.environ.get('VSLANG', '')) or culture)[:2]
+
 if argv[0] == 'build':
     projects = re.findall(r'Path="([^"]+)"', Path(argv[1]).read_text())
     journal(cmd='build', phase='start', projects=projects)
+    started = datetime.fromisoformat(scenario.get('build_started') or datetime.now().isoformat())
+    layout = {'de_DE': '%d.%m.%Y %H:%M:%S', 'en_GB': '%d/%m/%Y %H:%M:%S', 'en_US': '%m/%d/%Y %-I:%M:%S %p'}.get(culture, '%m/%d/%Y %H:%M:%S')
+    print(f'Der Buildvorgang wurde am {started:{layout}} gestartet.' if language == 'de' else f'Build started {started:{layout}}.')
     print('  Determining projects to restore...')
     time.sleep(scenario.get('build_sleep', 0))
     if scenario.get('build_error'):
@@ -59,7 +66,10 @@ if scenario.get('test_sleep'):
 tests = scenario['suites'][project]
 selection = option('--filter')
 if selection and '(' in selection:
-    print(f'[xUnit.net 00:00:00.39] {project}: Exception filtering tests: Incorrect format for TestCaseFilter Error: Invalid Condition. Specify the correct format and try again.')
+    if language == 'de':
+        print(f'[xUnit.net 00:00:00.39] {project}: Exception filtering tests: Ungültiges Format für TestCaseFilter Fehler: Ungültige Bedingung. Geben Sie das richtige Format an, und versuchen Sie es erneut.')
+    else:
+        print(f'[xUnit.net 00:00:00.39] {project}: Exception filtering tests: Incorrect format for TestCaseFilter Error: Invalid Condition. Specify the correct format and try again.')
     chosen = {}
 elif selection:
     needles = [part.split('~', 1)[1] for part in selection.split('|')]
@@ -112,6 +122,13 @@ FAILING = {
         'NflPlayoffLeverageTests.Leverage_is_symmetric': {'message': 'Assert.Equal() Failure: Values differ\nExpected: 0.25\nActual:   0.75', 'stack': STACK},
     },
 }
+
+
+def locale_caller(locale):
+    return {'LANG': locale, 'LC_ALL': locale}
+
+
+GERMAN_CALLERS = (locale_caller('de_DE.UTF-8'), {'DOTNET_CLI_UI_LANGUAGE': 'de-DE'}, {'VSLANG': '1031'})
 
 
 def write_executable(path, body):
@@ -195,17 +212,18 @@ class Harness:
         self.scenario.write_text(json.dumps(scenario))
         self.worktree = make_worktree(self.temp, 'worktree')
 
-    def env(self, tag='', path=None):
+    def env(self, tag='', path=None, caller=None):
         return {
             'HOME': str(self.temp),
             'PATH': path if path is not None else f'{self.bin}:/usr/bin:/bin',
             'FAKE_SCENARIO': str(self.scenario),
             'FAKE_JOURNAL': str(self.journal_path),
             'FAKE_TAG': tag,
+            **(caller or {}),
         }
 
-    def start(self, *args, tag='', worktree=None, path=None):
-        return subprocess.Popen([sys.executable, str((worktree or self.worktree) / SCRIPT), *args], cwd=worktree or self.worktree, env=self.env(tag, path), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    def start(self, *args, tag='', worktree=None, path=None, caller=None):
+        return subprocess.Popen([sys.executable, str((worktree or self.worktree) / SCRIPT), *args], cwd=worktree or self.worktree, env=self.env(tag, path, caller), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
     def run(self, *args, **kwargs):
         process = self.start(*args, **kwargs)
@@ -305,6 +323,27 @@ class SelectionAndBuildTests(SandboxedTestCase):
         code, output = harness.run('fsharp', '--filter', 'FullyQualifiedName~(')
         self.assertEqual(code, EXIT['invalid selection'], output)
         self.assertIn('Incorrect format for TestCaseFilter', output)
+
+    def test_an_invalid_filter_is_an_invalid_selection_in_any_caller_language(self):
+        for caller in GERMAN_CALLERS:
+            with self.subTest(**caller):
+                harness = Harness(self, {'suites': PASSING})
+                code, output = harness.run('csharp', '--filter', 'FullyQualifiedName~(', caller=caller)
+                self.assertEqual(code, EXIT['invalid selection'], output)
+                self.assertIn('Incorrect format for TestCaseFilter', output)
+
+    def test_the_build_order_check_catches_an_early_build_in_any_caller_language(self):
+        holder_finished = datetime(2026, 5, 12, 13, 49, 24).astimezone()
+        for caller in (*GERMAN_CALLERS, locale_caller('en_GB.UTF-8'), locale_caller('en_US.UTF-8')):
+            with self.subTest(**caller):
+                harness = Harness(self, {'suites': PASSING, 'build_started': '2026-05-12T13:49:19'})
+                code, output = harness.run('csharp', caller=caller)
+                self.assertEqual(code, EXIT['passed'], output)
+                holder = harness.temp / 'holder.trx'
+                holder.write_text(f'<Times finish="{holder_finished.isoformat()}" />')
+                waiter = next(harness.worktree.glob('obj/test-backend/runs/*/build.log'))
+                with self.assertRaisesRegex(AssertionError, 'built before the holder'):
+                    assert_built_after(self, waiter, holder)
 
     def test_unknown_suite_is_an_invalid_selection_and_builds_nothing(self):
         harness = Harness(self, {'suites': PASSING})
