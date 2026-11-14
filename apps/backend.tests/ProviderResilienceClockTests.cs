@@ -72,40 +72,43 @@ public sealed class ProviderResilienceClockTests
     public async Task Hung_scoreboard_ends_at_the_total_timeout_and_is_sent_once_at_error(string name)
     {
         var scoreboard = Scoreboards[name];
-        await using var app = new ClockedApp(Answer.Hang);
+        await UsingAsync(new ClockedApp(Answer.Hang), async app =>
+        {
+            var fetch = scoreboard.Run(app.Services, CancellationToken.None);
 
-        var fetch = scoreboard.Run(app.Services, CancellationToken.None);
-
-        Assert.Equal(TotalRequestTimeout, await app.RunAsync(fetch));
-        Assert.Null(await fetch);
-        AssertHungAttempts(app.Provider.Attempts);
-        var reported = Assert.Single(await app.SentEventsAsync());
-        Assert.Equal((scoreboard.Service.FullName, "error", scoreboard.Template), (reported.Logger, reported.Level, reported.Template));
-        Assert.Equal(typeof(TimeoutRejectedException).FullName, reported.ExceptionTypes[^1]);
-        Assert.DoesNotContain(app.Logs, l => l.Category == "Polly" && l.Level >= LogLevel.Error);
+            Assert.Equal(TotalRequestTimeout, await app.RunAsync(fetch));
+            Assert.Null(await fetch);
+            AssertHungAttempts(app.Provider.Attempts);
+            var reported = Assert.Single(await app.SentEventsAsync());
+            Assert.Equal((scoreboard.Service.FullName, "error", scoreboard.Template), (reported.Logger, reported.Level, reported.Template));
+            Assert.Equal(typeof(TimeoutRejectedException).FullName, reported.ExceptionTypes[^1]);
+            Assert.DoesNotContain(app.Logs, l => l.Category == "Polly" && l.Level >= LogLevel.Error);
+        });
     }
 
     [Fact]
     public async Task Every_resilient_provider_client_ends_a_hung_request_at_the_total_timeout()
     {
-        await using var app = new ClockedApp(Answer.Hang);
-        var clients = app.Services.GetRequiredService<IHttpClientFactory>();
-        var names = HttpClientRegistrations.Names(app.Services).Except(HttpClientRegistrations.DeadlineBound).Order().ToArray();
-        Assert.Contains(nameof(EspnOddsService), names);
-        Assert.Contains(nameof(NascarLiveFeedService), names);
-
-        foreach (var name in names)
+        await UsingAsync(new ClockedApp(Answer.Hang), async app =>
         {
-            app.Provider.Reset();
-            var started = app.Clock.Elapsed;
-            var request = clients.CreateClient(name).GetStringAsync("https://provider.invalid/hung");
+            var clients = app.Services.GetRequiredService<IHttpClientFactory>();
+            var names = HttpClientRegistrations.Names(app.Services).Except(HttpClientRegistrations.DeadlineBound).Order().ToArray();
+            Assert.Contains(nameof(EspnOddsService), names);
+            Assert.Contains(nameof(NascarLiveFeedService), names);
 
-            var ended = await app.RunAsync(request);
+            foreach (var name in names)
+            {
+                app.Provider.Reset();
+                var started = app.Clock.Elapsed;
+                var request = clients.CreateClient(name).GetStringAsync("https://provider.invalid/hung");
 
-            Assert.True(ended - started == TotalRequestTimeout, $"{name} ended after {ended - started}");
-            Assert.IsType<TimeoutRejectedException>(await Record.ExceptionAsync(() => request));
-            AssertHungAttempts(app.Provider.Attempts, started);
-        }
+                var ended = await app.RunAsync(request);
+
+                Assert.True(ended - started == TotalRequestTimeout, $"{name} ended after {ended - started}");
+                Assert.IsType<TimeoutRejectedException>(await Record.ExceptionAsync(() => request));
+                AssertHungAttempts(app.Provider.Attempts, started);
+            }
+        });
     }
 
     [Theory]
@@ -113,31 +116,33 @@ public sealed class ProviderResilienceClockTests
     public async Task Retryable_scoreboard_failure_stops_after_the_standard_attempts_and_is_sent_once_at_error(string name, HttpStatusCode? status)
     {
         var scoreboard = Scoreboards[name];
-        await using var app = new ClockedApp(status is { } code ? Answer.Status(code) : Answer.Unreachable);
+        await UsingAsync(new ClockedApp(status is { } code ? Answer.Status(code) : Answer.Unreachable), async app =>
+        {
+            var fetch = scoreboard.Run(app.Services, CancellationToken.None);
 
-        var fetch = scoreboard.Run(app.Services, CancellationToken.None);
-
-        Assert.InRange(await app.RunAsync(fetch), TimeSpan.Zero, TotalRequestTimeout - AttemptTimeout);
-        Assert.Null(await fetch);
-        Assert.Equal(StandardAttempts, app.Provider.Attempts.Count);
-        var reported = Assert.Single(await app.SentEventsAsync());
-        Assert.Equal((scoreboard.Service.FullName, "error", scoreboard.Template), (reported.Logger, reported.Level, reported.Template));
-        Assert.Equal(typeof(HttpRequestException).FullName, reported.ExceptionTypes[^1]);
-        var finalAttempt = Assert.Single(app.Logs, l => l.Category == "Polly" && l.Message.Contains($"Attempt: '{StandardAttempts - 1}'", StringComparison.Ordinal));
-        Assert.Equal(LogLevel.Warning, finalAttempt.Level);
+            Assert.InRange(await app.RunAsync(fetch), TimeSpan.Zero, TotalRequestTimeout - AttemptTimeout);
+            Assert.Null(await fetch);
+            Assert.Equal(StandardAttempts, app.Provider.Attempts.Count);
+            var reported = Assert.Single(await app.SentEventsAsync());
+            Assert.Equal((scoreboard.Service.FullName, "error", scoreboard.Template), (reported.Logger, reported.Level, reported.Template));
+            Assert.Equal(typeof(HttpRequestException).FullName, reported.ExceptionTypes[^1]);
+            var finalAttempt = Assert.Single(app.Logs, l => l.Category == "Polly" && l.Message.Contains($"Attempt: '{StandardAttempts - 1}'", StringComparison.Ordinal));
+            Assert.Equal(LogLevel.Warning, finalAttempt.Level);
+        });
     }
 
     [Fact]
     public async Task Retry_reaches_the_provider_when_the_thread_that_armed_its_attempt_timeout_is_descheduled()
     {
         var scoreboard = Scoreboards["EspnOdds"];
-        await using var app = new ClockedApp(Answer.Status(HttpStatusCode.TooManyRequests), descheduleAfterArming: TimeSpan.FromMilliseconds(50));
+        await UsingAsync(new ClockedApp(Answer.Status(HttpStatusCode.TooManyRequests), descheduleAfterArming: TimeSpan.FromMilliseconds(50)), async app =>
+        {
+            var fetch = scoreboard.Run(app.Services, CancellationToken.None);
+            var elapsed = await app.RunAsync(fetch);
 
-        var fetch = scoreboard.Run(app.Services, CancellationToken.None);
-        var elapsed = await app.RunAsync(fetch);
-
-        Assert.Equal(StandardAttempts, app.Provider.Attempts.Count);
-        Assert.InRange(elapsed, TimeSpan.Zero, TotalRequestTimeout - AttemptTimeout);
+            Assert.Equal(StandardAttempts, app.Provider.Attempts.Count);
+            Assert.InRange(elapsed, TimeSpan.Zero, TotalRequestTimeout - AttemptTimeout);
+        });
     }
 
     [Fact]
@@ -156,15 +161,16 @@ public sealed class ProviderResilienceClockTests
     public async Task Non_retryable_scoreboard_answer_is_fetched_once_and_stays_a_warning(string name, HttpStatusCode status)
     {
         var scoreboard = Scoreboards[name];
-        await using var app = new ClockedApp(Answer.Status(status));
+        await UsingAsync(new ClockedApp(Answer.Status(status)), async app =>
+        {
+            var fetch = scoreboard.Run(app.Services, CancellationToken.None);
 
-        var fetch = scoreboard.Run(app.Services, CancellationToken.None);
-
-        Assert.Equal(TimeSpan.Zero, await app.RunAsync(fetch));
-        Assert.Null(await fetch);
-        Assert.Single(app.Provider.Attempts);
-        Assert.Equal(LogLevel.Warning, Assert.Single(app.Logs, l => l.Category == scoreboard.Service.FullName && l.Level > LogLevel.Debug).Level);
-        Assert.Empty(await app.SentEventsAsync());
+            Assert.Equal(TimeSpan.Zero, await app.RunAsync(fetch));
+            Assert.Null(await fetch);
+            Assert.Single(app.Provider.Attempts);
+            Assert.Equal(LogLevel.Warning, Assert.Single(app.Logs, l => l.Category == scoreboard.Service.FullName && l.Level > LogLevel.Debug).Level);
+            Assert.Empty(await app.SentEventsAsync());
+        });
     }
 
     [Theory]
@@ -172,18 +178,20 @@ public sealed class ProviderResilienceClockTests
     public async Task Caller_cancellation_during_a_hung_attempt_stops_at_once_without_a_retry_or_a_log(string name)
     {
         var scoreboard = Scoreboards[name];
-        await using var app = new ClockedApp(Answer.Hang);
-        using var caller = new CancellationTokenSource();
+        await UsingAsync(new ClockedApp(Answer.Hang), async app =>
+        {
+            using var caller = new CancellationTokenSource();
 
-        var fetch = scoreboard.Run(app.Services, caller.Token);
-        await app.RunUntilAsync(fetch, () => app.Clock.Elapsed >= AttemptTimeout / 2, AttemptTimeout);
-        caller.Cancel();
+            var fetch = scoreboard.Run(app.Services, caller.Token);
+            await app.RunUntilAsync(fetch, () => app.Clock.Elapsed >= AttemptTimeout / 2, AttemptTimeout);
+            caller.Cancel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fetch.WaitAsync(Guard));
-        await AssertNothingRetriesAsync(app, fetch);
-        Assert.Equal(AttemptTimeout / 2, Assert.Single(app.Provider.Attempts).Ended);
-        Assert.DoesNotContain(app.Logs, l => l.Level >= LogLevel.Warning);
-        Assert.Empty(await app.SentEventsAsync());
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fetch.WaitAsync(Guard));
+            await AssertNothingRetriesAsync(app, fetch);
+            Assert.Equal(AttemptTimeout / 2, Assert.Single(app.Provider.Attempts).Ended);
+            Assert.DoesNotContain(app.Logs, l => l.Level >= LogLevel.Warning);
+            Assert.Empty(await app.SentEventsAsync());
+        });
     }
 
     [Theory]
@@ -191,18 +199,32 @@ public sealed class ProviderResilienceClockTests
     public async Task Caller_cancellation_during_the_retry_delay_stops_at_once_without_a_retry_or_a_log(string name)
     {
         var scoreboard = Scoreboards[name];
-        await using var app = new ClockedApp(Answer.Hang);
-        using var caller = new CancellationTokenSource();
+        await UsingAsync(new ClockedApp(Answer.Hang), async app =>
+        {
+            using var caller = new CancellationTokenSource();
 
-        var fetch = scoreboard.Run(app.Services, caller.Token);
-        await app.RunUntilAsync(fetch, () => app.Provider.Attempts is [{ Ended: not null }], AttemptTimeout * 2);
-        caller.Cancel();
+            var fetch = scoreboard.Run(app.Services, caller.Token);
+            await app.RunUntilAsync(fetch, () => app.Provider.Attempts is [{ Ended: not null }], AttemptTimeout * 2);
+            caller.Cancel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fetch.WaitAsync(Guard));
-        await AssertNothingRetriesAsync(app, fetch);
-        Assert.Equal(AttemptTimeout, Assert.Single(app.Provider.Attempts).Duration);
-        Assert.DoesNotContain(app.Logs, l => l.Category == scoreboard.Service.FullName && l.Level > LogLevel.Debug);
-        Assert.Empty(await app.SentEventsAsync());
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => fetch.WaitAsync(Guard));
+            await AssertNothingRetriesAsync(app, fetch);
+            Assert.Equal(AttemptTimeout, Assert.Single(app.Provider.Attempts).Duration);
+            Assert.DoesNotContain(app.Logs, l => l.Category == scoreboard.Service.FullName && l.Level > LogLevel.Debug);
+            Assert.Empty(await app.SentEventsAsync());
+        });
+    }
+
+    private static async Task UsingAsync<T>(T resource, Func<T, Task> body) where T : IAsyncDisposable
+    {
+        try
+        {
+            await body(resource);
+        }
+        finally
+        {
+            await resource.DisposeAsync();
+        }
     }
 
     private static async Task AssertNothingRetriesAsync(ClockedApp app, Task fetch)
