@@ -16,6 +16,20 @@ open Microsoft.EntityFrameworkCore
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 
+type internal GameWrites =
+    { Created: int
+      Updated: int
+      Skipped: int
+      PregameOdds: int
+      KalshiSnapshots: int }
+
+    static member None =
+        { Created = 0
+          Updated = 0
+          Skipped = 0
+          PregameOdds = 0
+          KalshiSnapshots = 0 }
+
 type NflBackfillService
     (httpClient: HttpClient,
      logger: ILogger<NflBackfillService>,
@@ -290,13 +304,12 @@ type NflBackfillService
          seasonType: int,
          weekNumber: int,
          options: BackfillOptions,
-         result: BackfillResult,
          db: ExcitementDbContext,
          ct: CancellationToken)
-        : Task =
+        : Task<GameWrites> =
         task {
             if isNull espnEvent.Competitions || espnEvent.Competitions.Count = 0 then
-                ()
+                return GameWrites.None
             else
                 let competition = espnEvent.Competitions.[0]
 
@@ -309,15 +322,36 @@ type NflBackfillService
                     |> Seq.tryFind (fun c -> c.HomeAway = "away")
 
                 match homeCompetitor, awayCompetitor with
-                | None, _ | _, None -> ()
+                | None, _ | _, None -> return GameWrites.None
                 | Some home, Some away ->
                     let! existingGame = db.Games.FindAsync([| espnEvent.Id :> obj |], ct)
                     let weekLabel = getWeekLabel seasonType weekNumber
 
+                    let fetchKalshi () =
+                        if options.BackfillKalshiOdds && not options.DryRun then
+                            this.TryFetchAndStoreKalshiHistoricalOddsAsync(
+                                espnEvent.Id,
+                                home.Team.Abbreviation,
+                                away.Team.Abbreviation,
+                                espnEvent.Date,
+                                options.KalshiCandlestickInterval,
+                                db,
+                                ct
+                            )
+                        else
+                            Task.FromResult 0
+
+                    let fetchPregame () =
+                        task {
+                            if options.DryRun then
+                                return 0
+                            else
+                                let! created = this.TryFetchAndStorePregameOddsAsync(espnEvent.Id, competition, db, ct)
+                                return if created then 1 else 0
+                        }
+
                     if not (isNull existingGame) then
                         if options.SkipExisting then
-                            result.GamesSkipped <- result.GamesSkipped + 1
-
                             logger.LogDebug(
                                 "Skipping existing game {GameId}: {Away} @ {Home}",
                                 espnEvent.Id,
@@ -334,23 +368,9 @@ type NflBackfillService
                                 existingGame.WeekLabel <- weekLabel
                                 existingGame.SeasonYear <- Nullable seasonYear
 
-                            if options.BackfillKalshiOdds && not options.DryRun then
-                                let! kalshiSnapshots =
-                                    this.TryFetchAndStoreKalshiHistoricalOddsAsync(
-                                        espnEvent.Id,
-                                        home.Team.Abbreviation,
-                                        away.Team.Abbreviation,
-                                        espnEvent.Date,
-                                        options.KalshiCandlestickInterval,
-                                        db,
-                                        ct
-                                    )
-
-                                if kalshiSnapshots > 0 then
-                                    result.KalshiOddsSnapshotsCreated <-
-                                        result.KalshiOddsSnapshotsCreated + kalshiSnapshots
-
+                            let! kalshiSnapshots = fetchKalshi ()
                             do! this.SaveGameAsync(db, ct)
+                            return { GameWrites.None with Skipped = 1; KalshiSnapshots = kalshiSnapshots }
                         else
                             existingGame.HomeTeam <- home.Team.DisplayName
                             existingGame.AwayTeam <- away.Team.DisplayName
@@ -374,8 +394,6 @@ type NflBackfillService
                             existingGame.WeekNumber <- Nullable weekNumber
                             existingGame.WeekLabel <- weekLabel
 
-                            result.GamesUpdated <- result.GamesUpdated + 1
-
                             logger.LogDebug(
                                 "Updated game {GameId}: {Away} @ {Home}",
                                 espnEvent.Id,
@@ -383,30 +401,13 @@ type NflBackfillService
                                 home.Team.Abbreviation
                             )
 
-                            if not options.DryRun then
-                                let! oddsCreated =
-                                    this.TryFetchAndStorePregameOddsAsync(espnEvent.Id, competition, db, ct)
-
-                                if oddsCreated then
-                                    result.PregameOddsCreated <- result.PregameOddsCreated + 1
-
-                            if options.BackfillKalshiOdds && not options.DryRun then
-                                let! kalshiSnapshots =
-                                    this.TryFetchAndStoreKalshiHistoricalOddsAsync(
-                                        espnEvent.Id,
-                                        home.Team.Abbreviation,
-                                        away.Team.Abbreviation,
-                                        espnEvent.Date,
-                                        options.KalshiCandlestickInterval,
-                                        db,
-                                        ct
-                                    )
-
-                                result.KalshiOddsSnapshotsCreated <-
-                                    result.KalshiOddsSnapshotsCreated + kalshiSnapshots
+                            let! pregameOdds = fetchPregame ()
+                            let! kalshiSnapshots = fetchKalshi ()
 
                             if not options.DryRun then
                                 do! this.SaveGameAsync(db, ct)
+
+                            return { GameWrites.None with Updated = 1; PregameOdds = pregameOdds; KalshiSnapshots = kalshiSnapshots }
                     else
                         let homeScore =
                             match Int32.TryParse(home.Score) with
@@ -439,8 +440,6 @@ type NflBackfillService
                         if not options.DryRun then
                             db.Games.Add(game) |> ignore
 
-                        result.GamesCreated <- result.GamesCreated + 1
-
                         logger.LogInformation(
                             "Created game {GameId}: {Away} @ {Home} ({Date})",
                             espnEvent.Id,
@@ -449,32 +448,14 @@ type NflBackfillService
                             espnEvent.Date
                         )
 
-                        if not options.DryRun then
-                            let! oddsCreated =
-                                this.TryFetchAndStorePregameOddsAsync(espnEvent.Id, competition, db, ct)
-
-                            if oddsCreated then
-                                result.PregameOddsCreated <- result.PregameOddsCreated + 1
-
-                        if options.BackfillKalshiOdds && not options.DryRun then
-                            let! kalshiSnapshots =
-                                this.TryFetchAndStoreKalshiHistoricalOddsAsync(
-                                    espnEvent.Id,
-                                    home.Team.Abbreviation,
-                                    away.Team.Abbreviation,
-                                    espnEvent.Date,
-                                    options.KalshiCandlestickInterval,
-                                    db,
-                                    ct
-                                )
-
-                            result.KalshiOddsSnapshotsCreated <-
-                                result.KalshiOddsSnapshotsCreated + kalshiSnapshots
+                        let! pregameOdds = fetchPregame ()
+                        let! kalshiSnapshots = fetchKalshi ()
 
                         if not options.DryRun then
                             do! this.SaveGameAsync(db, ct)
+
+                        return { GameWrites.None with Created = 1; PregameOdds = pregameOdds; KalshiSnapshots = kalshiSnapshots }
         }
-        :> Task
 
     member private this.BackfillWeekAsync
         (seasonYear: int,
@@ -506,17 +487,12 @@ type NflBackfillService
                     let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
 
                     try
-                        do!
-                            this.ProcessGameAsync(
-                                espnEvent,
-                                seasonYear,
-                                seasonType,
-                                weekNumber,
-                                options,
-                                result,
-                                db,
-                                ct
-                            )
+                        let! writes = this.ProcessGameAsync(espnEvent, seasonYear, seasonType, weekNumber, options, db, ct)
+                        result.GamesCreated <- result.GamesCreated + writes.Created
+                        result.GamesUpdated <- result.GamesUpdated + writes.Updated
+                        result.GamesSkipped <- result.GamesSkipped + writes.Skipped
+                        result.PregameOddsCreated <- result.PregameOddsCreated + writes.PregameOdds
+                        result.KalshiOddsSnapshotsCreated <- result.KalshiOddsSnapshotsCreated + writes.KalshiSnapshots
                     with
                     | :? OperationCanceledException when ct.IsCancellationRequested -> raise (OperationCanceledException(ct))
                     | ex ->
