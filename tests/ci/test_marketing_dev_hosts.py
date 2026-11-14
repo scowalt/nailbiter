@@ -104,9 +104,11 @@ class MarketingDevHostsTest(unittest.TestCase):
             self.assertEqual(403, status(port, OTHER_TAILNET_HOST))
 
     def test_dev_refuses_a_tailnet_url_without_an_exact_hostname(self):
-        for tailscale_url in ['https://.ts.net:8494', 'file:///tmp']:
+        for tailscale_url in ['https://.ts.net:8494', 'file:///tmp', 'not a url', 'true', 'box.example-tailnet.ts.net']:
             with self.subTest(tailscale_url=tailscale_url):
-                self.dev_startup_error(tailscale_url)
+                error = self.dev_startup_error(tailscale_url)
+                self.assertIn('PORTLESS_TAILSCALE_URL', error)
+                self.assertIn(f'"{tailscale_url}"', error)
 
     def test_dev_without_tailscale_sharing_blocks_tailnet_hosts(self):
         with self.serve('dev') as port:
