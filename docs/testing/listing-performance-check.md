@@ -195,21 +195,20 @@ date at a time, and the pregame loop that runs beside it writes
 `--import-college-history` share one advisory lock and write only college
 games, which no other writer changes.
 
-The NFL backfill (`BACKFILL_MODE=true`) does not keep the rule. It runs as a
-separate process, and nothing stops it from running while the deployed
-backend's live loop writes. It shares one `DbContext` across a week. It saves
-the Kalshi snapshots of an existing game at once, but the snapshots of the
-games it creates wait for one save at the end of the week, in scoreboard order
-rather than game id order. The live loop cannot lock a created game's
-`newest_odds` row before that save commits, because the game row does not
-exist for it yet. So the usual week save locks no row that the live loop can
-hold. A deadlock is still possible in narrow cases. For example, a failed save
-leaves its rows tracked, the next save then carries two existing live games,
-and the live loop locks the same two games in the other order. PostgreSQL then aborts one
-transaction and rolls it back. Run the backfill while the live loop does not
-write the same games. Apply the same rule to any other parallel or multi-game
-writer, including a manual script such as
-`scripts/backfills/recover_empty_odds.py`.
+The NFL backfill (`BACKFILL_MODE=true`) keeps the rule. It runs as a separate
+process, and nothing stops it from running while the deployed backend's live
+loop writes. It opens a new `DbContext` for each game and saves that game's
+rows in one transaction. EF Core writes the game row before that game's
+pregame odds and Kalshi snapshots, so the foreign key holds. Each backfill
+transaction locks the `newest_odds` row of one game at most, and it cannot
+lock two games in the opposite order to another writer. A failed save rolls
+back that game's rows alone. Its context is then discarded, so the next game's
+save carries only that game's rows.
+`Backfill_writes_each_game_in_its_own_transaction` and
+`Backfill_failed_game_save_leaks_no_rows_into_the_next_game` check both
+against TimescaleDB. Any other parallel or multi-game writer, including a
+manual script such as `scripts/backfills/recover_empty_odds.py`, must keep the
+same rule.
 
 ## Report
 
