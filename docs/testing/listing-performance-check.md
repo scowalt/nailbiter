@@ -189,14 +189,27 @@ follow:
   that change games A and B in opposite orders now deadlock, and PostgreSQL
   aborts one of them.
 
-Today's writers meet the rule. The live odds loop scrapes one sport and date
-at a time, and the pregame loop that runs beside it writes `pregame_odds`, not
-snapshots. The college collector and `--import-college-history` share one
-advisory lock and write only college games, which no other writer changes. The
-NFL backfill saves one game per transaction. A new parallel or multi-game
+The app's own writers meet the rule. The live odds loop scrapes one sport and
+date at a time, and the pregame loop that runs beside it writes
+`pregame_odds`, not snapshots. The college collector and
+`--import-college-history` share one advisory lock and write only college
+games, which no other writer changes.
+
+The NFL backfill (`BACKFILL_MODE=true`) does not keep the rule. It runs as a
+separate process, and nothing stops it from running while the deployed
+backend's live loop writes. It shares one `DbContext` across a week. It saves
+the Kalshi snapshots of an existing game at once, but the snapshots of the
+games it creates wait for one save at the end of the week, in scoreboard order
+rather than game id order. The live loop cannot lock a created game's
+`newest_odds` row before that save commits, because the game row does not
+exist for it yet. So the usual week save locks no row that the live loop can
+hold. A deadlock is still possible in narrow cases. For example, a failed save
+leaves its rows tracked, the next save then carries two existing live games,
+and the live loop locks the same two games in the other order. PostgreSQL then aborts one
+transaction and rolls it back. Run the backfill while the live loop does not
+write the same games. Apply the same rule to any other parallel or multi-game
 writer, including a manual script such as
-`scripts/backfills/recover_empty_odds.py`, must keep the rule or run while no
-other writer changes the same games.
+`scripts/backfills/recover_empty_odds.py`.
 
 ## Report
 
