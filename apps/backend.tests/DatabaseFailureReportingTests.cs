@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Net;
+using System.Net.Sockets;
 using System.Text.Json;
 using backend.Data;
 using backend.Models;
@@ -17,6 +18,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 using Npgsql;
 using Sentry;
@@ -32,6 +34,7 @@ public sealed class DatabaseFailureReportingTests
 {
     private const string GameId = "database-failure-game";
     private const string EfCommandLogger = "Microsoft.EntityFrameworkCore.Database.Command";
+    private const string EfConnectionLogger = "Microsoft.EntityFrameworkCore.Database.Connection";
     private const string LockTimeout = ";Options=-c lock_timeout=500";
     private static readonly DateTimeOffset Now = new(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
     private const string MlbSchedule = """
@@ -407,6 +410,69 @@ public sealed class DatabaseFailureReportingTests
         AssertReportedOnce(transport.Events.ToArray(), PostgresErrorCodes.LockNotAvailable);
     }
 
+    [Theory]
+    [InlineData("pool exhausted")]
+    [InlineData("connection refused")]
+    public async Task Connection_open_failure_in_a_background_loop_is_reported_once_by_the_loop(string failure)
+    {
+        await using var database = await UnopenableDatabase.StartAsync(failure);
+        await using var app = new ReportingApp(database.ConnectionString, typeof(HighlightsBackgroundService));
+
+        var reported = AssertConnectionFailureReportedOnce(await app.SentEventsAfterFailureAsync(), database.Cause);
+        Assert.Equal(typeof(HighlightsLifecycleService).FullName, reported.Logger);
+    }
+
+    [Theory]
+    [InlineData("pool exhausted")]
+    [InlineData("connection refused")]
+    public async Task Connection_open_failure_on_a_page_is_reported_once(string failure)
+    {
+        await using var database = await UnopenableDatabase.StartAsync(failure);
+        await using var app = new ReportingApp(database.ConnectionString, worker: null);
+
+        await Record.ExceptionAsync(() => app.Client.GetAsync("/nba"));
+
+        AssertConnectionFailureReportedOnce(await app.SentEventsAfterFailureAsync(), database.Cause);
+    }
+
+    [Fact]
+    public async Task Pro_competition_refresh_fault_during_shutdown_is_reported_once_at_error()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        var open = new OpenFailsAfterShutdown(new NpgsqlException("Synthetic connection failure after shutdown began"));
+        await using var app = new ReportingApp(database.ConnectionString, typeof(ProCompetitionRefreshBackgroundService),
+            services => services.ConfigureDbContext<ExcitementDbContext>(options => options.AddInterceptors(open)));
+        await open.Reached.Task.WaitAsync(TimeSpan.FromSeconds(15));
+
+        AssertSentOnceAtError<ProCompetitionRefreshBackgroundService, NpgsqlException>(await app.SentEventsAfterStopAsync());
+    }
+
+    [Fact]
+    public async Task Pro_competition_refresh_cancelled_by_shutdown_sends_nothing()
+    {
+        await using var database = await SyntheticDatabase.StartAsync();
+        var open = new OpenFailsAfterShutdown(fault: null);
+        await using var app = new ReportingApp(database.ConnectionString, typeof(ProCompetitionRefreshBackgroundService),
+            services => services.ConfigureDbContext<ExcitementDbContext>(options => options.AddInterceptors(open)));
+        await open.Reached.Task.WaitAsync(TimeSpan.FromSeconds(15));
+
+        Assert.Empty(await app.SentEventsAfterStopAsync());
+    }
+
+    [Theory]
+    [InlineData("Microsoft.EntityFrameworkCore.Query")]
+    [InlineData("Microsoft.EntityFrameworkCore.Update")]
+    public async Task Other_ef_error_logs_with_an_exception_still_reach_glitchtip(string category)
+    {
+        await using var app = new ReportingApp("Host=127.0.0.1;Database=unused", worker: null);
+
+        app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(category)
+            .LogError(new InvalidOperationException("Synthetic EF failure"), "Synthetic EF failure");
+
+        var reported = Assert.Single(await app.SentEventsAfterFailureAsync());
+        Assert.Equal((category, "error"), (reported.Logger, reported.Level));
+    }
+
     private static ReportingApp MoneyPuckApp(SyntheticDatabase database, MoneyPuckQualificationHandler moneyPuck) =>
         new(database.ConnectionString + LockTimeout, typeof(MoneyPuckRefreshBackgroundService),
             services =>
@@ -436,6 +502,63 @@ public sealed class DatabaseFailureReportingTests
         var failure = Assert.Single(reported.Exceptions, e => e.Type == typeof(PostgresException).FullName);
         Assert.StartsWith(sqlState + ":", failure.Value);
         Assert.Contains(EfCommandLogger, reported.BreadcrumbCategories);
+    }
+
+    private static SentEvent AssertConnectionFailureReportedOnce(IReadOnlyCollection<SentEvent> sent, Type cause)
+    {
+        Assert.DoesNotContain(sent, e => e.Logger == EfConnectionLogger);
+        var reported = Assert.Single(sent);
+        Assert.Equal("error", reported.Level);
+        Assert.Contains(reported.Exceptions, e => e.Type == typeof(NpgsqlException).FullName);
+        Assert.Contains(reported.Exceptions, e => e.Type == cause.FullName);
+        Assert.Contains(EfConnectionLogger, reported.BreadcrumbCategories);
+        return reported;
+    }
+
+    private sealed class UnopenableDatabase(string connectionString, Type cause,
+        SyntheticDatabase? database = null, NpgsqlConnection? onlyConnection = null) : IAsyncDisposable
+    {
+        public string ConnectionString => connectionString;
+
+        public Type Cause => cause;
+
+        public static async Task<UnopenableDatabase> StartAsync(string failure)
+        {
+            if (failure == "connection refused")
+            {
+                var listener = new TcpListener(IPAddress.Loopback, 0);
+                listener.Start();
+                var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+                listener.Stop();
+                return new($"Host=127.0.0.1;Port={port};Database=nailbiter;Username=nailbiter;Password=unused;Timeout=2",
+                    typeof(SocketException));
+            }
+            var database = await SyntheticDatabase.StartAsync();
+            var exhausted = database.ConnectionString + ";Maximum Pool Size=1;Timeout=1";
+            var onlyConnection = new NpgsqlConnection(exhausted);
+            await onlyConnection.OpenAsync();
+            return new(exhausted, typeof(TimeoutException), database, onlyConnection);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (onlyConnection is not null) await onlyConnection.DisposeAsync();
+            if (database is not null) await database.DisposeAsync();
+        }
+    }
+
+    private sealed class OpenFailsAfterShutdown(Exception? fault) : DbConnectionInterceptor
+    {
+        public TaskCompletionSource Reached { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public override async ValueTask<InterceptionResult> ConnectionOpeningAsync(DbConnection connection,
+            ConnectionEventData eventData, InterceptionResult result, CancellationToken cancellationToken = default)
+        {
+            Reached.TrySetResult();
+            try { await Task.Delay(Timeout.Infinite, cancellationToken); }
+            catch (OperationCanceledException) when (fault is not null) { throw fault; }
+            return result;
+        }
     }
 
     private sealed class SyntheticDatabase : IAsyncDisposable
@@ -538,6 +661,14 @@ public sealed class DatabaseFailureReportingTests
         }
 
         public HttpClient Client { get; }
+
+        public IServiceProvider Services => app.Services;
+
+        public async Task<IReadOnlyCollection<SentEvent>> SentEventsAfterStopAsync()
+        {
+            await app.DisposeAsync();
+            return transport.Events.ToArray();
+        }
 
         public async Task<IReadOnlyCollection<SentEvent>> SentEventsAsync()
         {
