@@ -40,6 +40,7 @@ builder.WebHost.UseSentry(o =>
             return null;  
 
         if (sentryEvent.Logger == DbLoggerCategory.Database.Command.Name
+            || sentryEvent.Logger == DbLoggerCategory.Database.Connection.Name
             || sentryEvent.Logger == DbLoggerCategory.Database.Transaction.Name)
             return null;
 
