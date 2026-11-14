@@ -99,6 +99,99 @@ public sealed class LatestOddsHistoryTests(ListingTimescale timescale, ITestOutp
         }
     }
 
+    [Theory]
+    [InlineData("an older delete, then a newest delete", "DELETE FROM odds_snapshots WHERE game_id = 'race' AND timestamp = @older",
+        "DELETE FROM odds_snapshots WHERE game_id = 'race' AND timestamp = @newest")]
+    [InlineData("a newest delete, then an older delete", "DELETE FROM odds_snapshots WHERE game_id = 'race' AND timestamp = @newest",
+        "DELETE FROM odds_snapshots WHERE game_id = 'race' AND timestamp = @older")]
+    [InlineData("an older move, then a newest delete", "UPDATE odds_snapshots SET game_id = 'race-moved' WHERE game_id = 'race' AND timestamp = @older",
+        "DELETE FROM odds_snapshots WHERE game_id = 'race' AND timestamp = @newest")]
+    [InlineData("a newer insert, then a newest delete", """
+        INSERT INTO odds_snapshots (game_id, timestamp, home_moneyline, away_moneyline, home_win_probability, away_win_probability, source, is_historical)
+        VALUES ('race', @newer, -100, -100, .5, .5, 'Kalshi', false)
+        """, "DELETE FROM odds_snapshots WHERE game_id = 'race' AND timestamp = @newest")]
+    public async Task Concurrent_odds_changes_to_one_game_keep_its_newest_odds(string interleaving, string first, string second)
+    {
+        var host = new HostedGameFixture(ListingWorkload.Now, null, timescale.Server);
+        await host.InitializeAsync();
+        try
+        {
+            await host.SeedAsync(Edge("race-moved", "final", Now.AddDays(-4)), []);
+            await host.SeedAsync(Edge("race", "final", Now.AddDays(-1)),
+                new[] { -3, -2, -1 }.Select(days => Quote("race", Now.AddDays(days))));
+            string connectionString;
+            using (var scope = host.Services.CreateScope())
+                connectionString = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Database.GetConnectionString()!;
+
+            await using var firstSession = await BeginAsync(connectionString);
+            await using var secondSession = await BeginAsync(connectionString);
+            await RaceCommand(firstSession, first).ExecuteNonQueryAsync();
+            var secondChange = RaceCommand(secondSession, second).ExecuteNonQueryAsync();
+            await UntilFinishedOrWaitingOnALockAsync(connectionString, secondSession.Connection!.ProcessID, secondChange);
+            await firstSession.CommitAsync();
+            await secondChange;
+            await secondSession.CommitAsync();
+
+            using (var scope = host.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+                var ids = new[] { "race", "race-moved" };
+                var newest = await db.OddsSnapshots
+                    .FromSqlRaw("SELECT DISTINCT ON (game_id) * FROM odds_snapshots WHERE game_id = ANY ({0}) ORDER BY game_id, timestamp DESC, id DESC", new object[] { ids })
+                    .AsNoTracking().ToDictionaryAsync(snapshot => snapshot.GameId, snapshot => (snapshot.Id, snapshot.Timestamp));
+                var pointers = await db.Database.SqlQueryRaw<string>(
+                    "SELECT game_id || ' at ' || timestamp AS \"Value\" FROM newest_odds WHERE game_id = ANY ({0}) ORDER BY game_id", new object[] { ids }).ToListAsync();
+                var latest = await scope.ServiceProvider.GetRequiredService<GameDataService>()
+                    .GetLatestOddsForGamesAsync(ListModule.OfSeq(ids), CancellationToken.None);
+                Assert.True(newest.OrderBy(entry => entry.Key).Select(entry => (entry.Key, entry.Value.Id))
+                        .SequenceEqual(latest.OrderBy(entry => entry.Key).Select(entry => (entry.Key, entry.Value.Id))),
+                    $"after {interleaving}, newest snapshots are [{string.Join(", ", newest.Select(entry => $"{entry.Key} at {entry.Value.Timestamp:O}"))}] "
+                    + $"but newest_odds holds [{string.Join(", ", pointers)}] and the read returned [{string.Join(", ", latest.Select(entry => entry.Key))}]");
+            }
+        }
+        finally
+        {
+            await host.DisposeAsync();
+        }
+    }
+
+    private static async Task<NpgsqlTransaction> BeginAsync(string connectionString)
+    {
+        var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        return await connection.BeginTransactionAsync();
+    }
+
+    private static NpgsqlCommand RaceCommand(NpgsqlTransaction session, string sql) => new(sql, session.Connection, session)
+    {
+        Parameters =
+        {
+            new("older", Now.AddDays(-2)),
+            new("newest", Now.AddDays(-1)),
+            new("newer", Now),
+        },
+    };
+
+    private static async Task UntilFinishedOrWaitingOnALockAsync(string connectionString, int processId, Task change)
+    {
+        await using var observer = new NpgsqlConnection(connectionString);
+        await observer.OpenAsync();
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (!change.IsCompleted)
+        {
+            await using var waiting = new NpgsqlCommand("SELECT wait_event_type = 'Lock' FROM pg_stat_activity WHERE pid = @pid", observer)
+                { Parameters = { new("pid", processId) } };
+            if (await waiting.ExecuteScalarAsync() is true) return;
+            Assert.True(DateTime.UtcNow < deadline, "the second session neither finished nor waited on a lock");
+            await Task.Delay(20);
+        }
+    }
+
+    private static OddsSnapshot Quote(string id, DateTime at) => new()
+    {
+        GameId = id, Timestamp = at, HomeWinProbability = .5, AwayWinProbability = .5, HomeMoneyline = -100, AwayMoneyline = -100, Source = "Kalshi"
+    };
+
     private static Game Edge(string id, string status, DateTime start) => new()
     {
         Id = id, Sport = "nhl", Status = status, SeasonYear = 2027, SeasonType = 2, ScheduledStart = start,
