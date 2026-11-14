@@ -455,11 +455,22 @@ class ToolTests(unittest.TestCase):
         self.assertIsNone(result['ci']['required_checks'])
         self.assertIn('incomplete', result['reason'])
 
-    def test_no_runs_are_pending_even_when_the_required_checks_are_unknown(self):
+    def test_no_runs_are_pending_when_the_required_checks_are_known(self):
+        for rules, required in [(RULES[1:], []), (RULES, REQUIRED_JOBS)]:
+            with self.subTest(required=required):
+                fake = FakeGitHub([pull()], runs={SHA: [[]]}, api={f'repos/{REPO}/rules/branches/main': (200, rules)})
+                code, result = self.invoke(fake, 'status', str(NUMBER))
+                self.assertEqual(result['policy']['required_checks'], required)
+                self.assertEqual(result['result'], 'pending')
+                self.assertEqual(result['reason'], f'no Actions runs yet for {SHA[:12]}')
+
+    def test_no_runs_with_unknown_required_checks_are_incomplete(self):
         fake = FakeGitHub([pull()], runs={SHA: [[]]}, api={f'repos/{REPO}/rules/branches/main': FORBIDDEN})
         code, result = self.invoke(fake, 'status', str(NUMBER))
-        self.assertEqual(result['result'], 'pending')
+        self.assertEqual(result['result'], 'incomplete')
         self.assertFalse(result['ci']['complete'])
+        self.assertIn('no Actions runs yet', result['reason'])
+        self.assertIn('incomplete', result['reason'])
 
     def test_required_check_names_match_exactly(self):
         for name in ['Validate (extra)', 'Validate (3.12)', 'validate', 'Pre-Validate', 'Validate ', ' Validate']:
@@ -625,6 +636,60 @@ class ToolTests(unittest.TestCase):
                 self.assertEqual(code, 12)
                 self.assertFalse(result['mutated'])
                 self.assertEqual(fake.merges(), [])
+
+    def test_merge_auto_with_pending_runs_never_arms_auto_merge_when_the_required_checks_are_unknown(self):
+        unknown = {
+            'legacy 403': FORBIDDEN,
+            'legacy 502 html': raw(502, '<html><body>Bad Gateway</body></html>'),
+            'legacy transport fail': Process(1, '', 'error connecting to api.github.com\n'),
+            'legacy 200 bad shape': (200, {'required_status_checks': {'contexts': 'Validate'}}),
+        }
+        for label, legacy in unknown.items():
+            with self.subTest(label):
+                fake = self.pending_then_passing_auto_merge(legacy)
+                code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge', '--auto')
+                self.assertEqual((result['result'], code), ('incomplete', 12))
+                self.assertEqual(result['policy']['bypass'], 'never')
+                self.assertFalse(result['ci']['complete'])
+                self.assertFalse(result['mutated'])
+                self.assertEqual(fake.merges(), [])
+
+    def test_merge_auto_with_pending_runs_arms_auto_merge_when_the_required_checks_are_known(self):
+        fake = self.pending_then_passing_auto_merge(NOT_FOUND)
+        code, result = self.invoke(fake, 'merge', str(NUMBER), '--sha', SHA, '--confirm-merge', '--auto')
+        self.assertEqual((result['result'], code), ('queued', 10))
+        self.assertTrue(result['ci']['complete'])
+        self.assertTrue(result['mutated'])
+        self.assertEqual(fake.merges(), [['pr', 'merge', str(NUMBER), '--repo', REPO, '--auto', '--squash', '--match-head-commit', SHA]])
+
+    def pending_then_passing_auto_merge(self, legacy):
+        return FakeGitHub(
+            [pull()],
+            runs={SHA: [[run(1, status='in_progress')], [run(1)]]},
+            api={f'repos/{REPO}': (200, SETTINGS | {'allow_auto_merge': True}), f'repos/{REPO}/branches/main/protection': legacy},
+            after_merge=[pull(auto=AUTO)],
+        )
+
+    def test_unknown_required_checks_are_incomplete_while_runs_are_pending(self):
+        for command in ['status', 'wait']:
+            with self.subTest(command):
+                self.clock = Clock()
+                fake = FakeGitHub([pull()], runs={SHA: [[run(1, status='in_progress')], [run(1)]]}, api={f'repos/{REPO}/branches/main/protection': FORBIDDEN})
+                code, result = self.invoke(fake, command, str(NUMBER), '--sha', SHA)
+                self.assertEqual((result['result'], code), ('incomplete', 12))
+                self.assertEqual(result['ci']['runs'][0]['status'], 'in_progress')
+                self.assertIn('incomplete', result['reason'])
+                self.assertEqual(self.clock.sleeps, [])
+                self.assert_read_only(fake)
+
+    def test_a_definite_run_outcome_outranks_unknown_required_checks(self):
+        for conclusion, expected in [('failure', 'failed'), ('cancelled', 'cancelled'), ('action_required', 'blocked')]:
+            with self.subTest(conclusion):
+                runs = [run(1, conclusion=conclusion), run(2, status='in_progress', workflow=2, name='Docs')]
+                fake = FakeGitHub([pull()], runs={SHA: [runs]}, api={f'repos/{REPO}/branches/main/protection': FORBIDDEN})
+                code, result = self.invoke(fake, 'status', str(NUMBER))
+                self.assertEqual(result['result'], expected)
+                self.assertFalse(result['ci']['complete'])
 
     def test_readable_legacy_protection_alone_makes_policy_readable(self):
         fake = FakeGitHub([pull()], api={f'repos/{REPO}': FORBIDDEN, f'repos/{REPO}/rules/branches/main': FORBIDDEN, f'repos/{REPO}/rulesets': FORBIDDEN, f'repos/{REPO}/branches/main/protection': (200, {'required_linear_history': {'enabled': True}})})
