@@ -46,6 +46,8 @@ internal sealed class CollegeHistoryProvider : HttpMessageHandler
 
     public Func<string, string, string?>? Override { get; set; }
 
+    public Func<Uri, HttpStatusCode?>? Status { get; set; }
+
     public string? FenceProbe { get; set; }
 
     public ConcurrentQueue<string> Requests { get; } = new();
@@ -81,6 +83,7 @@ internal sealed class CollegeHistoryProvider : HttpMessageHandler
         if (FenceProbe is not null && await FenceHeldAsync(FenceProbe, cancellationToken)) FencedRequests.Enqueue(path);
         var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
         if (path.EndsWith("/plays", StringComparison.Ordinal) && BeforePlays is not null) await BeforePlays(EventOf(path));
+        if (Status?.Invoke(uri) is { } status) return new HttpResponseMessage(status) { Content = new StringContent("{}") };
         var body = (path.EndsWith("/plays", StringComparison.Ordinal) || path.EndsWith("/odds", StringComparison.Ordinal)) && Override?.Invoke(EventOf(path), path) is { } replaced
             ? replaced
             : path switch
