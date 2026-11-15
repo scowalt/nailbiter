@@ -67,11 +67,6 @@ jobs:
           dotnet restore apps/backend.fsharp.tests/backend.fsharp.tests.fsproj
           dotnet build apps/backend/backend.csproj --no-restore --configuration Release
           dotnet test apps/backend.fsharp.tests/backend.fsharp.tests.fsproj --no-restore --configuration Release
-      - name: Package the listing checker once
-        env:
-          DOTNET_CLI_TELEMETRY_OPTOUT: '1'
-          DOTNET_NOLOGO: '1'
-        run: sh scripts/ci/package-listing-check.sh
       - name: Build and package marketing once
         run: |
           bun install --cwd apps/www --frozen-lockfile --ignore-scripts
@@ -97,6 +92,29 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
+
+  listing-checker:
+    name: Package the listing checker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        with:
+          version: 2026.11.8
+          sha256: 32b6abe844efa43d37d7ac4ed21d2ec41e9479d66feb19b0db8d2c548cd6e36d
+          install_args: asdf:mise-plugins/mise-dotnet-core
+          cache: false
+          github_token: ''
+      - name: Publish the self-contained checker
+        env:
+          DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+          DOTNET_NOLOGO: '1'
+        run: |
+          sh scripts/ci/verify-checkout.sh
+          sh scripts/ci/package-listing-check.sh
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: listing-checker-${{ github.sha }}
@@ -190,7 +208,7 @@ jobs:
 
   release:
     name: Release production
-    needs: [validate, image]
+    needs: [validate, image, listing-checker]
     if: >-
       github.repository == 'scowalt/nailbiter' &&
       github.ref == 'refs/heads/main' &&
