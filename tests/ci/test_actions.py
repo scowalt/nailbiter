@@ -103,7 +103,7 @@ class PipelineTests(unittest.TestCase):
         names = [step.get('name') for step in release['steps']]
         self.assertLess(names.index('Verify trusted main and publish the scanned image'), names.index('Deploy the tested backend revision and immutable image'))
         downloads = [step for step in release['steps'] if step.get('uses', '').startswith('actions/download-artifact@')]
-        self.assertEqual({step['with']['name'] for step in downloads}, {'backend-${{ github.sha }}', 'marketing-${{ github.sha }}'})
+        self.assertEqual({step['with']['name'] for step in downloads}, {'backend-${{ github.sha }}', 'marketing-${{ github.sha }}', 'listing-checker-${{ github.sha }}'})
         self.assertTrue(all('run-id' not in step['with'] and 'repository' not in step['with'] for step in downloads))
 
     def test_marketing_paths_and_manual_releases(self):

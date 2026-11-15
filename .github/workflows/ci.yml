@@ -67,6 +67,11 @@ jobs:
           dotnet restore apps/backend.fsharp.tests/backend.fsharp.tests.fsproj
           dotnet build apps/backend/backend.csproj --no-restore --configuration Release
           dotnet test apps/backend.fsharp.tests/backend.fsharp.tests.fsproj --no-restore --configuration Release
+      - name: Package the listing checker once
+        env:
+          DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+          DOTNET_NOLOGO: '1'
+        run: sh scripts/ci/package-listing-check.sh
       - name: Build and package marketing once
         run: |
           bun install --cwd apps/www --frozen-lockfile --ignore-scripts
@@ -89,6 +94,16 @@ jobs:
             .ci/marketing.tar
             .ci/marketing.sha256
             .ci/marketing.commit
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: listing-checker-${{ github.sha }}
+          path: |
+            .ci/listing-checker.tar
+            .ci/listing-checker.sha256
+            .ci/listing-checker.commit
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
@@ -208,6 +223,10 @@ jobs:
         with:
           name: marketing-${{ github.sha }}
           path: .ci
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: listing-checker-${{ github.sha }}
+          path: .ci
       - name: Verify trusted main and publish the scanned image
         env:
           GH_TOKEN: ${{ github.token }}
@@ -216,6 +235,7 @@ jobs:
       - name: Install pinned Tailscale binaries
         run: sh scripts/ci/install-tailscale.sh
       - name: Deploy the tested backend revision and immutable image
+        id: backend
         env:
           GH_TOKEN: ${{ github.token }}
           TAILSCALE_OAUTH_SECRET: ${{ secrets.TAILSCALE_CI_OAUTH_SECRET }}
@@ -233,3 +253,17 @@ jobs:
           bun install --cwd apps/www --frozen-lockfile --ignore-scripts
           cd apps/www
           bunx wrangler deploy
+      - name: Verify the deployed listing pages
+        id: listings
+        if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        run: bash scripts/ci/verify-listings.sh
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        if: ${{ !cancelled() && steps.listings.outcome != 'skipped' }}
+        with:
+          name: listing-check-${{ github.sha }}
+          path: |
+            .ci/listing-check.json
+            .ci/listing-check.txt
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 90
