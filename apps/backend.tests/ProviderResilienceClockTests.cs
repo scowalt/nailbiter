@@ -217,6 +217,24 @@ public sealed class ProviderResilienceClockTests
     }
 
     [Fact]
+    public async Task Disposing_an_app_whose_test_never_touched_its_services_succeeds()
+    {
+        var app = new ClockedApp(Answer.Hang, disposalGuard: ShortGuard);
+
+        await app.DisposeOffThreadAsync();
+    }
+
+    [Fact]
+    public async Task A_test_body_that_fails_before_touching_the_services_is_the_only_failure()
+    {
+        var failure = new InvalidOperationException("the body failed before it touched the services");
+
+        var reported = await Record.ExceptionAsync(() => UsingAsync(new ClockedApp(Answer.Hang), _ => throw failure));
+
+        Assert.Same(failure, reported);
+    }
+
+    [Fact]
     public async Task A_failed_test_body_stays_the_primary_failure_when_disposal_also_fails()
     {
         var failure = Record.Exception(() => Assert.Equal(StandardAttempts, HungAttemptsWithinTotal));
