@@ -59,7 +59,8 @@ therefore sends at most `(2 + 5) × 6 = 42` listing requests. With
 revision is served or the readiness period ends, so at most
 `ready-within-ms / 5000 + 1` polls. The client sends GET only,
 does not follow redirects, sends no cookies and has no option for headers or
-credentials. Fixture mode owns its paths, so `--path`, `--base-url` and
+credentials. Every request, including `/health`, carries the fixed User-Agent
+`nailbiter-listing-check/1 (+https://github.com/scowalt/nailbiter)`. Fixture mode owns its paths, so `--path`, `--base-url` and
 `--allow-remote-host` are invalid there.
 
 ## Failure classes
