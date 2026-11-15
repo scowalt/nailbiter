@@ -19,11 +19,11 @@ public sealed record HostInfo(double? LoadAverage1mBefore, double? LoadAverage1m
 }
 
 public sealed record ReportConfig(int Samples, int Warmup, double TtfbBudgetMs, double CompletionBudgetMs, double RequestTimeoutMs,
-    IReadOnlyList<string> Paths);
+    IReadOnlyList<string> Paths, string? ExpectedRevision, double? ReadyWithinMs);
 
 public sealed record CheckReport(string Schema, CheckMode Mode, string Outcome, int ExitCode, DateTimeOffset StartedAtUtc, double DurationMs,
     string Target, ReportConfig Config, HostInfo Host, IReadOnlyList<PageSummary> Pages, IReadOnlyList<Sample> Samples,
-    IReadOnlyList<Failure> Failures, object? Fixture)
+    IReadOnlyList<Failure> Failures, Readiness? Readiness, object? Fixture)
 {
     private const int PrintedFailures = 20;
 
@@ -37,13 +37,13 @@ public sealed record CheckReport(string Schema, CheckMode Mode, string Outcome, 
         IEnumerable<Failure> fixtureFailures, object? fixture)
     {
         var failures = probe.Failures.Concat(fixtureFailures).ToList();
-        FailureKind? top = failures.Count == 0 ? null : failures.Min(failure => failure.Kind);
+        FailureKind? top = failures.Count == 0 ? null : failures.MinBy(failure => Failure.Severity(failure.Kind))!.Kind;
         return new("nailbiter.listing-check/1", mode, top is { } kind ? Failure.Name(kind) : "pass", top is { } code ? (int)code : 0,
             start.AtUtc, Math.Round(Stopwatch.GetElapsedTime(start.Timestamp).TotalMilliseconds, 1), target,
             new(options.Samples, options.Warmup, options.TtfbBudget.TotalMilliseconds, options.CompletionBudget.TotalMilliseconds,
-                options.RequestTimeout.TotalMilliseconds, options.Paths),
+                options.RequestTimeout.TotalMilliseconds, options.Paths, options.Release?.Revision, options.Release?.ReadyWithin.TotalMilliseconds),
             new(start.LoadAverage1m, HostInfo.LoadAverage1m(), Environment.ProcessorCount),
-            probe.Pages, probe.Samples, failures, fixture);
+            probe.Pages, probe.Samples, failures, probe.Readiness, fixture);
     }
 
     public async Task WriteAsync(TextWriter output, string? reportPath)
@@ -59,6 +59,8 @@ public sealed record CheckReport(string Schema, CheckMode Mode, string Outcome, 
             await output.WriteLineAsync(
                 $"{page.Path.PadRight(width)}{$"{page.Measured}+{count - page.Measured}w",-9}{Format(page.Ttfb),-20}{Format(page.Completion),-24}{budget,-8}{failed}");
         }
+        if (Readiness is { Ready: true } ready)
+            await output.WriteLineAsync($"readiness: /health served {ready.ServedRevision} after {ready.Polls} polls in {ready.WaitedMs:0} ms");
         foreach (var failure in Failures.Take(PrintedFailures))
             await output.WriteLineAsync($"{Failure.Name(failure.Kind)} {failure.Path}: {failure.Message}");
         if (Failures.Count > PrintedFailures) await output.WriteLineAsync($"... {Failures.Count - PrintedFailures} more failures in the report");
