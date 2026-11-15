@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -46,8 +47,8 @@ HINTS = {
     4: 'complete response within 10 s',
     5: 'without its listing markup',
     7: 'over budget',
-    8: 'see the last poll',
-    9: 'another revision',
+    8: 'No listing was requested',
+    9: 'different revision',
 }
 
 
@@ -171,6 +172,24 @@ class ReleaseVerificationScriptTests(unittest.TestCase):
                 self.assertIn(f'outcome: fixture (exit {exit_code})', summary)
                 self.assertNotIn('Verified', summary)
 
+    def test_a_different_revision_is_named_with_both_revisions_without_guessing_its_age(self):
+        other = 'c' * 40
+        lines = {
+            8: f'readiness /health: revision {SHA} not served within 120000 ms after 25 polls; last poll: served revision {other}',
+            9: f'revision /nba: measured round 0: served revision {other}, expected {SHA}',
+        }
+        for exit_code, line in lines.items():
+            with self.subTest(exit_code=exit_code):
+                self.summary.unlink(missing_ok=True)
+                result = self.verify(exit_code, output=f'{line}\noutcome: fixture (exit {exit_code})')
+                annotation = next(line for line in result.stdout.splitlines() if line.startswith('::error '))
+                self.assertIn('different revision', annotation)
+                self.assertIn(f'expected {SHA}', annotation)
+                self.assertIn(f'served revision {other}', annotation)
+                for guess in ['previous', 'older', 'old container', 'second', 'stale']:
+                    self.assertNotIn(guess, annotation.lower())
+                    self.assertNotIn(guess, self.summary.read_text().lower())
+
     def test_a_checker_artifact_from_another_commit_or_with_other_bytes_sends_no_request(self):
         for tamper in ['commit', 'bytes', 'missing']:
             with self.subTest(tamper=tamper):
@@ -236,10 +255,32 @@ class ReleaseVerificationWorkflowTests(unittest.TestCase):
         self.assertEqual(artifact['with']['retention-days'], 90)
         self.assertEqual(self.release['concurrency'], {'group': 'production-release', 'cancel-in-progress': False})
 
-    def test_checker_is_built_in_a_job_without_secrets_and_uploaded_with_its_hash(self):
-        checks = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())['jobs']['checks']
-        steps = checks['steps']
-        package = next(i for i, step in enumerate(steps) if step.get('run') == 'sh scripts/ci/package-listing-check.sh')
+    def test_checker_is_built_in_its_own_job_that_runs_no_package_manager_or_browser_tooling(self):
+        jobs = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())['jobs']
+        packaging = [name for name, job in jobs.items() if 'package-listing-check.sh' in json.dumps(job)]
+        self.assertEqual(packaging, ['listing-checker'])
+        job = jobs['listing-checker']
+        self.assertIn('listing-checker', self.release['needs'])
+        for key in ['needs', 'permissions', 'environment', 'services', 'container']:
+            self.assertNotIn(key, job)
+        serialized = json.dumps(job)
+        self.assertNotIn('secrets.', serialized)
+        for tool in ['pip', 'bun', 'bunx', 'playwright', 'uv', 'npm', 'npx', 'python', 'apt-get']:
+            self.assertNotRegex(json.dumps(job['steps']), rf'(?<![\w-]){re.escape(tool)}(?![\w-])')
+        steps = job['steps']
+        actions = [step['uses'].split('@')[0] for step in steps if 'uses' in step]
+        self.assertEqual(actions, ['actions/checkout', 'jdx/mise-action', 'actions/upload-artifact'])
+        mise = next(step for step in steps if step.get('uses', '').startswith('jdx/mise-action@'))
+        self.assertEqual(mise['with'], {
+            'version': '2026.11.8',
+            'sha256': '32b6abe844efa43d37d7ac4ed21d2ec41e9479d66feb19b0db8d2c548cd6e36d',
+            'install_args': 'asdf:mise-plugins/mise-dotnet-core',
+            'cache': False,
+            'github_token': '',
+        })
+        runs = [step['run'] for step in steps if 'run' in step]
+        self.assertEqual(runs, ['sh scripts/ci/verify-checkout.sh\nsh scripts/ci/package-listing-check.sh\n'])
+        package = next(i for i, step in enumerate(steps) if 'package-listing-check.sh' in step.get('run', ''))
         self.assertEqual(steps[package]['env'], {'DOTNET_CLI_TELEMETRY_OPTOUT': '1', 'DOTNET_NOLOGO': '1'})
         upload = next(i for i, step in enumerate(steps) if step.get('uses', '').startswith('actions/upload-artifact@')
                       and step['with']['name'] == 'listing-checker-${{ github.sha }}')

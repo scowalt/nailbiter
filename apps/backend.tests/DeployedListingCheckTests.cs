@@ -18,7 +18,9 @@ public sealed class DeployedListingCheckTests : IAsyncLifetime
     private const string League = "<!DOCTYPE html><html><body><h1 class=\"league-title\">NHL</h1><div class=\"league-games\">games</div></body></html>";
     private const string EmptyLeague = "<!DOCTYPE html><html><body><h1 class=\"league-title\">NHL</h1><p class=\"empty-state-text\">No games.</p></body></html>";
     private const string Budgets = "--samples 1 --warmup 0 --ttfb-budget-ms 100 --completion-budget-ms 250 --request-timeout-ms 3000";
+    private const string UserAgent = "nailbiter-listing-check/1 (+https://github.com/scowalt/nailbiter)";
     private readonly ConcurrentQueue<string> requests = new();
+    private readonly ConcurrentQueue<string> userAgents = new();
     private readonly string reportPath = Path.Combine(Path.GetTempPath(), $"deployed-listing-check-{Guid.NewGuid():N}.json");
     private Func<int, (int Status, string? Revision)> health = _ => (200, Released);
     private int healthPolls;
@@ -33,6 +35,7 @@ public sealed class DeployedListingCheckTests : IAsyncLifetime
         stub.Use(async (context, next) =>
         {
             requests.Enqueue(context.Request.Method + " " + context.Request.Path + context.Request.QueryString);
+            userAgents.Enqueue(context.Request.Headers.UserAgent.ToString());
             context.Response.Headers["X-Nailbiter-Revision"] = Released;
             await next();
         });
@@ -87,6 +90,7 @@ public sealed class DeployedListingCheckTests : IAsyncLifetime
         Assert.Equal(Released, json.RootElement.GetProperty("config").GetProperty("expectedRevision").GetString());
         Assert.Contains($"readiness: /health served {Released} after 2 polls", output.ToString());
         Assert.Contains("outcome: pass (exit 0)", output.ToString());
+        Assert.Equal(Enumerable.Repeat(UserAgent, requests.Count), userAgents);
     }
 
     [Theory]
