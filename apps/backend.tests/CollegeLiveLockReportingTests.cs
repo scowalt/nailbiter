@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Data.Common;
 using System.Diagnostics;
 using System.Net;
 using backend.Data;
@@ -6,6 +7,7 @@ using backend.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -14,6 +16,7 @@ using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
+using Npgsql;
 using Polly.Timeout;
 using Sentry;
 using Sentry.AspNetCore;
@@ -65,6 +68,27 @@ public sealed class CollegeLiveLockReportingTests
         Assert.Equal((typeof(CollegeFootballBackgroundService).FullName, "error"), (reported.Logger, reported.Level));
         Assert.Contains(reported.Exceptions, e => e.Type == typeof(InvalidOperationException).FullName);
         Assert.Equal(LogLevel.Error, Assert.Single(app.LoopLogs).Level);
+    }
+
+    [Fact]
+    public async Task Live_tick_whose_lock_query_loses_its_session_is_sent_once_at_error_and_not_skipped_as_busy()
+    {
+        await using var database = await CollegeHistoryDatabase.StartAsync(1);
+        var terminate = new TerminateSessionBeforeLockQuery(database.ConnectionString);
+        await using var app = new LiveLoop(database, new FakeTimeProvider(CollegeHistoryProvider.Now), null, terminate);
+
+        await app.WaitUntilAsync(() => Task.FromResult(app.LoopLogs.Any()));
+        var sent = await app.SentEventsAsync();
+
+        Assert.True(terminate.Terminated);
+        var reported = Assert.Single(sent);
+        Assert.Equal((typeof(CollegeFootballBackgroundService).FullName, "error"), (reported.Logger, reported.Level));
+        Assert.Contains(reported.Exceptions, e => e.Type is "Npgsql.PostgresException" or "Npgsql.NpgsqlException");
+        Assert.DoesNotContain(reported.Exceptions, e => e.Type == typeof(CollegeCollectorBusyException).FullName);
+        var logged = Assert.Single(app.LoopLogs);
+        Assert.Equal(LogLevel.Error, logged.Level);
+        Assert.DoesNotContain("skipped", logged.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(database.Provider.Requests);
     }
 
     [Fact]
@@ -132,7 +156,36 @@ public sealed class CollegeLiveLockReportingTests
 
     private static bool IsScoreboard(Uri uri) => uri.AbsolutePath.EndsWith("/scoreboard", StringComparison.Ordinal);
 
-    private sealed record LoggedEntry(string Category, LogLevel Level);
+    private sealed record LoggedEntry(string Category, LogLevel Level, string Message);
+
+    private sealed class TerminateSessionBeforeLockQuery(string connectionString) : DbCommandInterceptor
+    {
+        private int fired;
+
+        public bool Terminated { get; private set; }
+
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            if (!command.CommandText.Contains("pg_try_advisory_xact_lock", StringComparison.Ordinal) || Interlocked.Exchange(ref fired, 1) == 1)
+                return result;
+            await using var pidQuery = command.Connection!.CreateCommand();
+            pidQuery.Transaction = command.Transaction;
+            pidQuery.CommandText = "SELECT pg_backend_pid()";
+            var pid = (int)(await pidQuery.ExecuteScalarAsync(cancellationToken))!;
+            await using var admin = new NpgsqlConnection(connectionString);
+            await admin.OpenAsync(cancellationToken);
+            await using var kill = new NpgsqlCommand("SELECT pg_terminate_backend(@pid)", admin);
+            kill.Parameters.AddWithValue("pid", pid);
+            Terminated = (bool)(await kill.ExecuteScalarAsync(cancellationToken))!;
+            await using var gone = new NpgsqlCommand("SELECT count(*) FROM pg_stat_activity WHERE pid = @pid", admin);
+            gone.Parameters.AddWithValue("pid", pid);
+            var waited = Stopwatch.StartNew();
+            while ((long)(await gone.ExecuteScalarAsync(cancellationToken))! > 0 && waited.Elapsed < Deadline)
+                await Task.Delay(20, cancellationToken);
+            return result;
+        }
+    }
 
     private sealed class LiveLoop : IAsyncDisposable
     {
@@ -143,7 +196,7 @@ public sealed class CollegeLiveLockReportingTests
         private readonly FakeTimeProvider clock;
 
         public LiveLoop(CollegeHistoryDatabase database, FakeTimeProvider clock,
-            Func<Uri, CancellationToken, Task<HttpResponseMessage?>>? respond = null)
+            Func<Uri, CancellationToken, Task<HttpResponseMessage?>>? respond = null, params IInterceptor[] interceptors)
         {
             this.clock = clock;
             app = entry.WithWebHostBuilder(builder =>
@@ -157,7 +210,7 @@ public sealed class CollegeLiveLockReportingTests
                     services.AddSingleton<IHostedService, CollegeFootballBackgroundService>();
                     services.RemoveAll<IDbContextOptionsConfiguration<ExcitementDbContext>>();
                     services.RemoveAll<DbContextOptions<ExcitementDbContext>>();
-                    services.AddDbContext<ExcitementDbContext>(options => options.UseNpgsql(database.ConnectionString));
+                    services.AddDbContext<ExcitementDbContext>(options => options.UseNpgsql(database.ConnectionString).AddInterceptors(interceptors));
                     services.ConfigureAll<HttpClientFactoryOptions>(options =>
                         options.HttpMessageHandlerBuilderActions.Add(handlers => handlers.PrimaryHandler = new Forwarding(database.Provider,
                             respond ?? ((_, _) => Task.FromResult<HttpResponseMessage?>(null)))));
@@ -236,7 +289,7 @@ public sealed class CollegeLiveLockReportingTests
             public bool IsEnabled(LogLevel logLevel) => true;
 
             public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-                entries.Enqueue(new LoggedEntry(category, logLevel));
+                entries.Enqueue(new LoggedEntry(category, logLevel, formatter(state, exception)));
         }
     }
 }
