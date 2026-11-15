@@ -10,6 +10,7 @@ using backend.Services.EspnNascar;
 using backend.Services.Nascar;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -34,6 +35,7 @@ public sealed class ProviderResilienceClockTests
     private static readonly TimeSpan AttemptTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan TotalRequestTimeout = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan Guard = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan ShortGuard = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan Step = TimeSpan.FromMilliseconds(10);
     private static readonly TimeSpan DisposalStep = TimeSpan.FromSeconds(1);
 
@@ -153,7 +155,7 @@ public sealed class ProviderResilienceClockTests
         var fetch = Scoreboards["EspnOdds"].Run(app.Services, CancellationToken.None);
         await app.RunUntilAsync(fetch, () => app.Provider.Attempts is [{ Ended: not null }], AttemptTimeout * 2);
 
-        await Task.Run(() => app.DisposeAsync().AsTask()).WaitAsync(Guard);
+        await app.DisposeOffThreadAsync();
         await fetch.WaitAsync(Guard);
     }
 
@@ -162,13 +164,56 @@ public sealed class ProviderResilienceClockTests
     {
         var app = new ClockedApp(Answer.Hang, services => services.AddSingleton<LateTimerDisposal>());
         var disposal = app.Services.GetRequiredService<LateTimerDisposal>();
+        Assert.Equal(TimeSpan.FromSeconds(20), app.DisposalGuard);
         Assert.Equal(0, app.Clock.LiveTimers);
 
         app.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
-        await disposal.Started.WaitAsync(Guard);
-        await Task.Run(() => app.DisposeAsync().AsTask()).WaitAsync(Guard);
+        await app.WaitForEntryThreadDisposalAsync(disposal.Started);
+        await app.DisposeOffThreadAsync();
 
         Assert.True(disposal.Finished);
+    }
+
+    [Fact]
+    public async Task Waiting_for_an_entry_thread_that_never_begins_disposing_fails_by_name_and_still_disposes_the_app()
+    {
+        var app = new ClockedApp(Answer.Hang, services => services.AddSingleton<LateTimerDisposal>(), disposalGuard: ShortGuard);
+        var disposal = app.Services.GetRequiredService<LateTimerDisposal>();
+
+        var reported = await Record.ExceptionAsync(() => app.WaitForEntryThreadDisposalAsync(disposal.Started));
+
+        Assert.Equal("the entry thread never began disposing the host", Assert.IsType<TimeoutException>(reported).Message);
+        Assert.True(disposal.Finished);
+    }
+
+    [Fact]
+    public async Task Disposing_the_app_fails_by_name_at_the_guard_when_a_service_hangs_without_the_clock()
+    {
+        var app = new ClockedApp(Answer.Hang, services => services.AddSingleton<ClocklessHang>(), disposalGuard: ShortGuard);
+        var hang = app.Services.GetRequiredService<ClocklessHang>();
+
+        app.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
+        await app.WaitForEntryThreadDisposalAsync(hang.Started);
+        var reported = await Record.ExceptionAsync(app.DisposeOffThreadAsync);
+        hang.Release();
+        await app.DisposeOffThreadAsync();
+
+        Assert.StartsWith($"the host was still disposing its services after {ShortGuard}", Assert.IsType<TimeoutException>(reported).Message, StringComparison.Ordinal);
+        Assert.Equal(0, app.Clock.TimersCreated);
+    }
+
+    [Fact]
+    public async Task Disposing_the_app_fails_by_name_at_the_guard_when_a_timer_outlives_the_host()
+    {
+        var app = new ClockedApp(Answer.Hang, disposalGuard: ShortGuard);
+        var timer = app.Services.GetRequiredService<TimeProvider>().CreateTimer(_ => { }, null, DisposalStep, DisposalStep);
+
+        var reported = await Record.ExceptionAsync(app.DisposeOffThreadAsync);
+        timer.Dispose();
+        await app.DisposeOffThreadAsync();
+
+        Assert.StartsWith($"the app was still disposing after the host disposed its services after {ShortGuard}, with the clock at ", Assert.IsType<TimeoutException>(reported).Message, StringComparison.Ordinal);
+        Assert.EndsWith(" and 1 live timers", reported.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -326,28 +371,12 @@ public sealed class ProviderResilienceClockTests
         public sealed record Reply(HttpStatusCode Code) : Answer;
     }
 
-    private sealed class SteppedClock(TimeSpan descheduleAfterArming) : FakeTimeProvider(Origin), IAsyncDisposable
+    private sealed class SteppedClock(TimeSpan descheduleAfterArming) : FakeTimeProvider(Origin)
     {
         private static readonly DateTimeOffset Origin = new(2026, 11, 7, 12, 0, 0, TimeSpan.Zero);
         private readonly List<TrackedTimer> timers = [];
-        private readonly TaskCompletionSource returned = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private volatile bool lent;
 
         public TimeSpan Elapsed => GetUtcNow() - Origin;
-
-        public Task Returned => lent ? returned.Task : Task.CompletedTask;
-
-        public TimeProvider Lend()
-        {
-            lent = true;
-            return this;
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            returned.TrySetResult();
-            return default;
-        }
 
         public int TimersCreated
         {
@@ -457,27 +486,46 @@ public sealed class ProviderResilienceClockTests
         }
     }
 
+    private sealed class ClocklessHang : IAsyncDisposable
+    {
+        private readonly TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Started => started.Task;
+
+        public void Release() => released.TrySetResult();
+
+        public async ValueTask DisposeAsync()
+        {
+            started.TrySetResult();
+            await released.Task;
+        }
+    }
+
     private sealed class ClockedApp : IAsyncDisposable
     {
         private readonly AppFactory entry = new();
         private readonly WebApplicationFactory<Program> app;
         private readonly SentTransport transport = new();
         private readonly LogRecorder logs = new();
+        private readonly HostDisposal hostDisposal = new();
 
-        public ClockedApp(Answer answer, Action<IServiceCollection>? configure = null, TimeSpan descheduleAfterArming = default)
+        public ClockedApp(Answer answer, Action<IServiceCollection>? configure = null, TimeSpan descheduleAfterArming = default, TimeSpan? disposalGuard = null)
         {
+            DisposalGuard = disposalGuard ?? Guard;
             Clock = new SteppedClock(descheduleAfterArming);
             Provider = new ControlledProvider(answer, Clock);
             app = entry.WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("Production");
+                builder.ConfigureAppConfiguration((_, configuration) => configuration.Add(hostDisposal));
                 builder.ConfigureServices(services =>
                 {
                     foreach (var worker in services.Where(s => s.ServiceType == typeof(IHostedService)
                         && s.ImplementationType?.Namespace?.StartsWith("backend", StringComparison.Ordinal) == true).ToArray())
                         services.Remove(worker);
                     services.RemoveAll<TimeProvider>();
-                    services.AddSingleton<TimeProvider>(_ => Clock.Lend());
+                    services.AddSingleton<TimeProvider>(Clock);
                     services.ConfigureAll<HttpClientFactoryOptions>(options =>
                         options.HttpMessageHandlerBuilderActions.Add(handlers => handlers.PrimaryHandler = Provider));
                     services.AddSingleton<ILoggerProvider>(logs);
@@ -540,24 +588,50 @@ public sealed class ProviderResilienceClockTests
             return transport.Events.ToArray();
         }
 
+        public TimeSpan DisposalGuard { get; }
+
+        public async Task WaitForEntryThreadDisposalAsync(Task reached)
+        {
+            if (await Task.WhenAny(reached, Task.Delay(DisposalGuard)) != reached)
+                await UsingAsync(this, _ => throw new TimeoutException("the entry thread never began disposing the host"));
+        }
+
+        public Task DisposeOffThreadAsync() => Task.Run(() => DisposeAsync().AsTask()).WaitAsync(DisposalGuard * 2);
+
         public async ValueTask DisposeAsync()
         {
             var disposing = Task.Run(async () =>
             {
                 await app.DisposeAsync();
                 await entry.DisposeAsync();
-                await Clock.Returned;
+                await hostDisposal.Disposed;
             });
-            var deadline = DateTime.UtcNow + Guard;
+            var deadline = DateTime.UtcNow + DisposalGuard;
             while (!disposing.IsCompleted || Clock.LiveTimers > 0)
             {
-                if (DateTime.UtcNow > deadline) throw new TimeoutException($"still disposing at {Clock.Elapsed} with {Clock.LiveTimers} live timers");
+                if (DateTime.UtcNow > deadline)
+                {
+                    _ = disposing.ContinueWith(abandoned => abandoned.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                    var still = hostDisposal.Disposed.IsCompleted ? "the app was still disposing after the host disposed its services" : "the host was still disposing its services";
+                    throw new TimeoutException($"{still} after {DisposalGuard}, with the clock at {Clock.Elapsed} and {Clock.LiveTimers} live timers");
+                }
                 Clock.Advance(DisposalStep);
                 await Task.Delay(1);
             }
-            await disposing;
+            await disposing.WaitAsync(DisposalGuard);
             Provider.Dispose();
         }
+    }
+
+    private sealed class HostDisposal : ConfigurationProvider, IConfigurationSource, IDisposable
+    {
+        private readonly TaskCompletionSource disposed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Disposed => disposed.Task;
+
+        public IConfigurationProvider Build(IConfigurationBuilder builder) => this;
+
+        public void Dispose() => disposed.TrySetResult();
     }
 
     private sealed class ControlledProvider(Answer answer, SteppedClock clock) : HttpMessageHandler
