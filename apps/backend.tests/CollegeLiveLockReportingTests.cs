@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Net;
 using backend.Data;
 using backend.Services;
 using Microsoft.AspNetCore.Hosting;
@@ -13,6 +14,7 @@ using Microsoft.Extensions.Http;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
+using Polly.Timeout;
 using Sentry;
 using Sentry.AspNetCore;
 using Xunit;
@@ -65,6 +67,71 @@ public sealed class CollegeLiveLockReportingTests
         Assert.Equal(LogLevel.Error, Assert.Single(app.LoopLogs).Level);
     }
 
+    [Fact]
+    public async Task Live_tick_whose_scoreboard_answers_404_logs_a_warning_and_sends_no_event()
+    {
+        await using var database = await CollegeHistoryDatabase.StartAsync(1);
+        await using var app = new LiveLoop(database, new FakeTimeProvider(CollegeHistoryProvider.Now),
+            (uri, _) => Task.FromResult(IsScoreboard(uri) ? new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("{}") } : null));
+
+        await app.WaitUntilAsync(() => Task.FromResult(app.LoopLogs.Any()));
+
+        Assert.Empty(await app.SentEventsAsync());
+        Assert.Equal(LogLevel.Warning, Assert.Single(app.LoopLogs).Level);
+    }
+
+    [Fact]
+    public async Task Live_tick_whose_scoreboard_body_is_malformed_logs_a_warning_and_sends_no_event()
+    {
+        await using var database = await CollegeHistoryDatabase.StartAsync(1);
+        await using var app = new LiveLoop(database, new FakeTimeProvider(CollegeHistoryProvider.Now),
+            (uri, _) => Task.FromResult(IsScoreboard(uri) ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"events\": [") } : null));
+
+        await app.WaitUntilAsync(() => Task.FromResult(app.LoopLogs.Any()));
+
+        Assert.Empty(await app.SentEventsAsync());
+        Assert.Equal(LogLevel.Warning, Assert.Single(app.LoopLogs).Level);
+    }
+
+    [Fact]
+    public async Task Live_tick_whose_scoreboard_answers_503_is_sent_once_at_error()
+    {
+        await using var database = await CollegeHistoryDatabase.StartAsync(1);
+        await using var app = new LiveLoop(database, new FakeTimeProvider(CollegeHistoryProvider.Now),
+            (uri, _) => Task.FromResult(IsScoreboard(uri) ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new StringContent("{}") } : null));
+
+        await app.WaitUntilAsync(() => Task.FromResult(app.LoopLogs.Any()));
+        var sent = await app.SentEventsAsync();
+
+        var reported = Assert.Single(sent);
+        Assert.Equal((typeof(CollegeFootballBackgroundService).FullName, "error"), (reported.Logger, reported.Level));
+        Assert.Contains(reported.Exceptions, e => e.Type == typeof(HttpRequestException).FullName);
+        Assert.Equal(LogLevel.Error, Assert.Single(app.LoopLogs).Level);
+    }
+
+    [Fact]
+    public async Task Live_tick_whose_scoreboard_request_times_out_is_sent_once_at_error()
+    {
+        await using var database = await CollegeHistoryDatabase.StartAsync(1);
+        await using var app = new LiveLoop(database, new FakeTimeProvider(CollegeHistoryProvider.Now),
+            async (uri, ct) =>
+            {
+                if (!IsScoreboard(uri)) return null;
+                await Task.Delay(Timeout.Infinite, ct);
+                return null;
+            });
+
+        await app.AdvanceUntilAsync(() => Task.FromResult(app.LoopLogs.Any()));
+        var sent = await app.SentEventsAsync();
+
+        var reported = Assert.Single(sent);
+        Assert.Equal((typeof(CollegeFootballBackgroundService).FullName, "error"), (reported.Logger, reported.Level));
+        Assert.Contains(reported.Exceptions, e => e.Type == typeof(TimeoutRejectedException).FullName);
+        Assert.Equal(LogLevel.Error, Assert.Single(app.LoopLogs).Level);
+    }
+
+    private static bool IsScoreboard(Uri uri) => uri.AbsolutePath.EndsWith("/scoreboard", StringComparison.Ordinal);
+
     private sealed record LoggedEntry(string Category, LogLevel Level);
 
     private sealed class LiveLoop : IAsyncDisposable
@@ -75,7 +142,8 @@ public sealed class CollegeLiveLockReportingTests
         private readonly LogRecorder logs = new();
         private readonly FakeTimeProvider clock;
 
-        public LiveLoop(CollegeHistoryDatabase database, FakeTimeProvider clock)
+        public LiveLoop(CollegeHistoryDatabase database, FakeTimeProvider clock,
+            Func<Uri, CancellationToken, Task<HttpResponseMessage?>>? respond = null)
         {
             this.clock = clock;
             app = entry.WithWebHostBuilder(builder =>
@@ -91,7 +159,8 @@ public sealed class CollegeLiveLockReportingTests
                     services.RemoveAll<DbContextOptions<ExcitementDbContext>>();
                     services.AddDbContext<ExcitementDbContext>(options => options.UseNpgsql(database.ConnectionString));
                     services.ConfigureAll<HttpClientFactoryOptions>(options =>
-                        options.HttpMessageHandlerBuilderActions.Add(handlers => handlers.PrimaryHandler = new Forwarding(database.Provider)));
+                        options.HttpMessageHandlerBuilderActions.Add(handlers => handlers.PrimaryHandler = new Forwarding(database.Provider,
+                            respond ?? ((_, _) => Task.FromResult<HttpResponseMessage?>(null)))));
                     services.ConfigureAll<HttpStandardResilienceOptions>(options =>
                     {
                         options.Retry.Delay = TimeSpan.Zero;
@@ -143,8 +212,12 @@ public sealed class CollegeLiveLockReportingTests
         }
     }
 
-    private sealed class Forwarding(HttpMessageHandler inner) : DelegatingHandler(inner)
+    private sealed class Forwarding(HttpMessageHandler inner, Func<Uri, CancellationToken, Task<HttpResponseMessage?>> respond)
+        : DelegatingHandler(inner)
     {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            await respond(request.RequestUri!, cancellationToken) ?? await base.SendAsync(request, cancellationToken);
+
         protected override void Dispose(bool disposing) { }
     }
 
