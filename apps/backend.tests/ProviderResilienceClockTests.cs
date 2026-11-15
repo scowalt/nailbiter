@@ -555,6 +555,7 @@ public sealed class ProviderResilienceClockTests
                     configure?.Invoke(services);
                 });
             });
+            _ = app.Services;
         }
 
         public SteppedClock Clock { get; }
