@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using backend.Services;
@@ -180,10 +181,13 @@ public sealed class ProviderResilienceClockTests
         var app = new ClockedApp(Answer.Hang, services => services.AddSingleton<LateTimerDisposal>(), disposalGuard: ShortGuard);
         var disposal = app.Services.GetRequiredService<LateTimerDisposal>();
 
+        var started = Stopwatch.GetTimestamp();
         var reported = await Record.ExceptionAsync(() => app.WaitForEntryThreadDisposalAsync(disposal.Started));
+        var elapsed = Stopwatch.GetElapsedTime(started);
 
         Assert.Equal("the entry thread never began disposing the host", Assert.IsType<TimeoutException>(reported).Message);
         Assert.True(disposal.Finished);
+        Assert.InRange(elapsed, ShortGuard, ShortGuard * 5);
     }
 
     [Fact]
@@ -214,6 +218,24 @@ public sealed class ProviderResilienceClockTests
 
         Assert.StartsWith($"the app was still disposing after the host disposed its services after {ShortGuard}, with the clock at ", Assert.IsType<TimeoutException>(reported).Message, StringComparison.Ordinal);
         Assert.EndsWith(" and 1 live timers", reported.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Disposing_an_app_whose_test_never_touched_its_services_succeeds()
+    {
+        var app = new ClockedApp(Answer.Hang, disposalGuard: ShortGuard);
+
+        await app.DisposeOffThreadAsync();
+    }
+
+    [Fact]
+    public async Task A_test_body_that_fails_before_touching_the_services_is_the_only_failure()
+    {
+        var failure = new InvalidOperationException("the body failed before it touched the services");
+
+        var reported = await Record.ExceptionAsync(() => UsingAsync(new ClockedApp(Answer.Hang), _ => throw failure));
+
+        Assert.Same(failure, reported);
     }
 
     [Fact]
@@ -537,6 +559,7 @@ public sealed class ProviderResilienceClockTests
                     configure?.Invoke(services);
                 });
             });
+            _ = app.Services;
         }
 
         public SteppedClock Clock { get; }
