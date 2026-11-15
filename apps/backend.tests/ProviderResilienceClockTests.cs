@@ -203,6 +203,20 @@ public sealed class ProviderResilienceClockTests
     }
 
     [Fact]
+    public async Task Disposing_the_app_fails_by_name_at_the_guard_when_a_timer_outlives_the_host()
+    {
+        var app = new ClockedApp(Answer.Hang, disposalGuard: ShortGuard);
+        var timer = app.Services.GetRequiredService<TimeProvider>().CreateTimer(_ => { }, null, DisposalStep, DisposalStep);
+
+        var reported = await Record.ExceptionAsync(app.DisposeOffThreadAsync);
+        timer.Dispose();
+        await app.DisposeOffThreadAsync();
+
+        Assert.StartsWith($"the app was still disposing after the host disposed its services after {ShortGuard}, with the clock at ", Assert.IsType<TimeoutException>(reported).Message, StringComparison.Ordinal);
+        Assert.EndsWith(" and 1 live timers", reported.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_failed_test_body_stays_the_primary_failure_when_disposal_also_fails()
     {
         var failure = Record.Exception(() => Assert.Equal(StandardAttempts, HungAttemptsWithinTotal));
