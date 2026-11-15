@@ -272,23 +272,63 @@ between games, so the live loop cannot change a game in the middle of an
 import. The import releases the lock when it ends, also when it fails or is
 cancelled. If the server ends the session, the lock ends with it.
 
+The live loop treats the taken lock as a skipped tick, not a failure
+([#193](https://github.com/scowalt/nailbiter/issues/193)).
+`LockCollectorAsync` throws `CollegeCollectorBusyException`, and the loop logs
+`College refresh skipped` at Information and sends no event. Before #193 it
+logged `College refresh failed` at Error, which sent 1 event per 30-second
+tick, about 120 per hour of import (inferred from 1 event per tick). A lock
+held for a long time gets no Warning either. The import is a foreground
+command that an operator runs and watches. If its process ends, the server
+ends the session and the lock with it. A Warning sends no event under the
+reporting rule, so it would add a log line and no alert, and no threshold
+separates a slow import from a stuck one without a measured import duration
+against the real providers. `CollegeLiveLockReportingTests` checks that 3
+refused ticks send no event and log below Warning, and that the loop collects
+again once the lock is free.
+
+The live loop's other failures use typed catch arms. A provider HTTP failure
+that is not an outage, such as a 404, and a malformed provider body log a
+Warning and send no event. An outage, such as a 503, a client timeout, a
+database failure, and an exception from our own code each send 1 Error per
+tick. The tick catches a failed Kalshi listing request itself and logs it by
+the same rule, so a Kalshi 401 or 403 is Error. Caller cancellation ends the
+loop without a log entry.
+
 A provider failure inside a game does not stop the import. The ESPN
-closing-line and play-bounds requests and the Kalshi candle requests each
-catch an HTTP failure or a malformed body for their game and log it: Error
-for an outage such as a 503, Warning for anything else such as a 404. The
-game is then saved without its closing line or its chart, and the import
-continues and reports itself complete. A Kalshi or ESPN outage therefore sends
-one Error per affected game, as it did before
-[#190](https://github.com/scowalt/nailbiter/issues/190). After the provider
-recovers, a rerun fills in the missing candles.
+closing-line and play-bounds requests each catch an `HttpRequestException` or
+a malformed body for their game. Each logs Error for an outage, such as a 503
+or a refused connection, and Warning for anything else, such as a 404. The
+Kalshi candle request catches every exception except caller cancellation. It
+logs Error for an outage, for a 401 or 403
+([#84](https://github.com/scowalt/nailbiter/issues/84)), and for an exception
+from our own code. It logs Warning for a 404 from both candle routes and for
+a malformed body. The game is then saved without its closing line or its
+chart, and the import continues and reports itself complete.
+
+An ESPN outage therefore sends 2 Errors per affected game, one from each ESPN
+request. Without a play window the import does not request Kalshi candles, so
+there is no third event. A Kalshi outage or refusal sends 1 Error per affected
+game. These counts are the same as before
+[#190](https://github.com/scowalt/nailbiter/issues/190). If ESPN's core API
+fails after discovery and stays down for the rest of a 150 to 300 game import,
+the import sends about 300 to 600 events (inferred from 2 per game). An outage
+that is already present at discovery stops the import before it writes any
+game. The two ESPN requests keep separate events: they call different
+endpoints, and each failure loses different data, the closing line or the
+chart. After the provider recovers, a rerun fills in the missing history.
 `Kalshi_outage_for_one_game_keeps_the_game_without_history_and_a_rerun_fills_it_in`
 checks this through the CLI.
 
 Any other failure in a game stops the import. This covers a failed save, a
-lost database session, an identity conflict with a stored game, and an
-exception from our own code. The games before it stay committed, and the
-import logs one entry with the event and the committed count: Warning for an
-identity conflict and Error for anything else. Caller cancellation is
+lost database session, an identity conflict with a stored game, an exception
+from our own code outside the Kalshi history request, and a client timeout or
+open circuit breaker in an ESPN request, which the ESPN catches do not take.
+The games before it stay committed, and the import logs one Error with the event and the
+committed count. The identity conflict is `CollegeIdentityConflictException`.
+It compares ESPN's event with a game we stored, and the operator must fix the
+stored game before a rerun can pass it, so it is an Error, not a malformed
+body. Caller cancellation is
 rethrown without a log entry. The CLI prints the committed count and exits
 with code 1. The import commits the `college_imports` checkpoint before the
 first game, so a rerun uses the same window. A rerun requests and saves every
