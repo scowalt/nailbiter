@@ -272,9 +272,23 @@ between games, so the live loop cannot change a game in the middle of an
 import. The import releases the lock when it ends, also when it fails or is
 cancelled. If the server ends the session, the lock ends with it.
 
-If a game fails, the import stops. The games before it stay committed, and the
-import logs one entry with the event and the committed count: Warning for a
-bad provider answer and Error for anything else. Caller cancellation is
+A provider failure inside a game does not stop the import. The ESPN
+closing-line and play-bounds requests and the Kalshi candle requests each
+catch an HTTP failure or a malformed body for their game and log it: Error
+for an outage such as a 503, Warning for anything else such as a 404. The
+game is then saved without its closing line or its chart, and the import
+continues and reports itself complete. A Kalshi or ESPN outage therefore sends
+one Error per affected game, as it did before
+[#190](https://github.com/scowalt/nailbiter/issues/190). After the provider
+recovers, a rerun fills in the missing candles.
+`Kalshi_outage_for_one_game_keeps_the_game_without_history_and_a_rerun_fills_it_in`
+checks this through the CLI.
+
+Any other failure in a game stops the import. This covers a failed save, a
+lost database session, an identity conflict with a stored game, and an
+exception from our own code. The games before it stay committed, and the
+import logs one entry with the event and the committed count: Warning for an
+identity conflict and Error for anything else. Caller cancellation is
 rethrown without a log entry. The CLI prints the committed count and exits
 with code 1. The import commits the `college_imports` checkpoint before the
 first game, so a rerun uses the same window. A rerun requests and saves every
@@ -282,12 +296,22 @@ game in the window again and counts them all. It updates stored games in
 place and skips candles it already has, so it ends with the same rows as one
 clean run. The exceptions are retrieval times, such as
 `scoreboard_updated_at` and the pregame `fetched_at`, which take the rerun's
-time. Stopping keeps one event per run and no
-more provider requests after a failure. A database or Kalshi outage would fail
-each game that followed in the same way.
+time.
 
-Operating rule: run the import while no pro save is time-critical, and if it
-stops, fix the cause and rerun the same command. A rerun is safe at any point.
+The import stops for two reasons. First, a database outage would fail each
+game that followed in the same way, so stopping keeps it to one event and no
+more provider requests. Second, stopping is what keeps a lost session safe.
+When the server ends the session, the advisory lock ends with it. EF Core
+would then open a new connection without the lock, and the live collector
+could run between games. `Import_whose_session_is_terminated_is_sent_once_at_error_and_exits_nonzero`
+fails if any game is written after the session is gone. A change that skips a
+failed game and continues must take the lock again or stop.
+
+Operating rule: run the import while no pro save is time-critical. If it stops
+with exit code 1, fix the cause and rerun the same command. If it exits 0
+after logging `College market history unavailable`, `Historical play bounds
+unavailable` or `Closing lines unavailable`, rerun it after the provider
+recovers. A rerun is safe at any point.
 
 To measure again:
 
