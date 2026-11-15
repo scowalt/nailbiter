@@ -409,6 +409,8 @@ public sealed class CollegeFootballBackgroundService(IServiceScopeFactory scopes
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (CollegeCollectorBusyException) { logger.LogInformation("College refresh skipped; another college collector or import holds the lock"); }
+            catch (HttpRequestException ex) when (!KalshiFailure.Is(ex)) { logger.LogWarning(ex, "College refresh failed; stored games retained"); }
+            catch (Exception ex) when (ex is JsonException or InvalidDataException) { logger.LogWarning(ex, "College refresh failed; stored games retained"); }
             catch (Exception ex) { logger.LogError(ex, "College refresh failed; stored games retained"); }
             await Task.Delay(TimeSpan.FromSeconds(30), clock, stoppingToken);
         }
