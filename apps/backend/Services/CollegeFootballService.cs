@@ -391,7 +391,8 @@ public sealed class CollegeFootballService(
     }
 }
 
-public sealed class CollegeFootballBackgroundService(IServiceScopeFactory scopes, ILogger<CollegeFootballBackgroundService> logger) : BackgroundService
+public sealed class CollegeFootballBackgroundService(IServiceScopeFactory scopes, TimeProvider clock,
+    ILogger<CollegeFootballBackgroundService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -404,7 +405,7 @@ public sealed class CollegeFootballBackgroundService(IServiceScopeFactory scopes
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception ex) { logger.LogError(ex, "College refresh failed; stored games retained"); }
-            await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+            await Task.Delay(TimeSpan.FromSeconds(30), clock, stoppingToken);
         }
     }
 }
