@@ -311,6 +311,19 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+if (app.Configuration["SourceRevision"] is { Length: > 0 } sourceRevision)
+{
+    app.Use((context, next) =>
+    {
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers["X-Nailbiter-Revision"] = sourceRevision;
+            return Task.CompletedTask;
+        });
+        return next(context);
+    });
+}
+
 app.Use(async (context, next) =>
 {
     try
