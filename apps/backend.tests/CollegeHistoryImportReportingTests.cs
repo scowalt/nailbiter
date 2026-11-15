@@ -105,7 +105,7 @@ public sealed class CollegeHistoryImportReportingTests
     }
 
     [Fact]
-    public async Task Game_conflicting_with_a_stored_game_stops_the_cli_with_a_warning_and_sends_nothing()
+    public async Task Game_conflicting_with_a_stored_game_is_sent_once_at_error_and_stops_the_cli()
     {
         await using var database = await CollegeHistoryDatabase.StartAsync(4);
         var conflicting = database.Provider.Games[2];
@@ -123,7 +123,9 @@ public sealed class CollegeHistoryImportReportingTests
         var (exitCode, sent) = await ImportAsync(database);
 
         Assert.Equal(1, exitCode);
-        Assert.Empty(sent);
+        var reported = Assert.Single(sent);
+        Assert.Equal(("backend.Services.CollegeFootballService", "error"), (reported.Logger, reported.Level));
+        Assert.Contains(reported.Exceptions, e => e.Value == $"College identity conflict for event {conflicting.Id}");
         Assert.Equal(2, (await database.RowsAsync("SELECT id FROM games WHERE sport = 'cfb'")).Count);
     }
 

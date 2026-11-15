@@ -124,7 +124,7 @@ public sealed class CollegeHistoryImportTests
     }
 
     [Fact]
-    public async Task Event_conflicting_with_a_stored_game_stops_the_import_with_a_warning_after_the_games_before_it()
+    public async Task Event_conflicting_with_a_stored_game_stops_the_import_with_an_error_after_the_games_before_it()
     {
         await using var database = await CollegeHistoryDatabase.StartAsync(4);
         var logs = new Recorder();
@@ -147,8 +147,8 @@ public sealed class CollegeHistoryImportTests
         Assert.Equal((2, false), (import.Games, import.Complete));
         Assert.Equal(2, (await database.RowsAsync("SELECT DISTINCT game_id FROM odds_snapshots")).Count);
         var failure = Assert.Single(logs.Entries, entry => entry.Level >= LogLevel.Warning);
-        Assert.Equal((LogLevel.Warning, Stopped, (int?)2), (failure.Level, failure.Template, failure.Committed));
-        Assert.IsType<InvalidDataException>(failure.Exception);
+        Assert.Equal((LogLevel.Error, Stopped, (int?)2), (failure.Level, failure.Template, failure.Committed));
+        Assert.Equal($"College identity conflict for event {conflicting.Id}", failure.Exception!.Message);
     }
 
     private static readonly string[] Tables =
