@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using backend.Services;
@@ -180,10 +181,13 @@ public sealed class ProviderResilienceClockTests
         var app = new ClockedApp(Answer.Hang, services => services.AddSingleton<LateTimerDisposal>(), disposalGuard: ShortGuard);
         var disposal = app.Services.GetRequiredService<LateTimerDisposal>();
 
+        var started = Stopwatch.GetTimestamp();
         var reported = await Record.ExceptionAsync(() => app.WaitForEntryThreadDisposalAsync(disposal.Started));
+        var elapsed = Stopwatch.GetElapsedTime(started);
 
         Assert.Equal("the entry thread never began disposing the host", Assert.IsType<TimeoutException>(reported).Message);
         Assert.True(disposal.Finished);
+        Assert.InRange(elapsed, ShortGuard, ShortGuard * 5);
     }
 
     [Fact]
