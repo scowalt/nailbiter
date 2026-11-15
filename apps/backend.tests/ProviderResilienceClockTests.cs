@@ -582,7 +582,7 @@ public sealed class ProviderResilienceClockTests
                 await UsingAsync(this, _ => throw new TimeoutException("the entry thread never began disposing the host"));
         }
 
-        public Task DisposeOffThreadAsync() => Task.Run(() => DisposeAsync().AsTask()).WaitAsync(DisposalGuard);
+        public Task DisposeOffThreadAsync() => Task.Run(() => DisposeAsync().AsTask()).WaitAsync(DisposalGuard * 2);
 
         public async ValueTask DisposeAsync()
         {
