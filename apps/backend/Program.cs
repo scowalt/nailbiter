@@ -235,8 +235,12 @@ if (args.Contains("--import-college-history"))
 {
     using var scope = app.Services.CreateScope();
     var importer = scope.ServiceProvider.GetRequiredService<CollegeFootballService>();
-    var count = await importer.RunAsync(initialHistory: true, apply: args.Contains("--apply"), CancellationToken.None);
-    Console.WriteLine($"College initial import: {count} eligible games ({(args.Contains("--apply") ? "committed" : "dry run")}).");
+    var apply = args.Contains("--apply");
+    var import = await importer.ImportHistoryAsync(apply, CancellationToken.None);
+    Console.WriteLine(apply
+        ? $"College initial import: {import.Games} games committed{(import.Complete ? "" : "; incomplete, see the logged failure and rerun to resume")}."
+        : $"College initial import: {import.Games} eligible games (dry run).");
+    if (!import.Complete) Environment.ExitCode = 1;
     return;
 }
 

@@ -389,7 +389,7 @@ public sealed class CollegeEventFailureReportingTests
         public async Task RunAsync(CancellationToken ct)
         {
             using var scope = app.Services.CreateScope();
-            await scope.ServiceProvider.GetRequiredService<CollegeFootballService>().RunAsync(false, true, ct);
+            await scope.ServiceProvider.GetRequiredService<CollegeFootballService>().RunAsync(ct);
         }
 
         public async Task<Game> GameAsync(string id)
