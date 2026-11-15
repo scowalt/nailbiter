@@ -61,7 +61,7 @@ public sealed class CollegeHistoryImportTests
         var import = await database.ImportAsync();
 
         Assert.Equal(2, committedBeforeLive);
-        Assert.Equal("Another college collector/import is running", Assert.IsType<InvalidOperationException>(live).Message);
+        Assert.IsType<CollegeCollectorBusyException>(live);
         Assert.Equal((4, true), (import.Games, import.Complete));
         Assert.Equal(0, await database.AdvisoryLocksAsync());
         await database.CollectLiveAsync();

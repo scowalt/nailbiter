@@ -14,6 +14,10 @@ internal static class CollegeFailure
 
 public sealed record CollegeHistoryImport(int Games, bool Complete);
 
+public sealed class CollegeCollectorBusyException() : Exception("Another college collector/import is running");
+
+public sealed class CollegeIdentityConflictException(string eventId) : Exception($"College identity conflict for event {eventId}");
+
 public sealed class CollegeFootballService(
     ExcitementDbContext db, CollegeEspnClient espn, CollegeKalshiClient kalshi,
     IGameUpdateService updates, TimeProvider time, ILogger<CollegeFootballService> logger)
@@ -151,7 +155,7 @@ public sealed class CollegeFootballService(
     private async Task LockCollectorAsync(string sql, CancellationToken ct)
     {
         if (!await db.Database.SqlQueryRaw<bool>(sql).SingleAsync(ct))
-            throw new InvalidOperationException("Another college collector/import is running");
+            throw new CollegeCollectorBusyException();
     }
 
     private sealed record Discovery(int Season, CollegeImport Checkpoint, Dictionary<string, CollegeTeam> Membership,
@@ -254,7 +258,7 @@ public sealed class CollegeFootballService(
         if (state is not ("pre" or "in" or "post")) return null;
         if (history && state != "post") return null;
         if (game is not null && (game.Sport != "cfb" || game.HomeTeamId != homeId || game.AwayTeamId != awayId))
-            throw new InvalidDataException($"College identity conflict for event {id}");
+            throw new CollegeIdentityConflictException(id);
         var pair = game?.HomeMarketTicker is not null && game.AwayMarketTicker is not null
             ? new CollegeMarketPair(game.HomeMarketTicker, game.AwayMarketTicker)
             : CollegeKalshiClient.Match(listings, start.Value, h.At("abbreviation").Text(), a.At("abbreviation").Text(),
@@ -404,6 +408,7 @@ public sealed class CollegeFootballBackgroundService(IServiceScopeFactory scopes
                 await scope.ServiceProvider.GetRequiredService<CollegeFootballService>().RunAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+            catch (CollegeCollectorBusyException) { logger.LogInformation("College refresh skipped; another college collector or import holds the lock"); }
             catch (Exception ex) { logger.LogError(ex, "College refresh failed; stored games retained"); }
             await Task.Delay(TimeSpan.FromSeconds(30), clock, stoppingToken);
         }
