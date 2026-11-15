@@ -155,7 +155,7 @@ public sealed class ProviderResilienceClockTests
         var fetch = Scoreboards["EspnOdds"].Run(app.Services, CancellationToken.None);
         await app.RunUntilAsync(fetch, () => app.Provider.Attempts is [{ Ended: not null }], AttemptTimeout * 2);
 
-        await Task.Run(() => app.DisposeAsync().AsTask()).WaitAsync(Guard);
+        await app.DisposeOffThreadAsync();
         await fetch.WaitAsync(Guard);
     }
 
@@ -169,7 +169,7 @@ public sealed class ProviderResilienceClockTests
 
         app.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
         await app.WaitForEntryThreadDisposalAsync(disposal.Started);
-        await Task.Run(() => app.DisposeAsync().AsTask()).WaitAsync(Guard);
+        await app.DisposeOffThreadAsync();
 
         Assert.True(disposal.Finished);
     }
@@ -194,9 +194,9 @@ public sealed class ProviderResilienceClockTests
 
         app.Services.GetRequiredService<IHostApplicationLifetime>().StopApplication();
         await app.WaitForEntryThreadDisposalAsync(hang.Started);
-        var reported = await Record.ExceptionAsync(() => app.DisposeAsync().AsTask().WaitAsync(ShortGuard * 2));
+        var reported = await Record.ExceptionAsync(app.DisposeOffThreadAsync);
         hang.Release();
-        await app.DisposeAsync().AsTask().WaitAsync(Guard);
+        await app.DisposeOffThreadAsync();
 
         Assert.StartsWith($"the host was still disposing its services after {ShortGuard}", Assert.IsType<TimeoutException>(reported).Message, StringComparison.Ordinal);
         Assert.Equal(0, app.Clock.TimersCreated);
@@ -581,6 +581,8 @@ public sealed class ProviderResilienceClockTests
             if (await Task.WhenAny(reached, Task.Delay(DisposalGuard)) != reached)
                 await UsingAsync(this, _ => throw new TimeoutException("the entry thread never began disposing the host"));
         }
+
+        public Task DisposeOffThreadAsync() => Task.Run(() => DisposeAsync().AsTask()).WaitAsync(DisposalGuard);
 
         public async ValueTask DisposeAsync()
         {
