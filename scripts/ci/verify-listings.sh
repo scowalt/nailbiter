@@ -46,6 +46,7 @@ set +e
   --report .ci/listing-check.json | tee .ci/listing-check.txt
 code=${PIPESTATUS[0]}
 set -e
+detail=$(grep -m1 -E '^(readiness|revision) ' .ci/listing-check.txt || true)
 
 case "$code" in
   0) finish 0 "Verified: $origin served revision $revision on every listing request, with listing markup and median timing within budget." ;;
@@ -54,7 +55,7 @@ case "$code" in
   4) finish 4 "A listing did not send a complete response within $((timeout_ms / 1000)) s. The release is deployed; a slow listing query is the likely cause." ;;
   5) finish 5 'A listing answered 200 without its listing markup. The release is deployed; open the path and compare it with the page renderer.' ;;
   7) finish 7 'Every listing loaded, but a median was over budget. Do not raise the budget here; open an issue with the attached report.' ;;
-  8) finish 8 "/health did not serve revision $revision within $((ready_ms / 1000)) s; see the last poll below. Another or no revision means the previous container is still serving: check docker ps and the backend logs on the host. A status or request failure points at the proxy or the network. No listing was requested." ;;
-  9) finish 9 'A listing response came from another revision, so a second backend may be behind the proxy. No timing from this run is attributed to the release.' ;;
+  8) finish 8 "/health did not serve revision $revision within $((ready_ms / 1000)) s. No listing was requested. Checker: $detail. If the last poll names a different revision, that revision answered instead of this release (expected $revision): check which container serves on the host with docker ps and the backend logs. A status or request failure points at Cloudflare, Caddy or the network." ;;
+  9) finish 9 "A listing response came from a different revision than this release (expected $revision). Checker: $detail. Check which containers serve behind Caddy on the host. No timing from this run is attributed to the release." ;;
   *) finish "$code" 'The checker stopped without a result. Read its stack trace in this step log.' ;;
 esac
