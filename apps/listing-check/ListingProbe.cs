@@ -34,7 +34,10 @@ public static class ListingProbe
         UseCookies = false,
         AutomaticDecompression = DecompressionMethods.All
     })
-    { Timeout = Timeout.InfiniteTimeSpan };
+    {
+        Timeout = Timeout.InfiniteTimeSpan,
+        DefaultRequestHeaders = { { "User-Agent", "nailbiter-listing-check/1 (+https://github.com/scowalt/nailbiter)" } }
+    };
 
     public static async Task<ProbeResult> RunAsync(HttpClient client, Uri baseUrl, CheckOptions options,
         Func<string, string, IReadOnlyList<string>>? extraCheck, CancellationToken cancellationToken)
