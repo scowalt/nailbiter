@@ -385,7 +385,7 @@ public sealed class MlbScoreboardIngestionTests : IClassFixture<SharedPostgreSql
     }
 
     [Fact]
-    public async Task A_scheduled_game_that_leaves_its_board_keeps_its_accepted_status_and_frame_until_the_board_returns_it()
+    public async Task A_scheduled_game_that_leaves_its_board_is_canceled_without_its_frame_until_the_board_returns_it()
     {
         await Observe("opening");
         provider.Withdraw("991300106");
@@ -393,8 +393,10 @@ public sealed class MlbScoreboardIngestionTests : IClassFixture<SharedPostgreSql
         host.Clock.Advance(TimeSpan.FromMinutes(1));
         await Run();
 
-        Assert.Equal(new Listed("scheduled", 0, 0, null), (await Api())["991300106"]);
-        Assert.Equal(MlbScoreboardPhase.Pregame, (await View("991300106")).Phase);
+        Assert.Equal(new Listed("canceled", null, null, null), (await Api())["991300106"]);
+        var withdrawn = await View("991300106");
+        Assert.Equal(MlbScoreboardPhase.Unavailable, withdrawn.Phase);
+        Assert.Null(withdrawn.Board);
 
         provider.Restore("991300106");
         provider.Corrupt("991300106", e => Restate(e, "STATUS_IN_PROGRESS", "in", "Top 1st", (string)e["date"]!, period: 1));
