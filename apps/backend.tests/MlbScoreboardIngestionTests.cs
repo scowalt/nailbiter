@@ -294,6 +294,29 @@ public sealed class MlbScoreboardIngestionTests : IClassFixture<SharedPostgreSql
     }
 
     [Fact]
+    public async Task A_game_that_ends_forgets_the_frames_it_was_warned_about()
+    {
+        await Observe("opening");
+        provider.Corrupt("991300104", Corruptions["missing-score"]);
+        for (var cycle = 0; cycle < 2; cycle++)
+        {
+            host.Clock.Advance(TimeSpan.FromSeconds(30));
+            await Run();
+        }
+        Assert.Single(Warnings("991300104"));
+        provider.Corrupt("991300104", _ => { });
+        await Observe("resumption");
+
+        provider.Corrupt("991300104", Corruptions["missing-score"]);
+        provider.Serve("opening");
+        host.Clock.Advance(TimeSpan.FromSeconds(30));
+        await Run();
+
+        Assert.Equal(2, Warnings("991300104").Count());
+        Assert.Equal(new Listed("final", 2, 3, 9), (await Api())["991300104"]);
+    }
+
+    [Fact]
     public async Task A_postponed_event_returned_as_scheduled_or_in_progress_leaves_postponed()
     {
         await Observe("opening");
@@ -475,6 +498,9 @@ public sealed class MlbScoreboardIngestionTests : IClassFixture<SharedPostgreSql
             g.GetProperty("status").GetString()!, Int(g.GetProperty("homeScore")), Int(g.GetProperty("awayScore")), Int(g.GetProperty("period"))));
         static int? Int(JsonElement value) => value.ValueKind == JsonValueKind.Number ? value.GetInt32() : null;
     }
+
+    private IEnumerable<Entry> Warnings(string gameId) =>
+        logs.From("backend.Services.MlbScoreboardIngestion").Where(e => e.Level == LogLevel.Warning && e.Message.Contains(gameId));
 
     private async Task<MlbScoreboardView> View(string gameId) =>
         (await host.Services.GetRequiredService<MlbScoreboardStore>().ReadAsync(gameId, CancellationToken.None)).Value;
