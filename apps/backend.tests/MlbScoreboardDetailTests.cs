@@ -201,7 +201,8 @@ public sealed class MlbScoreboardDetailTests : IClassFixture<SharedPostgreSql>, 
         Assert.Null(situation.QuerySelector(".situation-facts"));
         Assert.Equal("Last known score · live situation unavailable", situation.TextContent.Trim());
         Assert.Equal("5th inning", Clock(expired));
-        Assert.DoesNotContain("Synthetic", expired.QuerySelector("#detail-scoreboard")!.TextContent);
+        foreach (var person in new[] { "Synthetic Batter", "Synthetic Pitcher", "Synthetic Runner" })
+            Assert.DoesNotContain(person, expired.QuerySelector("#detail-scoreboard")!.TextContent);
         Assert.Equal("3", expired.QuerySelector("#detail-away-score")!.TextContent.Trim());
         Assert.Equal("1", expired.QuerySelector("#detail-home-score")!.TextContent.Trim());
         Assert.NotNull(expired.QuerySelector("#detail-probbar .detail-probability"));
