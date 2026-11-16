@@ -64,6 +64,13 @@ let private rowCells (doc: IDocument) (row: int) =
     Assert.True(rows.Length > row, $"Expected line score row {row + 1}")
     rows.[row].QuerySelectorAll("td") |> Seq.toList
 
+let private assertNoLineScore (doc: IDocument) =
+    let section = single doc "#mlb-line-score"
+    Assert.Equal("section", section.LocalName)
+    Assert.True(section.HasAttribute "hidden", $"Expected a hidden line score but got {section.OuterHtml}")
+    Assert.False(section.HasAttribute "class", $"Expected no class on {section.OuterHtml}")
+    Assert.Equal(0, section.ChildNodes.Length)
+
 [<Fact>]
 let ``MLB detail reads strip then situation then probability then chart then line score then highlights`` () =
     let doc =
@@ -103,7 +110,7 @@ let ``board absent keeps the stored game scores`` () =
     let doc = livePage (view MlbScoreboardPhase.Unavailable None None)
     Assert.Equal("1", text doc "#detail-away-score")
     Assert.Equal("2", text doc "#detail-home-score")
-    Assert.Null(doc.QuerySelector("#mlb-line-score"))
+    assertNoLineScore doc
     Assert.NotNull(doc.QuerySelector("#mlb-situation"))
 
 [<Fact>]
@@ -172,7 +179,21 @@ let ``line score is a captioned table with column and row headers`` () =
 [<Fact>]
 let ``board without innings shows no line score`` () =
     let doc = page (game "scheduled") (view MlbScoreboardPhase.Pregame (Some(board 0 (team 0 []) (team 0 []))) None)
-    Assert.Null(doc.QuerySelector("#mlb-line-score"))
+    assertNoLineScore doc
+
+let noLineTableCases : obj[] list =
+    [ [| "scheduled"; view MlbScoreboardPhase.Pregame None None |]
+      [| "in_progress"; view MlbScoreboardPhase.Unavailable None None |]
+      [| "scheduled"; view MlbScoreboardPhase.Pregame (Some(board 0 (team 0 []) (team 0 []))) None |] ]
+
+[<Theory>]
+[<MemberData(nameof noLineTableCases)>]
+let ``a page without a line table keeps an empty hidden line score target between the chart and highlights`` (status: string) (scoreboard: MlbScoreboardView) =
+    let doc = pageWith (game status) [ snapshot 0.4 2.0; snapshot 0.45 0.5 ] (HighlightsDetailState(HighlightsDetailStatus.Pending)) scoreboard
+    assertNoLineScore doc
+    let section = single doc "#mlb-line-score"
+    Assert.NotNull(section.PreviousElementSibling.QuerySelector("nb-win-probability-chart"))
+    Assert.Equal("game-highlights", section.NextElementSibling.Id)
 
 [<Theory>]
 [<InlineData("nba")>]
@@ -443,7 +464,7 @@ let ``fragments take scores from the board and fall back to the update`` () =
     let fromUpdate = fragments GameStatus.IN_PROGRESS None (view MlbScoreboardPhase.Unavailable None None)
     Assert.Equal("1", text fromUpdate "#detail-away-score")
     Assert.Equal("2", text fromUpdate "#detail-home-score")
-    Assert.Null(fromUpdate.QuerySelector("#mlb-line-score"))
+    assertNoLineScore fromUpdate
     Assert.Equal("Live scoreboard unavailable", text fromUpdate "#mlb-situation")
     Assert.Equal("@", text fromUpdate "#detail-clock")
 
@@ -472,11 +493,8 @@ let ``a patch equals the page for the same scoreboard`` (status: string) (scoreb
     let g = game status
     let pageDoc = page g scoreboard
     let patch = fragments (GameStatusExtensions.FromDbValue(status).Value) None scoreboard
-    for selector in [ "#mlb-situation"; "#detail-clock"; "#detail-away-score"; "#detail-home-score" ] do
+    for selector in [ "#mlb-situation"; "#detail-clock"; "#detail-away-score"; "#detail-home-score"; "#mlb-line-score" ] do
         Assert.Equal((single pageDoc selector).OuterHtml, (single patch selector).OuterHtml)
-    match pageDoc.QuerySelector("#mlb-line-score") with
-    | null -> Assert.Null(patch.QuerySelector("#mlb-line-score"))
-    | section -> Assert.Equal(section.OuterHtml, (single patch "#mlb-line-score").OuterHtml)
 
 let private badge (doc: IDocument) =
     let element = single doc "#detail-status"
@@ -567,7 +585,7 @@ let private assertSettled (doc: IDocument) (label: string) =
     Assert.Null(doc.QuerySelector("#mlb-situation .situation-facts"))
     Assert.Equal("", text doc "#mlb-situation")
     Assert.Equal(label, fst (badge doc))
-    Assert.Null(doc.QuerySelector("#mlb-line-score"))
+    assertNoLineScore doc
     Assert.DoesNotContain("%", text doc "#detail-probbar")
     Assert.Equal("1", text doc "#detail-away-score")
     Assert.Equal("2", text doc "#detail-home-score")
@@ -585,6 +603,14 @@ let ``a settled stored status overrides an in progress frame on the page`` statu
 [<InlineData("canceled", "Canceled")>]
 let ``a settled update status overrides an in progress frame in the patch`` status label =
     assertSettled (fragments (GameStatusExtensions.FromDbValue(status).Value) (Some 0.6) (live richContext)) label
+
+[<Fact>]
+let ``a settled update empties the in progress line score an open page shows`` () =
+    let inProgress = view MlbScoreboardPhase.Live (Some fiveInnings) (Some richContext)
+    let section = single (livePage inProgress) "section#mlb-line-score.panel"
+    Assert.Equal(2, section.QuerySelectorAll("table.line-score tbody tr").Length)
+    for status in [ GameStatus.FINAL; GameStatus.CANCELED ] do
+        assertNoLineScore (fragments status None inProgress)
 
 [<Fact>]
 let ``a final frame that agrees with the stored status keeps its extra innings`` () =

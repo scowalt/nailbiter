@@ -262,7 +262,7 @@ public sealed class MlbScoreboardDetailTests : IClassFixture<SharedPostgreSql>, 
         Assert.Equal(Score(competitors, "away"), page.QuerySelector("#detail-away-score")!.TextContent.Trim());
         Assert.Equal(Score(competitors, "home"), page.QuerySelector("#detail-home-score")!.TextContent.Trim());
         if (innings == 0)
-            Assert.Null(page.QuerySelector("#mlb-line-score"));
+            AssertNoLineScore(page);
         else
             AssertLineScoreShell(page, innings);
     }
@@ -422,7 +422,42 @@ public sealed class MlbScoreboardDetailTests : IClassFixture<SharedPostgreSql>, 
         foreach (var person in new[] { "Synthetic Batter", "Synthetic Pitcher", "Synthetic Runner" })
             Assert.DoesNotContain(person, document.Body!.TextContent);
         Assert.Equal("Final", document.QuerySelector("#detail-status")!.TextContent.Trim());
-        Assert.Null(document.QuerySelector("#mlb-line-score"));
+        AssertNoLineScore(document);
+    }
+
+    [Fact]
+    public async Task A_final_update_empties_the_in_progress_line_score_an_open_page_shows()
+    {
+        var game = MlbGame(Doubleheader);
+        await host.SeedAsync(game, [Odds(Doubleheader, "2027-07-10T23:29:00Z", 0.4)]);
+        At("2027-07-10T23:30:00Z");
+        Accepted(await AcceptAsync(Frame("active-complete", "opening")));
+        At("2027-07-10T23:30:10Z");
+
+        using (var page = await PageAsync(Doubleheader))
+        {
+            Assert.NotNull(page.QuerySelector("section#mlb-line-score.panel"));
+            AssertLineScoreShell(page, 5);
+        }
+
+        using (var scope = host.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Games.Where(g => g.Id == Doubleheader).ExecuteUpdateAsync(s => s
+                .SetProperty(g => g.Status, "final")
+                .SetProperty(g => g.AwayScore, 5)
+                .SetProperty(g => g.HomeScore, 6));
+
+        await using var stream = new SsePeer(host.Client, $"/sse/game/{Doubleheader}");
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var reading = stream.ReadForAsync("detail-away-score");
+        await broadcaster.ReadyAsync([$"game:{Doubleheader}"], deadline.Token);
+        var update = Update(Doubleheader, Sport.MLB, game.HomeTeam, game.AwayTeam, game.HomeTeamAbbreviation, game.AwayTeamAbbreviation, home: 6, away: 5);
+        update.Status = GameStatus.FINAL;
+        await broadcaster.PublishAsync(update, deadline.Token);
+        using var fragments = await reading;
+
+        Assert.Equal("5", fragments.QuerySelector("#detail-away-score")!.TextContent.Trim());
+        Assert.Equal("6", fragments.QuerySelector("#detail-home-score")!.TextContent.Trim());
+        AssertNoLineScore(fragments);
     }
 
     [Fact]
@@ -441,7 +476,7 @@ public sealed class MlbScoreboardDetailTests : IClassFixture<SharedPostgreSql>, 
         Assert.Null(situation.QuerySelector(".situation-facts"));
         Assert.Equal("Live scoreboard unavailable", situation.TextContent.Trim());
         Assert.Equal("Live", page.QuerySelector("#detail-status")!.TextContent.Trim());
-        Assert.Null(page.QuerySelector("#mlb-line-score"));
+        AssertNoLineScore(page);
         Assert.Equal("2", page.QuerySelector("#detail-away-score")!.TextContent.Trim());
         Assert.Equal("4", page.QuerySelector("#detail-home-score")!.TextContent.Trim());
         Assert.NotNull(page.QuerySelector("#detail-probbar .detail-probability"));
@@ -485,6 +520,16 @@ public sealed class MlbScoreboardDetailTests : IClassFixture<SharedPostgreSql>, 
         Assert.Null(document.QuerySelector("#mlb-situation"));
         Assert.Null(document.QuerySelector("#mlb-line-score"));
         Assert.Null(document.QuerySelector(".scoreboard-side"));
+    }
+
+    private static void AssertNoLineScore(IDocument document)
+    {
+        var section = document.QuerySelector("#mlb-line-score");
+        Assert.NotNull(section);
+        Assert.Equal("section", section.LocalName);
+        Assert.True(section.HasAttribute("hidden"), $"Expected a hidden line score but got {section.OuterHtml}");
+        Assert.False(section.HasAttribute("class"), $"Expected no class on {section.OuterHtml}");
+        Assert.Equal(0, section.ChildNodes.Length);
     }
 
     private static void AssertInDocumentOrder(IDocument page, params IElement[] elements)
