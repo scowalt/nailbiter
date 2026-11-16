@@ -14,6 +14,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 INSTALL = 'sh scripts/ci/install-dotnet-sdk.sh'
+CHECK = 'sh scripts/ci/check-dotnet-sdk.sh'
 SDK = json.loads((ROOT / 'apps/backend/global.json').read_text())['sdk']['version']
 ARCHIVE = f'dotnet-sdk-{SDK}-linux-x64.tar.gz'
 URL = f'https://builds.dotnet.microsoft.com/dotnet/Sdk/{SDK}/{ARCHIVE}'
@@ -44,13 +45,14 @@ class DotnetSdkWorkflowTests(unittest.TestCase):
         runs_dotnet = r'(?<![\w-])dotnet(?![\w-])|package-listing-check\.sh|backend-test-shard\.py|scripts/test-backend'
         for name, job in self.jobs.items():
             runs = [step.get('run', '') for step in job['steps']]
-            first_dotnet = next((i for i, run in enumerate(runs) if run.strip() != INSTALL and re.search(runs_dotnet, run)), None)
+            first_dotnet = next((i for i, run in enumerate(runs) if run.strip() not in (INSTALL, CHECK) and re.search(runs_dotnet, run)), None)
             if first_dotnet is None:
                 continue
             users.append(name)
             installs = [i for i, run in enumerate(runs) if run.strip() == INSTALL]
             self.assertEqual(len(installs), 1, name)
-            self.assertLess(installs[0], first_dotnet, name)
+            self.assertEqual([i for i, run in enumerate(runs) if run.strip() == CHECK], [installs[0] + 1], name)
+            self.assertLess(installs[0] + 1, first_dotnet, name)
         self.assertEqual(sorted(users), ['backend-tests', 'checks', 'listing-checker'])
 
     def test_no_job_installs_dotnet_through_the_mise_plugin(self):
@@ -138,6 +140,7 @@ class DotnetSdkInstallTests(unittest.TestCase):
         self.assertEqual(download[-1], URL)
         self.assertEqual(download[download.index('--proto') + 1], '=https')
         self.assertEqual(download[download.index('--proto-redir') + 1], '=https')
+        self.assertIn('--tlsv1.2', download)
 
     def test_tarball_that_does_not_match_the_committed_sha512_fails_before_extraction(self):
         (self.workspace / 'scripts/ci/dotnet-sdk.sha512').write_bytes((ROOT / 'scripts/ci/dotnet-sdk.sha512').read_bytes())
@@ -181,6 +184,61 @@ class DotnetSdkInstallTests(unittest.TestCase):
         self.pin(self.tarball.read_bytes())
         self.assert_nothing_installed(self.install({'FIXTURE_CURL_EXIT': '22'}))
         self.assertEqual([download[-1] for download in self.downloads()], [URL])
+
+
+class DotnetSdkCheckTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.workspace = self.root / 'workspace'
+        (self.workspace / 'apps/backend').mkdir(parents=True)
+        (self.workspace / 'apps/backend/global.json').write_bytes((ROOT / 'apps/backend/global.json').read_bytes())
+        self.runner_temp = self.root / 'runner temp $x'
+        self.pinned = self.runner_temp / 'dotnet'
+        self.elsewhere = self.root / 'usr-bin'
+        self.tools = self.root / 'tools'
+        self.tools.mkdir()
+        for tool in ['sed', 'cat', 'printf']:
+            found = subprocess.run(['sh', '-c', f'command -v {tool}'], capture_output=True, text=True).stdout.strip()
+            if found.startswith('/'):
+                (self.tools / tool).symlink_to(found)
+
+    def dotnet(self, directory, version):
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / 'dotnet').write_text(f'#!/bin/sh\n[ "$1" = --version ] && echo {version}\n')
+        (directory / 'dotnet').chmod(0o755)
+
+    def check(self, *path):
+        env = {'PATH': os.pathsep.join([*map(str, path), str(self.tools)]), 'RUNNER_TEMP': str(self.runner_temp)}
+        return subprocess.run([subprocess.run(['sh', '-c', 'command -v sh'], capture_output=True, text=True).stdout.strip(),
+                               str(ROOT / 'scripts/ci/check-dotnet-sdk.sh')], cwd=self.workspace, env=env, capture_output=True, text=True, timeout=30)
+
+    def test_pinned_sdk_first_on_the_path_passes_and_logs_its_version_and_location(self):
+        self.dotnet(self.pinned, SDK)
+        self.dotnet(self.elsewhere, SDK)
+        result = self.check(self.pinned, self.elsewhere)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(f'dotnet --version: {SDK}', result.stdout)
+        self.assertIn(f'command -v dotnet: {self.pinned}/dotnet', result.stdout)
+
+    def test_another_dotnet_ahead_of_the_pinned_sdk_fails(self):
+        self.dotnet(self.pinned, SDK)
+        self.dotnet(self.elsewhere, SDK)
+        result = self.check(self.elsewhere, self.pinned)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn('::error title=.NET SDK not on PATH::', result.stdout)
+
+    def test_pinned_sdk_reporting_another_version_fails(self):
+        self.dotnet(self.pinned, '10.0.404')
+        result = self.check(self.pinned)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn('::error title=.NET SDK version mismatch::', result.stdout)
+
+    def test_missing_dotnet_fails(self):
+        result = self.check()
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn('::error title=.NET SDK not on PATH::', result.stdout)
 
 
 if __name__ == '__main__':

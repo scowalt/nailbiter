@@ -293,7 +293,7 @@ class ReleaseVerificationWorkflowTests(unittest.TestCase):
         actions = [step['uses'].split('@')[0] for step in steps if 'uses' in step]
         self.assertEqual(actions, ['actions/checkout', 'actions/upload-artifact'])
         runs = [step['run'] for step in steps if 'run' in step]
-        self.assertEqual(runs, ['sh scripts/ci/install-dotnet-sdk.sh', 'sh scripts/ci/verify-checkout.sh\nsh scripts/ci/package-listing-check.sh\n'])
+        self.assertEqual(runs, ['sh scripts/ci/install-dotnet-sdk.sh', 'sh scripts/ci/check-dotnet-sdk.sh', 'sh scripts/ci/verify-checkout.sh\nsh scripts/ci/package-listing-check.sh\n'])
         package = next(i for i, step in enumerate(steps) if 'package-listing-check.sh' in step.get('run', ''))
         self.assertEqual(steps[package]['env'], {'DOTNET_CLI_TELEMETRY_OPTOUT': '1', 'DOTNET_NOLOGO': '1'})
         self.assertEqual(job['outputs'], {'sha256': f"${{{{ steps.{steps[package]['id']}.outputs.sha256 }}}}"})
