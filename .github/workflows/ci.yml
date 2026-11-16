@@ -210,9 +210,13 @@ jobs:
         run: |
           sh scripts/ci/verify-checkout.sh
           sh scripts/ci/build-image.sh
+      - name: Install pinned Trivy
+        run: sh scripts/ci/install-trivy.sh
       - name: Scan the exact image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
+          skip-setup-trivy: true
+          cache: false
           image-ref: nailbiter-backend:scan
           format: table
           severity: CRITICAL,HIGH
