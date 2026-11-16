@@ -10,4 +10,9 @@ printf '%s  %s\n' "$sha256" "$archive" | sha256sum --check
 mkdir "$directory"
 unzip -q -j "$archive" bun-linux-x64/bun -d "$directory"
 ln -s bun "$directory/bunx"
+installed=$("$directory/bun" --version)
+if [ "$installed" != "$version" ]; then
+  printf 'bun --version printed %s, expected %s\n' "$installed" "$version" >&2
+  exit 1
+fi
 printf '%s\n' "$directory" >> "${GITHUB_PATH:?GitHub path export is required}"
