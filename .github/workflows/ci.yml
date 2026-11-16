@@ -10,6 +10,9 @@ on:
 permissions:
   contents: read
 
+env:
+  MISE_DISABLE_TOOLS: asdf:mise-plugins/mise-dotnet-core
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -36,6 +39,8 @@ jobs:
           uv run --no-project --with-requirements .comment-policy/requirements.txt python .comment-policy/check.py
           uv run --no-project --with-requirements .comment-policy/requirements.txt python -m unittest discover -s .comment-policy -v
           gitleaks git --config .gitleaks.toml --redact=100 --log-opts=--all
+      - name: Install the pinned .NET SDK
+        run: sh scripts/ci/install-dotnet-sdk.sh
       - name: Lint and browser regressions
         run: |
           bun install --frozen-lockfile --ignore-scripts
@@ -103,13 +108,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
-        with:
-          version: 2026.11.8
-          sha256: 32b6abe844efa43d37d7ac4ed21d2ec41e9479d66feb19b0db8d2c548cd6e36d
-          install_args: asdf:mise-plugins/mise-dotnet-core
-          cache: false
-          github_token: ''
+      - name: Install the pinned .NET SDK
+        run: sh scripts/ci/install-dotnet-sdk.sh
       - name: Publish the self-contained checker
         id: package
         env:
@@ -144,6 +144,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+      - name: Install the pinned .NET SDK
+        run: sh scripts/ci/install-dotnet-sdk.sh
       - name: Build the C# test suite
         run: |
           sh scripts/ci/verify-checkout.sh
