@@ -1005,12 +1005,52 @@
                       {
                         "id": "9118",
                         "homeAway": "home",
-                        "score": "1",
+                        "score": "2",
                         "team": {
                           "id": "9118",
                           "abbreviation": "MIN",
                           "displayName": "Synthetic MIN",
                           "name": "MIN"
+                        },
+                        "hits": 5,
+                        "errors": 0,
+                        "linescores": [
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 1
+                          },
+                          {
+                            "value": 2.0,
+                            "displayValue": "2",
+                            "period": 2
+                          },
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 3
+                          },
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 4
+                          },
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 5
+                          }
+                        ]
+                      },
+                      {
+                        "id": "9111",
+                        "homeAway": "away",
+                        "score": "1",
+                        "team": {
+                          "id": "9111",
+                          "abbreviation": "DET",
+                          "displayName": "Synthetic DET",
+                          "name": "DET"
                         },
                         "hits": 4,
                         "errors": 0,
@@ -1044,46 +1084,6 @@
                             "value": 0.0,
                             "displayValue": "0",
                             "period": 6
-                          }
-                        ]
-                      },
-                      {
-                        "id": "9111",
-                        "homeAway": "away",
-                        "score": "2",
-                        "team": {
-                          "id": "9111",
-                          "abbreviation": "DET",
-                          "displayName": "Synthetic DET",
-                          "name": "DET"
-                        },
-                        "hits": 5,
-                        "errors": 0,
-                        "linescores": [
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 1
-                          },
-                          {
-                            "value": 2.0,
-                            "displayValue": "2",
-                            "period": 2
-                          },
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 3
-                          },
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 4
-                          },
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 5
                           }
                         ]
                       }
@@ -1438,18 +1438,6 @@
               "away": {
                 "innings": [
                   0,
-                  2,
-                  0,
-                  0,
-                  0
-                ],
-                "runs": 2,
-                "hits": 5,
-                "errors": 0
-              },
-              "home": {
-                "innings": [
-                  0,
                   0,
                   0,
                   1,
@@ -1458,6 +1446,18 @@
                 ],
                 "runs": 1,
                 "hits": 4,
+                "errors": 0
+              },
+              "home": {
+                "innings": [
+                  0,
+                  2,
+                  0,
+                  0,
+                  0
+                ],
+                "runs": 2,
+                "hits": 5,
                 "errors": 0
               }
             },
@@ -2432,12 +2432,52 @@
                       {
                         "id": "9118",
                         "homeAway": "home",
-                        "score": "1",
+                        "score": "2",
                         "team": {
                           "id": "9118",
                           "abbreviation": "MIN",
                           "displayName": "Synthetic MIN",
                           "name": "MIN"
+                        },
+                        "hits": 5,
+                        "errors": 0,
+                        "linescores": [
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 1
+                          },
+                          {
+                            "value": 2.0,
+                            "displayValue": "2",
+                            "period": 2
+                          },
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 3
+                          },
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 4
+                          },
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 5
+                          }
+                        ]
+                      },
+                      {
+                        "id": "9111",
+                        "homeAway": "away",
+                        "score": "1",
+                        "team": {
+                          "id": "9111",
+                          "abbreviation": "DET",
+                          "displayName": "Synthetic DET",
+                          "name": "DET"
                         },
                         "hits": 4,
                         "errors": 0,
@@ -2471,46 +2511,6 @@
                             "value": 0.0,
                             "displayValue": "0",
                             "period": 6
-                          }
-                        ]
-                      },
-                      {
-                        "id": "9111",
-                        "homeAway": "away",
-                        "score": "2",
-                        "team": {
-                          "id": "9111",
-                          "abbreviation": "DET",
-                          "displayName": "Synthetic DET",
-                          "name": "DET"
-                        },
-                        "hits": 5,
-                        "errors": 0,
-                        "linescores": [
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 1
-                          },
-                          {
-                            "value": 2.0,
-                            "displayValue": "2",
-                            "period": 2
-                          },
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 3
-                          },
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 4
-                          },
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 5
                           }
                         ]
                       }
@@ -2868,18 +2868,6 @@
               "away": {
                 "innings": [
                   0,
-                  2,
-                  0,
-                  0,
-                  0
-                ],
-                "runs": 2,
-                "hits": 5,
-                "errors": 0
-              },
-              "home": {
-                "innings": [
-                  0,
                   0,
                   0,
                   1,
@@ -2888,6 +2876,18 @@
                 ],
                 "runs": 1,
                 "hits": 4,
+                "errors": 0
+              },
+              "home": {
+                "innings": [
+                  0,
+                  2,
+                  0,
+                  0,
+                  0
+                ],
+                "runs": 2,
+                "hits": 5,
                 "errors": 0
               }
             },
@@ -3827,12 +3827,52 @@
                       {
                         "id": "9118",
                         "homeAway": "home",
-                        "score": "1",
+                        "score": "2",
                         "team": {
                           "id": "9118",
                           "abbreviation": "MIN",
                           "displayName": "Synthetic MIN",
                           "name": "MIN"
+                        },
+                        "hits": 5,
+                        "errors": 0,
+                        "linescores": [
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 1
+                          },
+                          {
+                            "value": 2.0,
+                            "displayValue": "2",
+                            "period": 2
+                          },
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 3
+                          },
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 4
+                          },
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 5
+                          }
+                        ]
+                      },
+                      {
+                        "id": "9111",
+                        "homeAway": "away",
+                        "score": "1",
+                        "team": {
+                          "id": "9111",
+                          "abbreviation": "DET",
+                          "displayName": "Synthetic DET",
+                          "name": "DET"
                         },
                         "hits": 4,
                         "errors": 0,
@@ -3866,46 +3906,6 @@
                             "value": 0.0,
                             "displayValue": "0",
                             "period": 6
-                          }
-                        ]
-                      },
-                      {
-                        "id": "9111",
-                        "homeAway": "away",
-                        "score": "2",
-                        "team": {
-                          "id": "9111",
-                          "abbreviation": "DET",
-                          "displayName": "Synthetic DET",
-                          "name": "DET"
-                        },
-                        "hits": 5,
-                        "errors": 0,
-                        "linescores": [
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 1
-                          },
-                          {
-                            "value": 2.0,
-                            "displayValue": "2",
-                            "period": 2
-                          },
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 3
-                          },
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 4
-                          },
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 5
                           }
                         ]
                       }
@@ -4256,18 +4256,6 @@
               "away": {
                 "innings": [
                   0,
-                  2,
-                  0,
-                  0,
-                  0
-                ],
-                "runs": 2,
-                "hits": 5,
-                "errors": 0
-              },
-              "home": {
-                "innings": [
-                  0,
                   0,
                   0,
                   1,
@@ -4276,6 +4264,18 @@
                 ],
                 "runs": 1,
                 "hits": 4,
+                "errors": 0
+              },
+              "home": {
+                "innings": [
+                  0,
+                  2,
+                  0,
+                  0,
+                  0
+                ],
+                "runs": 2,
+                "hits": 5,
                 "errors": 0
               }
             },
@@ -5235,12 +5235,52 @@
                       {
                         "id": "9118",
                         "homeAway": "home",
-                        "score": "1",
+                        "score": "2",
                         "team": {
                           "id": "9118",
                           "abbreviation": "MIN",
                           "displayName": "Synthetic MIN",
                           "name": "MIN"
+                        },
+                        "hits": 5,
+                        "errors": 0,
+                        "linescores": [
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 1
+                          },
+                          {
+                            "value": 2.0,
+                            "displayValue": "2",
+                            "period": 2
+                          },
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 3
+                          },
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 4
+                          },
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 5
+                          }
+                        ]
+                      },
+                      {
+                        "id": "9111",
+                        "homeAway": "away",
+                        "score": "1",
+                        "team": {
+                          "id": "9111",
+                          "abbreviation": "DET",
+                          "displayName": "Synthetic DET",
+                          "name": "DET"
                         },
                         "hits": 4,
                         "errors": 0,
@@ -5274,46 +5314,6 @@
                             "value": 0.0,
                             "displayValue": "0",
                             "period": 6
-                          }
-                        ]
-                      },
-                      {
-                        "id": "9111",
-                        "homeAway": "away",
-                        "score": "2",
-                        "team": {
-                          "id": "9111",
-                          "abbreviation": "DET",
-                          "displayName": "Synthetic DET",
-                          "name": "DET"
-                        },
-                        "hits": 5,
-                        "errors": 0,
-                        "linescores": [
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 1
-                          },
-                          {
-                            "value": 2.0,
-                            "displayValue": "2",
-                            "period": 2
-                          },
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 3
-                          },
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 4
-                          },
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 5
                           }
                         ]
                       }
@@ -5668,18 +5668,6 @@
               "away": {
                 "innings": [
                   0,
-                  2,
-                  0,
-                  0,
-                  0
-                ],
-                "runs": 2,
-                "hits": 5,
-                "errors": 0
-              },
-              "home": {
-                "innings": [
-                  0,
                   0,
                   0,
                   1,
@@ -5688,6 +5676,18 @@
                 ],
                 "runs": 1,
                 "hits": 4,
+                "errors": 0
+              },
+              "home": {
+                "innings": [
+                  0,
+                  2,
+                  0,
+                  0,
+                  0
+                ],
+                "runs": 2,
+                "hits": 5,
                 "errors": 0
               }
             },
@@ -6667,12 +6667,52 @@
                       {
                         "id": "9118",
                         "homeAway": "home",
-                        "score": "1",
+                        "score": "2",
                         "team": {
                           "id": "9118",
                           "abbreviation": "MIN",
                           "displayName": "Synthetic MIN",
                           "name": "MIN"
+                        },
+                        "hits": 5,
+                        "errors": 0,
+                        "linescores": [
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 1
+                          },
+                          {
+                            "value": 2.0,
+                            "displayValue": "2",
+                            "period": 2
+                          },
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 3
+                          },
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 4
+                          },
+                          {
+                            "value": 0.0,
+                            "displayValue": "0",
+                            "period": 5
+                          }
+                        ]
+                      },
+                      {
+                        "id": "9111",
+                        "homeAway": "away",
+                        "score": "1",
+                        "team": {
+                          "id": "9111",
+                          "abbreviation": "DET",
+                          "displayName": "Synthetic DET",
+                          "name": "DET"
                         },
                         "hits": 4,
                         "errors": 0,
@@ -6706,46 +6746,6 @@
                             "value": 0.0,
                             "displayValue": "0",
                             "period": 6
-                          }
-                        ]
-                      },
-                      {
-                        "id": "9111",
-                        "homeAway": "away",
-                        "score": "2",
-                        "team": {
-                          "id": "9111",
-                          "abbreviation": "DET",
-                          "displayName": "Synthetic DET",
-                          "name": "DET"
-                        },
-                        "hits": 5,
-                        "errors": 0,
-                        "linescores": [
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 1
-                          },
-                          {
-                            "value": 2.0,
-                            "displayValue": "2",
-                            "period": 2
-                          },
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 3
-                          },
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 4
-                          },
-                          {
-                            "value": 0.0,
-                            "displayValue": "0",
-                            "period": 5
                           }
                         ]
                       }
@@ -7104,18 +7104,6 @@
               "away": {
                 "innings": [
                   0,
-                  2,
-                  0,
-                  0,
-                  0
-                ],
-                "runs": 2,
-                "hits": 5,
-                "errors": 0
-              },
-              "home": {
-                "innings": [
-                  0,
                   0,
                   0,
                   1,
@@ -7124,6 +7112,18 @@
                 ],
                 "runs": 1,
                 "hits": 4,
+                "errors": 0
+              },
+              "home": {
+                "innings": [
+                  0,
+                  2,
+                  0,
+                  0,
+                  0
+                ],
+                "runs": 2,
+                "hits": 5,
                 "errors": 0
               }
             },
