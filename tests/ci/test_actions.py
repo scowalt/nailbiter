@@ -17,6 +17,26 @@ DIGEST = IMAGE + '@sha256:' + 'b' * 64
 LEGACY_DIGEST = 'ghcr.io/scowalt/nailbiter-app/backend@sha256:' + 'b' * 64
 
 
+def action_uses(workflows):
+    for workflow in sorted(workflows.glob('*.y*ml')):
+        for job_name, job in yaml.safe_load(workflow.read_text())['jobs'].items():
+            if 'uses' in job:
+                yield f'{workflow.name}:{job_name}', job
+            for index, step in enumerate(job.get('steps', [])):
+                if 'uses' in step:
+                    yield f'{workflow.name}:{job_name}[{index}]', step
+
+
+def action_pin_problems(workflows=ROOT / '.github/workflows'):
+    problems = []
+    for source, use in action_uses(workflows):
+        if not re.match(r'^[\w.-]+/[\w./-]+@[0-9a-f]{40}$', use['uses']):
+            problems.append(f'{source}: {use["uses"]!r} is not pinned to a full commit SHA')
+        if use['uses'].lower().startswith('actions/checkout@') and use.get('with', {}).get('persist-credentials') is not False:
+            problems.append(f'{source}: checkout must set persist-credentials: false')
+    return problems
+
+
 class PipelineTests(unittest.TestCase):
     def setUp(self):
         self.workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
@@ -44,13 +64,7 @@ class PipelineTests(unittest.TestCase):
         self.assertFalse((ROOT / '.woodpecker').exists())
 
     def test_action_pins_and_checkout_credentials(self):
-        for job in self.jobs.values():
-            for step in job['steps']:
-                if 'uses' not in step:
-                    continue
-                self.assertRegex(step['uses'], r'^[\w/-]+@[0-9a-f]{40}$')
-                if step['uses'].startswith('actions/checkout@'):
-                    self.assertFalse(step['with']['persist-credentials'])
+        self.assertEqual(action_pin_problems(), [])
 
     def test_all_validation_contracts_remain(self):
         text = json.dumps([self.jobs[name] for name in ['checks', 'backend-tests', 'validate']])
@@ -129,6 +143,24 @@ class PipelineTests(unittest.TestCase):
         backend = json.loads(result.stdout)['services']['backend']
         self.assertEqual(backend['image'], DIGEST)
         self.assertEqual(backend['environment']['Highlights__Worker__AuthorizeLaunchCatchup'], 'false')
+
+
+class ActionPinRuleTests(unittest.TestCase):
+    def test_every_workflow_file_pins_step_and_job_uses_in_any_letter_case(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workflows = Path(directory)
+            (workflows / 'ci.yml').write_text(f'jobs:\n  build:\n    steps:\n      - uses: actions/checkout@{"a" * 40}\n        with:\n          persist-credentials: false\n')
+            (workflows / 'other.yaml').write_text(f'''jobs:
+  call:
+    uses: octo/reusable/.github/workflows/build.yml@main
+  build:
+    steps:
+      - uses: actions/setup-node@v4
+      - uses: docker://alpine:3.20
+      - uses: Actions/Checkout@{"a" * 40}
+''')
+            problems = action_pin_problems(workflows)
+        self.assertEqual([problem.split(':', 2)[1] for problem in problems], ['call', 'build[0]', 'build[1]', 'build[2]'], problems)
 
 
 class ScriptTests(unittest.TestCase):

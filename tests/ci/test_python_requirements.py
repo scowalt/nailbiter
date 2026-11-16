@@ -1,4 +1,5 @@
 from pathlib import Path
+import itertools
 import re
 import shlex
 import tempfile
@@ -10,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENT = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*==[0-9][A-Za-z0-9.+!-]*$')
 HASH = re.compile(r'^--hash=sha256:[0-9a-f]{64}$')
 INSTALLERS = {'uvx', 'pipx'}
+PIP = re.compile(r'pip[0-9.]*')
+SEPARATORS = {'&&', '||', ';', '|'}
 MIN_HASHED_FILES = 3
 
 
@@ -47,11 +50,18 @@ def hashed_file_problems(path):
 def install_problems(tokens):
     problems = []
     for start, token in enumerate(tokens):
-        if token in INSTALLERS or tokens[start:start + 2] == ['uv', 'tool']:
+        if token in INSTALLERS:
             problems.append(f'{token} installs packages without a hashed requirements file')
-        if tokens[start:start + 2] == ['uv', 'run'] and any(re.fullmatch(r'--with([-=]\S*)?|-w\S*', arg) for arg in tokens[start + 2:]):
-            problems.append('uv run --with resolves packages without checking hashes; use uv pip install --require-hashes')
-        if token == 'pip' and tokens[start + 1:start + 2] == ['install']:
+        if token == 'uv':
+            command = list(itertools.takewhile(lambda arg: arg not in SEPARATORS, tokens[start + 1:]))
+            if command[:1] == ['run']:
+                if '--no-project' not in command:
+                    problems.append('uv run without --no-project installs the nearest pyproject.toml project instead of a hashed requirements file')
+                if any(re.fullmatch(r'--with([-=]\S*)?|-w\S*', arg) for arg in command):
+                    problems.append('uv run --with resolves packages without checking hashes; use uv pip install --require-hashes')
+            elif command[:1] != ['venv'] and command[:2] != ['pip', 'install']:
+                problems.append(f'uv {" ".join(command[:2])} is not one of uv venv, uv pip install or uv run --no-project')
+        if PIP.fullmatch(token) and tokens[start + 1:start + 2] == ['install']:
             if tokens[start - 1:start] != ['uv']:
                 problems.append('use uv pip install, not pip install')
                 continue
@@ -66,7 +76,7 @@ def install_problems(tokens):
                     requirement_files.append(next(remaining, ''))
                 elif arg == '--python':
                     next(remaining, None)
-                elif arg in {'&&', '||', ';', '|'}:
+                elif arg in SEPARATORS:
                     break
                 elif not arg.startswith('-'):
                     problems.append(f'uv pip install names {arg!r} outside a hashed requirements file')
@@ -77,13 +87,17 @@ def install_problems(tokens):
     return problems
 
 
+def line_install_problems(line):
+    if not re.search(r'\b(pip[0-9.]*|uvx|pipx|uv)\b', line):
+        return []
+    return install_problems(shlex.split(line, comments=True))
+
+
 def ci_install_problems():
     found = []
     for source, text in ci_sources():
         for line in logical_lines(text):
-            if not re.search(r'\b(pip|uvx|pipx|uv\s+run|uv\s+tool)\b', line):
-                continue
-            for problem in install_problems(shlex.split(line, comments=True)):
+            for problem in line_install_problems(line):
                 found.append(f'{source}: {problem}: {line.strip()}')
     return found
 
@@ -142,6 +156,16 @@ class InstallRuleTests(unittest.TestCase):
 
     def test_allows_uv_run_without_extra_packages(self):
         self.assertEqual(self.problems('uv run --no-project python -m unittest'), [])
+
+    def test_rejects_versioned_pip_uv_sync_and_uv_run_that_reads_a_project(self):
+        for line in ['pip3 install pyyaml', 'pip3.14 install --require-hashes -r r.txt', 'uv sync', 'uv sync --frozen', 'uv pip sync r.txt', 'cd apps/analysis && uv run python -m unittest', 'uv run --project apps/analysis python', 'uv --directory apps/analysis run python', 'uv run python -m unittest && uv run --no-project python -c 1']:
+            with self.subTest(line=line):
+                self.assertNotEqual(line_install_problems(line), [])
+
+    def test_allows_the_commands_ci_runs(self):
+        for line in ['uv venv "$RUNNER_TEMP/tests-ci"', f'uv pip install --python "$RUNNER_TEMP/v" --require-hashes --no-build -r {self.hashed}', 'uv run --no-project python -m unittest', 'bunx playwright install --with-deps chromium']:
+            with self.subTest(line=line):
+                self.assertEqual(line_install_problems(line), [])
 
     def test_hashed_file_rejects_ranges_missing_hashes_and_extra_options(self):
         digest = '--hash=sha256:' + 'a' * 64
