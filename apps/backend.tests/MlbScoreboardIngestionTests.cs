@@ -129,7 +129,7 @@ public sealed class MlbScoreboardIngestionTests : IClassFixture<SharedPostgreSql
         await Observe("opening");
         await Observe("advance");
         var before = await View("991300104");
-        provider.FailScoreboards = true;
+        provider.Scoreboards = () => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
 
         await Observe("partial");
 
@@ -377,7 +377,7 @@ internal sealed class SyntheticMlbProvider(JsonObject fixture) : HttpMessageHand
     private volatile JsonObject? observation;
 
     public ConcurrentQueue<string> Requests { get; } = new();
-    public bool FailScoreboards { get; set; }
+    public Func<HttpResponseMessage>? Scoreboards { get; set; }
 
     public void Serve(string id) => observation = fixture["observations"]!.AsArray().Single(o => (string)o!["id"]! == id)!.AsObject();
 
@@ -402,7 +402,7 @@ internal sealed class SyntheticMlbProvider(JsonObject fixture) : HttpMessageHand
         Requests.Enqueue(uri.ToString());
         if (uri.Host == "site.web.api.espn.com")
         {
-            if (FailScoreboards) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+            if (Scoreboards is { } respond) return Task.FromResult(respond());
             var served = observation!;
             var board = served["boards"]!.AsArray().FirstOrDefault(b => (string)b!["url"]! == uri.ToString());
             var body = board?["body"]!.DeepClone().AsObject() ?? new JsonObject { ["events"] = new JsonArray() };
