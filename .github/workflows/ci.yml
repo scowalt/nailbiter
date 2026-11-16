@@ -32,6 +32,8 @@ jobs:
           persist-credentials: false
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
+          version: 2026.11.5
+          sha256: 7a5b051d6f17d335c502f8047a5175cf3103f347d91942771c60da4e302ebcb0
           cache_key_prefix: mise-v2
       - name: Verify event checkout and synthetic fixture provenance
         run: |
@@ -159,6 +161,8 @@ jobs:
           persist-credentials: false
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
         with:
+          version: 2026.11.5
+          sha256: 7a5b051d6f17d335c502f8047a5175cf3103f347d91942771c60da4e302ebcb0
           cache_key_prefix: mise-v2
       - name: Install the pinned .NET SDK
         run: sh scripts/ci/install-dotnet-sdk.sh
