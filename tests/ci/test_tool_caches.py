@@ -13,6 +13,13 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 SHA256 = re.compile(r'\b[0-9a-f]{64}\b')
 INSTALL_TRIVY = 'sh scripts/ci/install-trivy.sh'
+TRIVY_ADVISORIES = {
+    'GHSA-xcq4-m2r3-cmrj': ((0, 0, 0), (0, 51, 2)),
+    'GHSA-69fq-xp46-6x23': ((0, 69, 4), (0, 69, 5)),
+    'GHSA-q3fv-x8vg-qqm4': ((0, 0, 0), (0, 71, 0)),
+    'GHSA-mcj4-mphf-j9ff': ((0, 0, 0), (0, 71, 1)),
+    'GHSA-8rc5-4fr6-64pw': ((0, 0, 0), (0, 72, 0)),
+}
 FAKE_CURL = r'''#!/usr/bin/env python3
 import os, shutil, sys
 args = sys.argv[1:]
@@ -105,6 +112,12 @@ class PinnedTrivyInstallTests(unittest.TestCase):
         for source, steps, index, _ in self.scans:
             with self.subTest(source=source):
                 self.assertEqual(len(SHA256.findall(self.install_script(source, steps, index))), 1)
+
+    def test_the_pinned_trivy_is_outside_every_known_advisory_range(self):
+        version = re.search(r'^version=([0-9]+)\.([0-9]+)\.([0-9]+)$', (ROOT / INSTALL_TRIVY.split()[1]).read_text(), re.MULTILINE)
+        self.assertIsNotNone(version)
+        pinned = tuple(int(part) for part in version.groups())
+        self.assertEqual({advisory: pinned for advisory, (introduced, fixed) in TRIVY_ADVISORIES.items() if introduced <= pinned < fixed}, {})
 
     def test_a_download_that_does_not_match_the_pin_fails_before_trivy_reaches_the_path(self):
         for source, steps, index, _ in self.scans:

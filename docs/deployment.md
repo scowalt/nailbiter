@@ -115,9 +115,10 @@ The `image` job installs Trivy itself and passes `skip-setup-trivy: true` and `c
 To change Trivy:
 
 1. Pick a release from `https://github.com/aquasecurity/trivy/releases` that is not a prerelease and was published at least 7 days ago.
-2. Download `trivy_<version>_Linux-64bit.tar.gz` and its `.sigstore.json` bundle. Verify it with `cosign verify-blob --bundle trivy_<version>_Linux-64bit.tar.gz.sigstore.json --certificate-identity https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v<version> --certificate-oidc-issuer https://token.actions.githubusercontent.com trivy_<version>_Linux-64bit.tar.gz`.
-3. Set the version in the URL and the tarball's sha256 in the `Install pinned Trivy` step.
-4. Run `tests/ci`. In the pull request's `Build and scan backend image` log, check that `Install pinned Trivy` prints `trivy.tar.gz: OK`.
+2. Read `https://github.com/aquasecurity/trivy/security/advisories`. Add each advisory that is not yet in `TRIVY_ADVISORIES` in `tests/ci/test_tool_caches.py`, with the first affected version and the first fixed version. The test fails if the pinned version is in any of those ranges.
+3. Download `trivy_<version>_Linux-64bit.tar.gz` and its `.sigstore.json` bundle. Verify it with `cosign verify-blob --bundle trivy_<version>_Linux-64bit.tar.gz.sigstore.json --certificate-identity https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v<version> --certificate-oidc-issuer https://token.actions.githubusercontent.com trivy_<version>_Linux-64bit.tar.gz`.
+4. Set `version` and the tarball's `sha256` in `scripts/ci/install-trivy.sh`.
+5. Run `tests/ci`. In the pull request's `Build and scan backend image` log, check that `Install pinned Trivy` prints `trivy.tar.gz: OK`.
 
 ### CI .NET SDK
 
