@@ -463,3 +463,61 @@ let ``a patch equals the page for the same scoreboard`` (status: string) (scoreb
     match pageDoc.QuerySelector("#mlb-line-score") with
     | null -> Assert.Null(patch.QuerySelector("#mlb-line-score"))
     | section -> Assert.Equal(section.OuterHtml, (single patch "#mlb-line-score").OuterHtml)
+
+let private badge (doc: IDocument) =
+    let element = single doc "#detail-status"
+    element.TextContent.Trim(), element.ClassList |> Seq.toList
+
+let interruptedBadgeCases : obj[] list =
+    [ [| "delayed"; MlbScoreboardPhase.Delayed; "Delayed"; "status-scheduled" |]
+      [| "in_progress"; MlbScoreboardPhase.Delayed; "Delayed"; "status-scheduled" |]
+      [| "suspended"; MlbScoreboardPhase.Suspended; "Suspended"; "status-scheduled" |]
+      [| "in_progress"; MlbScoreboardPhase.Suspended; "Suspended"; "status-scheduled" |]
+      [| "postponed"; MlbScoreboardPhase.Postponed; "Postponed"; "status-scheduled" |]
+      [| "scheduled"; MlbScoreboardPhase.Postponed; "Postponed"; "status-scheduled" |]
+      [| "canceled"; MlbScoreboardPhase.Canceled; "Canceled"; "status-final" |] ]
+
+[<Theory>]
+[<MemberData(nameof interruptedBadgeCases)>]
+let ``the page badge agrees with an interrupted scoreboard`` (status: string) (phase: MlbScoreboardPhase) (label: string) (badgeClass: string) =
+    let label', classes = badge (page (game status) (view phase (Some fiveInnings) None))
+    Assert.Equal(label, label')
+    Assert.Contains(badgeClass, classes)
+    Assert.Contains("detail-status-badge", classes)
+    Assert.DoesNotContain("status-live", classes)
+
+let storedInterruptionCases : obj[] list =
+    [ [| "delayed"; "Delayed" |]; [| "suspended"; "Suspended" |]; [| "postponed"; "Postponed" |] ]
+
+[<Theory>]
+[<MemberData(nameof storedInterruptionCases)>]
+let ``without a board the page badge names the stored interruption`` (status: string) (label: string) =
+    let label', classes = badge (page (game status) (view MlbScoreboardPhase.Unavailable None None))
+    Assert.Equal(label, label')
+    Assert.Contains("status-scheduled", classes)
+
+[<Fact>]
+let ``a delayed patch says delayed rather than live`` () =
+    let label, classes = badge (fragments GameStatus.IN_PROGRESS None (view MlbScoreboardPhase.Delayed (Some fiveInnings) None))
+    Assert.Equal("Delayed", label)
+    Assert.Contains("status-scheduled", classes)
+    Assert.DoesNotContain("status-live", classes)
+
+[<Fact>]
+let ``a postponed patch says postponed rather than scheduled`` () =
+    let label, classes = badge (fragments GameStatus.SCHEDULED None (view MlbScoreboardPhase.Postponed (Some fiveInnings) None))
+    Assert.Equal("Postponed", label)
+    Assert.Contains("status-scheduled", classes)
+
+[<Theory>]
+[<MemberData(nameof patchCases)>]
+let ``a patch badge equals the page badge for the same scoreboard`` (status: string) (scoreboard: MlbScoreboardView) =
+    let pageBadge = (single (page (game status) scoreboard) "#detail-status").OuterHtml
+    let patchBadge = (single (fragments (GameStatusExtensions.FromDbValue(status).Value) None scoreboard) "#detail-status").OuterHtml
+    Assert.Equal(pageBadge, patchBadge)
+
+[<Fact>]
+let ``uninterrupted scoreboards keep the stored status badge`` () =
+    Assert.Equal("Live", fst (badge (livePage (live emptyContext))))
+    Assert.Equal("Final", fst (badge (page (game "final") (view MlbScoreboardPhase.Final (Some fiveInnings) None))))
+    Assert.Equal("Live", fst (badge (fragments GameStatus.IN_PROGRESS None (live emptyContext))))
