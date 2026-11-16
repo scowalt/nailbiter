@@ -167,6 +167,39 @@ class InstallRuleTests(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertEqual(line_install_problems(line), [])
 
+    def test_rejects_path_qualified_installers_and_pip_tools(self):
+        for line in ['/usr/bin/pip install pyyaml', '.venv/bin/pip3 install -r r.txt', '"$RUNNER_TEMP/v/bin/pip" install pyyaml', '/usr/local/bin/uv sync', '/opt/bin/uvx ruff check', '~/.local/bin/pipx run ruff', 'pip-sync r.txt', '/usr/bin/pip-sync r.txt', 'python -m piptools sync r.txt']:
+            with self.subTest(line=line):
+                self.assertNotEqual(line_install_problems(line), [])
+        for line in [f'"$RUNNER_TEMP/bin/uv" pip install --python "$RUNNER_TEMP/v" --require-hashes --no-build -r {self.hashed}', '/usr/local/bin/uv venv "$RUNNER_TEMP/v"']:
+            with self.subTest(line=line):
+                self.assertEqual(line_install_problems(line), [])
+
+    def test_rejects_a_seeded_uv_venv(self):
+        for line in ['uv venv --seed "$RUNNER_TEMP/v"', 'uv venv "$RUNNER_TEMP/v" --seed', 'UV_VENV_SEED=1 uv venv "$RUNNER_TEMP/v"', 'export UV_VENV_SEED=true']:
+            with self.subTest(line=line):
+                self.assertNotEqual(line_install_problems(line), [])
+
+    def test_no_project_counts_only_before_the_command_uv_runs(self):
+        for line in ['uv run python -c 1 --no-project', 'uv run python -m unittest --no-project', 'uv run --python 3.14 python --no-project', 'uv run -- python --no-project']:
+            with self.subTest(line=line):
+                self.assertNotEqual(line_install_problems(line), [])
+        for line in ['uv run --python 3.14 --no-project python -c 1', 'uv run -p 3.14 --no-project python -c 1', 'uv run --no-project -- python -c 1']:
+            with self.subTest(line=line):
+                self.assertEqual(line_install_problems(line), [])
+
+    def test_rejects_uv_run_on_a_script_with_inline_dependencies(self):
+        inline = '# /// script\n# dependencies = ["six"]\n# ///\nprint(1)\n'
+        for name, text in {'inline.py': inline, 'inline': inline, 'inline.pyw': inline, 'plain.py': 'print(1)\n'}.items():
+            (self.directory / name).write_text(text)
+        rejected = ['inline.py', 'inline.pyw', '--script inline', '-s inline', '--gui-script inline', '-', 'https://example.invalid/script', 'missing.py']
+        allowed = ['plain.py', 'python inline.py', 'python -m inline']
+        for command, expected in [(c, False) for c in rejected] + [(c, True) for c in allowed]:
+            words = [str(self.directory / word) if word.startswith(('inline', 'plain', 'missing')) else word for word in command.split()]
+            line = shlex.join(['uv', 'run', '--no-project', *words])
+            with self.subTest(line=line):
+                self.assertEqual(line_install_problems(line) == [], expected, line_install_problems(line))
+
     def test_hashed_file_rejects_ranges_missing_hashes_and_extra_options(self):
         digest = '--hash=sha256:' + 'a' * 64
         cases = {
