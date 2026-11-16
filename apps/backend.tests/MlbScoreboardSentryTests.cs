@@ -110,6 +110,33 @@ public sealed class MlbScoreboardSentryTests : IClassFixture<SharedPostgreSql>, 
         Assert.Equal("Top 5th", (await Read()).Board.Value.Detail);
     }
 
+    [Fact]
+    public async Task A_failing_acceptance_sends_one_error_event_and_keeps_the_last_frame()
+    {
+        await Observe("opening");
+        await using (var connection = new NpgsqlConnection(ConnectionString()))
+        {
+            await connection.OpenAsync();
+            await using var fail = new NpgsqlCommand("""
+                CREATE FUNCTION fail_scoreboard_write() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN RAISE EXCEPTION 'synthetic scoreboard write failure'; END $$;
+                CREATE TRIGGER fail_scoreboard_write BEFORE UPDATE ON games FOR EACH ROW
+                WHEN (NEW.id = '991300104' AND NEW.mlb_scoreboard_json IS DISTINCT FROM OLD.mlb_scoreboard_json)
+                EXECUTE FUNCTION fail_scoreboard_write();
+                """, connection);
+            await fail.ExecuteNonQueryAsync();
+        }
+
+        await Observe("advance");
+
+        var sent = Assert.Single(await Events());
+        Assert.Equal("error", sent.Level);
+        Assert.Equal("backend.Services.MlbScoreboardIngestion", sent.Logger);
+        Assert.Contains("991300104", sent.Json);
+        Assert.Contains("Accepting the ESPN MLB scoreboard frame for {GameId} failed", sent.Json);
+        Assert.Equal("Top 5th", (await Read()).Board.Value.Detail);
+    }
+
     private async Task<MlbScoreboardView> Read() =>
         (await host.Services.GetRequiredService<MlbScoreboardStore>().ReadAsync("991300104", CancellationToken.None)).Value;
 
