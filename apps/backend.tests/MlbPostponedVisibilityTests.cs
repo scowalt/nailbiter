@@ -15,6 +15,8 @@ namespace backend.tests;
 public sealed class MlbPostponedVisibilityTests : IClassFixture<SharedPostgreSql>, IAsyncLifetime
 {
     private const string Id = "991300105";
+    private const string TodayId = "991300106";
+    private static readonly TimeZoneInfo Eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
     private readonly HighlightsFaultReportingTests.Logs logs = new();
     private readonly HostedGameFixture host;
 
@@ -34,6 +36,14 @@ public sealed class MlbPostponedVisibilityTests : IClassFixture<SharedPostgreSql
             HomeTeamId = "9125", AwayTeamId = "9128", ScheduledStart = new DateTime(2027, 7, 11, 2, 10, 0, DateTimeKind.Utc),
             SeasonYear = 2027, SeasonType = 2
         }, []);
+        var wallToday = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, Eastern));
+        await host.SeedAsync(new Game
+        {
+            Id = TodayId, Sport = "mlb", Status = "postponed", StatusDetail = "Postponed", HomeScore = 0, AwayScore = 0,
+            HomeTeam = "Synthetic SEA", AwayTeam = "Synthetic TEX", HomeTeamAbbreviation = "SEA", AwayTeamAbbreviation = "TEX",
+            HomeTeamId = "9125", AwayTeamId = "9128", SeasonYear = wallToday.Year, SeasonType = 2,
+            ScheduledStart = TimeZoneInfo.ConvertTimeToUtc(wallToday.ToDateTime(new TimeOnly(12, 0)), Eastern)
+        }, []);
 
         foreach (var at in new[]
         {
@@ -45,13 +55,19 @@ public sealed class MlbPostponedVisibilityTests : IClassFixture<SharedPostgreSql
             host.Clock.SetUtcNow(at);
             var requests = host.RejectedOutboundRequests;
 
-            foreach (var path in new[] { "/", "/mlb", "/mlb?date=2027-07-10" })
+            var easternDay = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(at.UtcDateTime, Eastern));
+            foreach (var (path, game, listed) in new[]
+            {
+                ("/", Id, easternDay == new DateOnly(2027, 7, 10)),
+                ("/mlb", TodayId, true),
+                ("/mlb?date=2027-07-10", Id, true),
+            })
             {
                 using var page = await Page(path);
-                AssertNoScore(page, path, $"away-score-{Id}", $"home-score-{Id}");
-                Assert.NotEqual("Final", page.GetElementById($"status-{Id}")?.TextContent.Trim());
+                AssertNoScore(page, path, $"away-score-{game}", $"home-score-{game}");
+                var badge = page.GetElementById($"status-{game}")?.TextContent.Trim();
+                Assert.True(badge == (listed ? "Postponed" : null), $"{path} at {at:O} shows {game} with the status '{badge}'");
             }
-            using (var dated = await Page("/mlb?date=2027-07-10")) Assert.NotNull(dated.QuerySelector($"a[href='/game/{Id}']"));
             using (var detail = await Page($"/game/{Id}"))
             {
                 AssertNoScore(detail, $"/game/{Id}", "detail-away-score", "detail-home-score");
