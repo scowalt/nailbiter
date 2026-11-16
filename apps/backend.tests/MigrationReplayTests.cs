@@ -68,7 +68,9 @@ public sealed class MigrationReplayTests
         foreach (var deploy in new[] { 1, 2 })
             await DeployAsync(container, deploy, BeforeWidening);
         await using var db = Context(container);
-        db.Games.AddRange(Game("old"), Game("recent"));
+        foreach (var id in new[] { "old", "recent" })
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"INSERT INTO games (id, sport, status, season_year, season_type, scheduled_start, home_team, away_team, home_team_abbr, away_team_abbr) VALUES ({id}, 'nhl', 'in_progress', 2027, 2, {Now.AddHours(-1)}, 'Home', 'Away', 'HOM', 'AWY')");
         db.OddsSnapshots.AddRange(Enumerable.Range(0, 96).Select(hour => Quote(hour % 2 == 0 ? "old" : "recent", Now.AddHours(-hour), .5)));
         await db.SaveChangesAsync();
         await ScalarAsync(db, "SELECT count(compress_chunk(chunk))::text AS \"Value\" FROM show_chunks('odds_snapshots') chunk");
