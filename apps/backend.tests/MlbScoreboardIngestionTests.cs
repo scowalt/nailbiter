@@ -124,6 +124,49 @@ public sealed class MlbScoreboardIngestionTests : IClassFixture<SharedPostgreSql
     }
 
     [Fact]
+    public async Task An_odds_row_beside_a_rejected_frame_carries_the_accepted_score_and_inning()
+    {
+        await Observe("opening");
+        await Observe("advance");
+        provider.ListMarket("27JUL101735ATLPHI", home: "PHI", away: "ATL", homeBid: 0.62m);
+        broadcaster.Published.Clear();
+
+        await Observe("out-of-order");
+
+        using var scope = host.Services.CreateScope();
+        var row = await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().OddsSnapshots.AsNoTracking().SingleAsync(o => o.GameId == "991300104");
+        Assert.Equal((2, 3, 6), (row.HomeScore, row.AwayScore, row.Period));
+        var update = broadcaster.Published.Last(u => u.GameId == "991300104");
+        Assert.Equal((2, 3, 6), (update.HomeScore, update.AwayScore, update.Period));
+    }
+
+    [Fact]
+    public async Task An_update_without_an_odds_row_carries_the_accepted_inning()
+    {
+        await Observe("opening");
+        broadcaster.Published.Clear();
+
+        await Observe("advance");
+
+        var update = broadcaster.Published.Last(u => u.GameId == "991300104");
+        Assert.Equal((2, 3, 6), (update.HomeScore, update.AwayScore, update.Period));
+        Assert.Equal(0, await OddsRows());
+    }
+
+    [Fact]
+    public async Task A_new_game_whose_first_frame_is_rejected_is_stored_without_a_score()
+    {
+        provider.Corrupt("991300104", Corruptions["missing-score"]);
+
+        await Observe("opening");
+
+        Assert.Equal(new Listed("in_progress", null, null, null), (await Api())["991300104"]);
+        var view = await View("991300104");
+        Assert.Equal(MlbScoreboardPhase.Unavailable, view.Phase);
+        Assert.Null(view.Board);
+    }
+
+    [Fact]
     public async Task A_scoreboard_transport_failure_keeps_the_last_accepted_scores_lines_and_clock()
     {
         await Observe("opening");
@@ -224,6 +267,30 @@ public sealed class MlbScoreboardIngestionTests : IClassFixture<SharedPostgreSql
         Assert.Equal(("final", (DateTime?)Served("resumption").UtcDateTime), (game.Status, game.CompletionConfirmedAt));
         Assert.True(MlbCompletionEvidence.IsActuallyCompleted(game));
         Assert.NotNull(game.HighlightsDiscoveryExpiresAt);
+    }
+
+    [Fact]
+    public async Task A_later_board_that_contradicts_completion_only_in_its_nested_detail_withdraws_actual_completion()
+    {
+        await Observe("opening");
+        await Observe("advance");
+        await Observe("resumption");
+        Assert.True((await View("991300104")).Completed);
+        provider.Corrupt("991300104", e =>
+        {
+            foreach (var status in new[] { e["status"]!, e["competitions"]![0]!["status"]! })
+            {
+                status["type"]!["detail"] = "Suspended: Rain";
+                status["type"]!["shortDetail"] = "Suspended: Rain";
+            }
+        });
+
+        host.Clock.Advance(TimeSpan.FromSeconds(30));
+        await Run();
+
+        Assert.Equal(new Listed("final", 2, 3, 9), (await Api())["991300104"]);
+        var view = await View("991300104");
+        Assert.Equal((MlbScoreboardPhase.Final, "Final", false), (view.Phase, view.Board.Value.Detail, view.Completed));
     }
 
     [Fact]
