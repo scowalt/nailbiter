@@ -41,9 +41,10 @@ class DotnetSdkWorkflowTests(unittest.TestCase):
 
     def test_every_job_that_runs_dotnet_installs_the_pinned_sdk_first(self):
         users = []
+        runs_dotnet = r'(?<![\w-])dotnet(?![\w-])|package-listing-check\.sh|backend-test-shard\.py|scripts/test-backend'
         for name, job in self.jobs.items():
             runs = [step.get('run', '') for step in job['steps']]
-            first_dotnet = next((i for i, run in enumerate(runs) if re.search(r'(?m)^\s*(dotnet |sh scripts/ci/package-listing-check\.sh)', run)), None)
+            first_dotnet = next((i for i, run in enumerate(runs) if run.strip() != INSTALL and re.search(runs_dotnet, run)), None)
             if first_dotnet is None:
                 continue
             users.append(name)
@@ -59,6 +60,13 @@ class DotnetSdkWorkflowTests(unittest.TestCase):
             for step in job['steps']:
                 self.assertNotIn('dotnet', json.dumps(step.get('with', {})), name)
                 self.assertNotIn('dotnet-install', step.get('run', ''), name)
+                self.assertNotIn('GITHUB_PATH', step.get('run', ''), name)
+
+    def test_mise_never_restores_a_cache_saved_before_the_sdk_pin(self):
+        mise = [step for job in self.jobs.values() for step in job['steps'] if step.get('uses', '').startswith('jdx/mise-action@')]
+        self.assertEqual(len(mise), 2)
+        for step in mise:
+            self.assertEqual(step.get('with', {}).get('cache_key_prefix'), 'mise-v2')
 
     def test_the_committed_sha512_names_exactly_the_global_json_sdk(self):
         lines = (ROOT / 'scripts/ci/dotnet-sdk.sha512').read_text().splitlines()
@@ -129,6 +137,7 @@ class DotnetSdkInstallTests(unittest.TestCase):
         [download] = self.downloads()
         self.assertEqual(download[-1], URL)
         self.assertEqual(download[download.index('--proto') + 1], '=https')
+        self.assertEqual(download[download.index('--proto-redir') + 1], '=https')
 
     def test_tarball_that_does_not_match_the_committed_sha512_fails_before_extraction(self):
         (self.workspace / 'scripts/ci/dotnet-sdk.sha512').write_bytes((ROOT / 'scripts/ci/dotnet-sdk.sha512').read_bytes())
