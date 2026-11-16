@@ -238,3 +238,5 @@ module SseFragmentRenderer =
         fragments
         |> List.map XmlNodeRenderer.renderNode
         |> String.concat ""
+
+    let renderMlbDetailFragments (update: GameUpdate) (scoreboard: backend.Services.MlbScoreboardView) = renderDetailFragments update

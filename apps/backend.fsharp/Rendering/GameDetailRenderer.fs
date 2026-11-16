@@ -463,6 +463,9 @@ module GameDetailRenderer =
             ]
         ]
 
+    let RenderMlbWithHighlightsAtTime now game snapshots pregameOdds hypeComponents hypeScore homeTeamRank awayTeamRank highlights (scoreboard: MlbScoreboardView) =
+        RenderWithHighlightsAtTime now game snapshots pregameOdds hypeComponents hypeScore homeTeamRank awayTeamRank highlights
+
     let RenderAtTime now game snapshots pregameOdds hypeComponents hypeScore homeTeamRank awayTeamRank =
         RenderWithHighlightsAtTime now game snapshots pregameOdds hypeComponents hypeScore homeTeamRank awayTeamRank (HighlightsDetailState(HighlightsDetailStatus.Hidden))
 
