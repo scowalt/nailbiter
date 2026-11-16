@@ -231,9 +231,9 @@ public sealed class MlbScoreboardDetailTests : IClassFixture<SharedPostgreSql>, 
     [Theory]
     [InlineData("991300101", "retained-after-final", "final", "Final", "Final", "status-final", 9)]
     [InlineData("991300102", null, "final", "Final · 11 innings", "Final", "status-final", 11)]
-    [InlineData("991300108", "retained-while-delayed", "delayed", "Delayed · 6th inning", "Delayed", "status-scheduled", 6)]
-    [InlineData("991300109", "retained-while-suspended", "suspended", "Suspended · 7th inning", "Suspended", "status-scheduled", 7)]
-    [InlineData("991300105", null, "postponed", "Postponed", "Postponed", "status-scheduled", 0)]
+    [InlineData("991300108", "retained-while-delayed", "in_progress", "Delayed · 6th inning", "Delayed", "status-scheduled", 6)]
+    [InlineData("991300109", "retained-while-suspended", "in_progress", "Suspended · 7th inning", "Suspended", "status-scheduled", 7)]
+    [InlineData("991300105", null, "scheduled", "Postponed", "Postponed", "status-scheduled", 0)]
     [InlineData("991300107", null, "canceled", "Canceled", "Canceled", "status-final", 0)]
     public async Task Interrupted_and_ended_games_show_a_distinct_clock_label_a_matching_badge_and_no_situation_facts(
         string gameId, string? frameId, string status, string clock, string badge, string badgeClass, int innings)
@@ -365,6 +365,7 @@ public sealed class MlbScoreboardDetailTests : IClassFixture<SharedPostgreSql>, 
         Assert.NotNull(situation);
         Assert.Null(situation.QuerySelector(".situation-facts"));
         Assert.Equal("Live scoreboard unavailable", situation.TextContent.Trim());
+        Assert.Equal("Live", page.QuerySelector("#detail-status")!.TextContent.Trim());
         Assert.Null(page.QuerySelector("#mlb-line-score"));
         Assert.Equal("2", page.QuerySelector("#detail-away-score")!.TextContent.Trim());
         Assert.Equal("4", page.QuerySelector("#detail-home-score")!.TextContent.Trim());
