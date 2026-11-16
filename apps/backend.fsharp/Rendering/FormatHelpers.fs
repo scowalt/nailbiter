@@ -147,6 +147,8 @@ module FormatHelpers =
         | true, dt -> formatScheduledTime dt
         | _ -> isoString
 
+    let showsScore (game: backend.Models.Game) = game.Status <> "scheduled" && game.Status <> "postponed"
+
     let getStatusLabel (status: GameStatus) =
         match status with
         | GameStatus.IN_PROGRESS -> "Live"
