@@ -56,7 +56,8 @@ class DotnetSdkWorkflowTests(unittest.TestCase):
         self.assertEqual(sorted(users), ['backend-tests', 'checks', 'listing-checker'])
 
     def test_no_job_installs_dotnet_through_the_mise_plugin(self):
-        self.assertEqual(self.workflow['env'], {'MISE_DISABLE_TOOLS': mise_dotnet_tool()})
+        self.assertEqual(list(self.workflow['env']), ['MISE_DISABLE_TOOLS'])
+        self.assertIn(mise_dotnet_tool(), self.workflow['env']['MISE_DISABLE_TOOLS'].split(','))
         for name, job in self.jobs.items():
             self.assertNotIn('MISE_DISABLE_TOOLS', job.get('env', {}), name)
             for step in job['steps']:

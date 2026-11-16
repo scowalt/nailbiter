@@ -75,8 +75,6 @@ class PipelineTests(unittest.TestCase):
         sdk = json.loads((ROOT / 'apps/backend/global.json').read_text())['sdk']['version']
         self.assertEqual(tools['asdf:mise-plugins/mise-dotnet-core'], sdk)
         self.assertTrue(tools['python'].startswith('3.14.'))
-        release_bun = next(step for step in self.jobs['release']['steps'] if step.get('uses', '').startswith('oven-sh/setup-bun@'))
-        self.assertEqual(release_bun['with']['bun-version'], tools['bun'])
         self.assertNotIn('GH_TOKEN', self.jobs['release']['env'])
 
     def test_bun_projects_have_no_npm_lockfile(self):

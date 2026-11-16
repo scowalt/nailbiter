@@ -6,12 +6,16 @@ import re
 import subprocess
 import tarfile
 import tempfile
+import tomllib
 import unittest
+import zipfile
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 SHA256 = re.compile(r'\b[0-9a-f]{64}\b')
+INSTALL_BUN = 'sh scripts/ci/install-bun.sh'
+RUNS_BUN = re.compile(r'(?<![\w./-])bunx?(?![\w.-])')
 INSTALL_TRIVY = 'sh scripts/ci/install-trivy.sh'
 FAKE_CURL = r'''#!/usr/bin/env python3
 import os, shutil, sys
@@ -31,6 +35,17 @@ def steps_using(action, workflows=ROOT / '.github/workflows'):
                     yield f'{workflow.name}:{job_name}[{index}]', steps, index, step.get('with', {})
 
 
+def bun_archive(script):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w') as archive:
+        for name, body in [('bun-linux-x64/bun', script), ('bun-linux-x64/README.md', b'readme')]:
+            entry = zipfile.ZipInfo(name)
+            entry.create_system = 3
+            entry.external_attr = 0o100755 << 16
+            archive.writestr(entry, body)
+    return buffer.getvalue()
+
+
 def trivy_archive(script):
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode='w:gz') as archive:
@@ -45,10 +60,8 @@ def trivy_archive(script):
 class ToolCacheTests(unittest.TestCase):
     maxDiff = None
 
-    def test_every_setup_bun_use_turns_off_its_unchecked_binary_cache(self):
-        uses = list(steps_using('oven-sh/setup-bun'))
-        self.assertGreaterEqual(len(uses), 1)
-        self.assertEqual({source: inputs.get('no-cache') for source, _, _, inputs in uses if inputs.get('no-cache') is not True}, {})
+    def test_no_workflow_installs_bun_with_setup_bun(self):
+        self.assertEqual([source for source, _, _, _ in steps_using('oven-sh/setup-bun')], [])
 
     def test_every_trivy_scan_skips_the_binary_and_database_caches(self):
         uses = list(steps_using('aquasecurity/trivy-action'))
@@ -134,6 +147,58 @@ class PinnedTrivyInstallTests(InstallScriptTests):
                 self.assertEqual(len(added), 1)
                 self.assertEqual(sorted(path.name for path in added[0].iterdir()), ['trivy'])
                 self.assertEqual(subprocess.run([added[0] / 'trivy'], capture_output=True, text=True).stdout, 'genuine\n')
+
+
+class PinnedBunInstallTests(InstallScriptTests):
+    def setUp(self):
+        super().setUp()
+        self.workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
+        self.script = ROOT / INSTALL_BUN.split()[1]
+
+    def test_mise_does_not_install_bun_in_ci(self):
+        self.assertIn('bun', self.workflow['env']['MISE_DISABLE_TOOLS'].split(','))
+
+    def test_each_job_that_runs_bun_installs_the_pinned_bun_before_it(self):
+        users, problems = [], {}
+        for name, job in self.workflow['jobs'].items():
+            runs = [step.get('run', '') for step in job.get('steps', [])]
+            first_bun = next((i for i, run in enumerate(runs) if RUNS_BUN.search(run)), None)
+            if first_bun is None:
+                continue
+            users.append(name)
+            installs = [i for i, run in enumerate(runs) if run.strip() == INSTALL_BUN]
+            if len(installs) != 1 or installs[0] > first_bun:
+                problems[name] = {'installs': installs, 'first bun': first_bun}
+        self.assertIn('release', users)
+        self.assertEqual(problems, {})
+
+    def test_the_pinned_bun_is_the_mise_toml_version(self):
+        version = re.search(r'^version=(\S+)$', self.script.read_text(), re.MULTILINE)
+        self.assertIsNotNone(version)
+        self.assertEqual(version.group(1), tomllib.loads((ROOT / '.mise.toml').read_text())['tools']['bun'])
+
+    def test_a_download_that_does_not_match_the_pin_fails_before_bun_reaches_the_path(self):
+        result, added = self.run_install(self.script.read_text(), bun_archive(b'#!/bin/sh\necho tampered\n'))
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('FAILED', result.stdout + result.stderr)
+        self.assertEqual(added, [])
+        self.assertEqual([path for path in (self.root / 'runner-temp').rglob('*') if path.name in {'bun', 'bunx'}], [])
+        [request] = [line.split() for line in (self.root / 'curl.log').read_text().splitlines()]
+        self.assertIn('--proto =https', ' '.join(request))
+        self.assertEqual([arg for arg in request if '://' in arg and not arg.startswith('https://')], [])
+
+    def test_a_download_that_matches_the_pin_puts_only_bun_and_bunx_on_the_path(self):
+        archive = bun_archive(b'#!/bin/sh\necho genuine "${0##*/}"\n')
+        script = self.script.read_text()
+        self.assertEqual(len(SHA256.findall(script)), 1)
+        result, added = self.run_install(SHA256.sub(hashlib.sha256(archive).hexdigest(), script), archive)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(len(added), 1)
+        self.assertEqual(sorted(path.name for path in added[0].iterdir()), ['bun', 'bunx'])
+        self.assertEqual((added[0] / 'bunx').resolve(), (added[0] / 'bun').resolve())
+        for name in ['bun', 'bunx']:
+            self.assertEqual(subprocess.run([added[0] / name], capture_output=True, text=True).stdout, f'genuine {name}\n')
+
 
 
 if __name__ == '__main__':
