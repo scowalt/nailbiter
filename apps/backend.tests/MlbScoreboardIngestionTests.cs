@@ -295,6 +295,27 @@ public sealed class MlbScoreboardIngestionTests : IClassFixture<SharedPostgreSql
     }
 
     [Fact]
+    public async Task A_scheduled_game_that_leaves_its_board_keeps_its_accepted_status_and_frame_until_the_board_returns_it()
+    {
+        await Observe("opening");
+        provider.Withdraw("991300106");
+
+        host.Clock.Advance(TimeSpan.FromMinutes(1));
+        await Run();
+
+        Assert.Equal(new Listed("scheduled", 0, 0, null), (await Api())["991300106"]);
+        Assert.Equal(MlbScoreboardPhase.Pregame, (await View("991300106")).Phase);
+
+        provider.Restore("991300106");
+        provider.Corrupt("991300106", e => Restate(e, "STATUS_IN_PROGRESS", "in", "Top 1st", (string)e["date"]!, period: 1));
+        host.Clock.Advance(TimeSpan.FromMinutes(1));
+        await Run();
+
+        Assert.Equal(new Listed("in_progress", 0, 0, 1), (await Api())["991300106"]);
+        Assert.Equal(MlbScoreboardPhase.Live, (await View("991300106")).Phase);
+    }
+
+    [Fact]
     public async Task Acceptance_held_up_by_another_writer_gives_up_at_its_deadline_and_the_cycle_continues()
     {
         await Observe("opening");
@@ -439,6 +460,7 @@ internal sealed class SyntheticMlbProvider(JsonObject fixture) : HttpMessageHand
 {
     private readonly ConcurrentDictionary<string, Action<JsonObject>> corruptions = new();
     private readonly ConcurrentDictionary<string, JsonObject> markets = new();
+    private readonly ConcurrentDictionary<string, bool> withdrawn = new();
     private volatile JsonObject? observation;
 
     public ConcurrentQueue<string> Requests { get; } = new();
@@ -447,6 +469,10 @@ internal sealed class SyntheticMlbProvider(JsonObject fixture) : HttpMessageHand
     public void Serve(string id) => observation = fixture["observations"]!.AsArray().Single(o => (string)o!["id"]! == id)!.AsObject();
 
     public void Corrupt(string gameId, Action<JsonObject> corruption) => corruptions[gameId] = corruption;
+
+    public void Withdraw(string gameId) => withdrawn[gameId] = true;
+
+    public void Restore(string gameId) => withdrawn.TryRemove(gameId, out _);
 
     public void ListMarket(string eventCode, string home, string away, decimal homeBid)
     {
@@ -471,6 +497,9 @@ internal sealed class SyntheticMlbProvider(JsonObject fixture) : HttpMessageHand
             var served = observation!;
             var board = served["boards"]!.AsArray().FirstOrDefault(b => (string)b!["url"]! == uri.ToString());
             var body = board?["body"]!.DeepClone().AsObject() ?? new JsonObject { ["events"] = new JsonArray() };
+            var events = body["events"]!.AsArray();
+            foreach (var item in events.Where(e => withdrawn.ContainsKey((string)e!["id"]!)).ToList())
+                events.Remove(item);
             foreach (var item in body["events"]!.AsArray())
                 if (corruptions.TryGetValue((string)item!["id"]!, out var corruption))
                     corruption(item.AsObject());
