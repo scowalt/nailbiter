@@ -151,6 +151,14 @@ class ReleaseArtifactHashTests(unittest.TestCase):
             with self.subTest(artifact=artifact):
                 self.assertEqual(sorted(Path(path).suffix for path in self.upload_paths(artifact)), ['.commit', '.tar'])
 
+    def test_no_two_downloaded_artifacts_share_or_nest_a_directory(self):
+        paths = [Path(step['with']['path']) for step in self.jobs['release']['steps'] if step.get('uses', '').startswith('actions/download-artifact@')]
+        self.assertEqual(len(paths), 3)
+        for index, path in enumerate(paths):
+            for other in paths[index + 1:]:
+                with self.subTest(path=str(path), other=str(other)):
+                    self.assertFalse(path == other or path in other.parents or other in path.parents)
+
     def test_the_release_publishes_the_image_whose_hash_and_id_the_image_job_reported(self):
         self.produce_image()
         result = self.publish()
