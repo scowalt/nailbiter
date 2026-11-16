@@ -392,7 +392,7 @@ type MlbScoreboardStore(scopes: IServiceScopeFactory, timeProvider: TimeProvider
                 | MlbStoredFrameFault.Invalid rejection -> string rejection
             logger.LogError(
                 "MLB scoreboard stored frame for {GameId} observed at {ObservedAt} is unusable: {Fault}",
-                box game.Id, box game.ScoreboardUpdatedAt, box fault)
+                box game.Id, box (ofNullable game.ScoreboardUpdatedAt |> Option.map _.ToString("O") |> Option.toObj), box fault)
 
     member _.AcceptAsync(report: MlbScoreboardReport, cancellationToken: CancellationToken)
         : Task<Result<MlbScoreboardFrame, MlbScoreboardRejection>> =
