@@ -521,3 +521,26 @@ let ``uninterrupted scoreboards keep the stored status badge`` () =
     Assert.Equal("Live", fst (badge (livePage (live emptyContext))))
     Assert.Equal("Final", fst (badge (page (game "final") (view MlbScoreboardPhase.Final (Some fiveInnings) None))))
     Assert.Equal("Live", fst (badge (fragments GameStatus.IN_PROGRESS None (live emptyContext))))
+
+let postponedViewCases : obj[] list =
+    [ [| view MlbScoreboardPhase.Unavailable None None |]
+      [| view MlbScoreboardPhase.Postponed (Some fiveInnings) None |] ]
+
+[<Theory>]
+[<MemberData(nameof postponedViewCases)>]
+let ``a stored postponed game says postponed and shows no quote despite a fresh snapshot`` (scoreboard: MlbScoreboardView) =
+    let doc = pageWith (game "postponed") [ snapshot 0.6 0.2 ] (HighlightsDetailState(HighlightsDetailStatus.Hidden)) scoreboard
+    let label, classes = badge doc
+    Assert.Equal("Postponed", label)
+    Assert.Contains("status-scheduled", classes)
+    Assert.Equal("", text doc "#detail-probbar")
+    Assert.Equal("", text doc "#mlb-situation")
+
+[<Fact>]
+let ``postponed and canceled scoreboards show no quote despite fresh odds`` () =
+    for status, phase in [ "canceled", MlbScoreboardPhase.Canceled; "in_progress", MlbScoreboardPhase.Canceled; "scheduled", MlbScoreboardPhase.Postponed ] do
+        let doc = pageWith (game status) [ snapshot 0.6 0.2 ] (HighlightsDetailState(HighlightsDetailStatus.Hidden)) (view phase (Some fiveInnings) None)
+        Assert.Equal("", text doc "#detail-probbar")
+    for status, phase in [ GameStatus.CANCELED, MlbScoreboardPhase.Canceled; GameStatus.IN_PROGRESS, MlbScoreboardPhase.Canceled; GameStatus.SCHEDULED, MlbScoreboardPhase.Postponed ] do
+        let patch = fragments status (Some 0.6) (view phase (Some fiveInnings) None)
+        Assert.Equal("", text patch "#detail-probbar")
