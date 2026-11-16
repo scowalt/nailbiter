@@ -366,3 +366,100 @@ let ``interrupted and ended games label the clock and show no situation`` (phase
     Assert.Equal(label, text doc "#detail-clock")
     Assert.Equal("", text doc "#mlb-situation")
     Assert.Empty(facts doc)
+
+[<Fact>]
+let ``a current quote renders the probability bar from a single snapshot without a chart`` () =
+    let doc = pageWith (game "in_progress") [ snapshot 0.6 0.5 ] (HighlightsDetailState(HighlightsDetailStatus.Hidden)) (live emptyContext)
+    let bar = single doc "#detail-probbar .detail-probability"
+    Assert.Contains("CIN 60%", bar.TextContent)
+    Assert.Contains("CHC 40%", bar.TextContent)
+    Assert.Null(doc.QuerySelector("nb-win-probability-chart"))
+
+[<Fact>]
+let ``no quote during a game says live probability is unavailable instead of an even bar`` () =
+    for phase in [ MlbScoreboardPhase.Live; MlbScoreboardPhase.Stale; MlbScoreboardPhase.Unavailable ] do
+        let scoreboard = if phase = MlbScoreboardPhase.Unavailable then None else Some fiveInnings
+        let doc = livePage (view phase scoreboard (if phase = MlbScoreboardPhase.Live then Some emptyContext else None))
+        Assert.Equal("Live probability unavailable", text doc "#detail-probbar")
+        Assert.Null(doc.QuerySelector("#detail-probbar .probability-track"))
+        Assert.DoesNotContain("50%", doc.Body.TextContent)
+
+[<Fact>]
+let ``final games show no current quote even with a fresh snapshot`` () =
+    let doc =
+        pageWith (game "final") [ snapshot 0.98 0.2 ] (HighlightsDetailState(HighlightsDetailStatus.Hidden))
+            (view MlbScoreboardPhase.Final (Some fiveInnings) None)
+    Assert.Equal("", text doc "#detail-probbar")
+    let finalBoard =
+        pageWith (game "in_progress") [ snapshot 0.98 0.2 ] (HighlightsDetailState(HighlightsDetailStatus.Hidden))
+            (view MlbScoreboardPhase.Final (Some fiveInnings) None)
+    Assert.Equal("", text finalBoard "#detail-probbar")
+
+let private update status (homeWinProbability: float option) =
+    GameUpdate(GameId = "mlb-synthetic-1", Sport = Sport.MLB, Status = status,
+               HomeTeam = "Cincinnati Reds", AwayTeam = "Chicago Cubs", HomeTeamAbbreviation = "CIN", AwayTeamAbbreviation = "CHC",
+               HomeScore = Nullable 2, AwayScore = Nullable 1,
+               HomeWinProbability = Option.toNullable homeWinProbability,
+               AwayWinProbability = Option.toNullable (homeWinProbability |> Option.map (fun p -> 1.0 - p)))
+
+let private fragments status probability scoreboard =
+    SseFragmentRenderer.renderMlbDetailFragments (update status probability) scoreboard |> parse
+
+[<Fact>]
+let ``live fragments without a quote say probability is unavailable and never show an even bar`` () =
+    let doc = fragments GameStatus.IN_PROGRESS None (live emptyContext)
+    Assert.Equal("Live probability unavailable", text doc "#detail-probbar")
+    Assert.Null(doc.QuerySelector("#detail-probbar .probability-track"))
+    Assert.DoesNotContain("50%", doc.Body.TextContent)
+
+[<Fact>]
+let ``fragments render a current quote and drop it once final`` () =
+    let current = fragments GameStatus.IN_PROGRESS (Some 0.6) (live emptyContext)
+    Assert.Contains("CIN 60%", text current "#detail-probbar .detail-probability")
+    let ended = fragments GameStatus.FINAL (Some 0.98) (view MlbScoreboardPhase.Final (Some fiveInnings) None)
+    Assert.Equal("", text ended "#detail-probbar")
+    let finalBoard = fragments GameStatus.IN_PROGRESS (Some 0.98) (view MlbScoreboardPhase.Final (Some fiveInnings) None)
+    Assert.Equal("", text finalBoard "#detail-probbar")
+
+[<Fact>]
+let ``fragments take scores from the board and fall back to the update`` () =
+    let fromBoard = fragments GameStatus.IN_PROGRESS None (live emptyContext)
+    Assert.Equal("4", text fromBoard "#detail-away-score")
+    Assert.Equal("3", text fromBoard "#detail-home-score")
+    let fromUpdate = fragments GameStatus.IN_PROGRESS None (view MlbScoreboardPhase.Unavailable None None)
+    Assert.Equal("1", text fromUpdate "#detail-away-score")
+    Assert.Equal("2", text fromUpdate "#detail-home-score")
+    Assert.Null(fromUpdate.QuerySelector("#mlb-line-score"))
+    Assert.Equal("Live scoreboard unavailable", text fromUpdate "#mlb-situation")
+    Assert.Equal("@", text fromUpdate "#detail-clock")
+
+let private richContext : MlbActiveContext =
+    { Half = Some MlbHalf.Top
+      Count = Some { Balls = 2; Strikes = 1; Outs = 1 }
+      Bases = Some(bases (occupied(Some "Synthetic Runner A")) MlbBase.Empty (occupied None))
+      Matchup = Some { Batter = Some "Synthetic Batter"; Pitcher = Some "Synthetic Pitcher" } }
+
+let patchCases : obj[] list =
+    let extra = board 12 (team 5 (runs [ 0; 0; 1; 0; 0; 2; 0; 0; 1; 0; 0; 1 ])) (team 4 (runs [ 1; 0; 0; 0; 2; 0; 0; 1; 0; 0; 0; 0 ]))
+    [ [| "in_progress"; live richContext |]
+      [| "in_progress"; live emptyContext |]
+      [| "in_progress"; view MlbScoreboardPhase.Stale (Some fiveInnings) None |]
+      [| "in_progress"; view MlbScoreboardPhase.Recorded (Some fiveInnings) None |]
+      [| "in_progress"; view MlbScoreboardPhase.Delayed (Some fiveInnings) None |]
+      [| "in_progress"; view MlbScoreboardPhase.Suspended (Some fiveInnings) None |]
+      [| "in_progress"; view MlbScoreboardPhase.Unavailable None None |]
+      [| "scheduled"; view MlbScoreboardPhase.Postponed (Some fiveInnings) None |]
+      [| "canceled"; view MlbScoreboardPhase.Canceled None None |]
+      [| "final"; view MlbScoreboardPhase.Final (Some extra) None |] ]
+
+[<Theory>]
+[<MemberData(nameof patchCases)>]
+let ``a patch equals the page for the same scoreboard`` (status: string) (scoreboard: MlbScoreboardView) =
+    let g = game status
+    let pageDoc = page g scoreboard
+    let patch = fragments (GameStatusExtensions.FromDbValue(status).Value) None scoreboard
+    for selector in [ "#mlb-situation"; "#detail-clock"; "#detail-away-score"; "#detail-home-score" ] do
+        Assert.Equal((single pageDoc selector).OuterHtml, (single patch selector).OuterHtml)
+    match pageDoc.QuerySelector("#mlb-line-score") with
+    | null -> Assert.Null(patch.QuerySelector("#mlb-line-score"))
+    | section -> Assert.Equal(section.OuterHtml, (single patch "#mlb-line-score").OuterHtml)
