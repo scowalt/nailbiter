@@ -30,7 +30,7 @@ def action_uses(workflows):
 def action_pin_problems(workflows=ROOT / '.github/workflows'):
     problems = []
     for source, use in action_uses(workflows):
-        if not re.match(r'^[\w.-]+/[\w./-]+@[0-9a-f]{40}$', use['uses']):
+        if not re.fullmatch(r'[\w.-]+/[\w./-]+@[0-9a-f]{40}', use['uses']):
             problems.append(f'{source}: {use["uses"]!r} is not pinned to a full commit SHA')
         if use['uses'].lower().startswith('actions/checkout@') and use.get('with', {}).get('persist-credentials') is not False:
             problems.append(f'{source}: checkout must set persist-credentials: false')
