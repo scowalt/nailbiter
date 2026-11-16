@@ -269,6 +269,28 @@ public sealed class MlbScoreboardTests : IClassFixture<SharedPostgreSql>, IAsync
     }
 
     [Fact]
+    public async Task A_withdrawal_cancels_only_a_scheduled_game_newer_than_its_last_frame_and_shuts_out_older_frames()
+    {
+        await host.SeedAsync(MlbGame("991300106", "scheduled"), []);
+        await host.SeedAsync(MlbGame("991300104"), []);
+        At("2027-07-10T23:31:00Z");
+        Accepted(await AcceptAsync(Report("991300106", "opening", Instant("2027-07-10T23:30:00Z"))));
+        Accepted(await AcceptAsync(Report("991300104", "opening", Instant("2027-07-10T23:30:00Z"))));
+        var scheduled = await RowAsync("991300106");
+        var live = await RowAsync("991300104");
+
+        Assert.False(await WithdrawAsync("991300106", "2027-07-10T23:30:00Z"));
+        Assert.False(await WithdrawAsync("991300104", "2027-07-10T23:31:00Z"));
+        Assert.Equal(scheduled, await RowAsync("991300106"));
+        Assert.Equal(live, await RowAsync("991300104"));
+
+        Assert.True(await WithdrawAsync("991300106", "2027-07-10T23:31:00Z"));
+        Rejected(MlbScoreboardRejection.RegressingObservation,
+            await AcceptAsync(Report("991300106", "opening", Instant("2027-07-10T23:30:30Z"))));
+        Assert.Equal(new Row("canceled", null, null, null, null, Utc("2027-07-10T23:31:00Z"), null, null), await RowAsync("991300106"));
+    }
+
+    [Fact]
     public async Task An_older_frame_is_rejected_even_when_the_stored_frame_no_longer_matches_the_game()
     {
         await host.SeedAsync(MlbGame("991300104"), []);
@@ -604,6 +626,9 @@ public sealed class MlbScoreboardTests : IClassFixture<SharedPostgreSql>, IAsync
 
     private async Task<FSharpResult<MlbScoreboardFrame, MlbScoreboardRejection>> AcceptAsync(JsonObject report, string status) =>
         await host.Services.GetRequiredService<MlbScoreboardStore>().AcceptAsync(Parse(report), status, CancellationToken.None);
+
+    private async Task<bool> WithdrawAsync(string gameId, string observedAt) =>
+        await host.Services.GetRequiredService<MlbScoreboardStore>().WithdrawAsync(gameId, Utc(observedAt), null, CancellationToken.None);
 
     private static MlbScoreboardReport Parse(JsonObject report) =>
         JsonSerializer.Deserialize<MlbScoreboardReport>(report.ToJsonString(), JsonSerializerOptions.Web)!;
