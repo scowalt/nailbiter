@@ -13,6 +13,17 @@ public sealed class MlbScoreboardFixtureTests
 {
     private static readonly string[] Sides = ["home", "away"];
 
+    private static readonly Dictionary<string, (string Name, string State, bool Completed)> Statuses = new()
+    {
+        ["scheduled"] = ("STATUS_SCHEDULED", "pre", false),
+        ["in"] = ("STATUS_IN_PROGRESS", "in", false),
+        ["final"] = ("STATUS_FINAL", "post", true),
+        ["postponed"] = ("STATUS_POSTPONED", "post", false),
+        ["canceled"] = ("STATUS_CANCELED", "post", false),
+        ["delayed"] = ("STATUS_RAIN_DELAY", "in", false),
+        ["suspended"] = ("STATUS_SUSPENDED", "post", false),
+    };
+
     private static JsonObject Fixture() =>
         JsonNode.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "MlbScoreboard", "espn-basic.json")))!.AsObject();
 
@@ -94,6 +105,8 @@ public sealed class MlbScoreboardFixtureTests
                 if (status?.Type is null) { problems.Add($"{id}: {label} status nesting"); continue; }
                 if (status.Type.Name != (string)want["name"]! || status.Type.State != (string)want["state"]! || status.Type.Completed != (bool)want["completed"]!)
                     problems.Add($"{id}: {label} status {status.Type.Name}/{status.Type.State}/{status.Type.Completed}");
+                if ((status.Type.Name, status.Type.State, status.Type.Completed) != Statuses[(string)want["status"]!])
+                    problems.Add($"{id}: {label} status {status.Type.Name}/{status.Type.State}/{status.Type.Completed} is not {want["status"]}");
                 if (status.Period != (int)want["period"]!) problems.Add($"{id}: {label} period {status.Period}");
                 var detail = Property(rawOwner, "status") is { } rawStatus && Property(rawStatus, "type") is { } rawType ? Property(rawType, "detail")?.GetString() : null;
                 if (detail != (string)want["detail"]!) problems.Add($"{id}: {label} detail {detail}");
