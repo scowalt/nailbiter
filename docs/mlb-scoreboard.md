@@ -82,7 +82,7 @@ The ESPN odds cycle for MLB (`EspnOddsService.ScrapeAndStoreOddsAsync "mlb"`) al
 - Hits, errors and inning runs that are present must be whole numbers, and inning entries must be in period order. Otherwise the whole event is rejected.
 - The report never includes the count, bases or matchup. The general scoreboard does not supply them reliably, so ingestion does not guess the live situation.
 
-For MLB, the cycle writes `status`, `home_score`, `away_score`, `period` and `status_detail` of an existing game only through the store. A game the cycle inserts gets its first status from the table below. The cycle still writes teams, schedule and odds as before. Its sweep still cancels a scheduled game that has left its date's board, which is how ESPN drops an unneeded postseason game. For MLB the sweep calls `MlbScoreboardStore.WithdrawAsync`, which takes the same locks as acceptance. In one save it sets `canceled` and clears the frame, score, inning and `status_detail`, so no frame contradicts the status. It sets `scoreboard_updated_at` to the cycle's time and raises the source revision to the board's `Date` header. A withdrawal is refused if the game is no longer scheduled, or if the board is older than the last accepted frame by either time. A board that returns the game later is accepted as usual. A board observed before the withdrawal cannot bring the old frame back. Withdrawal failures are logged with the same Error templates as acceptance failures. Odds snapshots made in the same cycle copy the accepted score and inning. Other sports are unchanged.
+For MLB, the cycle writes `status`, `home_score`, `away_score`, `period` and `status_detail` of an existing game only through the store. A game the cycle inserts gets its first status from the table below. The cycle still writes teams, schedule and odds as before. Its sweep still cancels a scheduled game that has left its date's board, which is how ESPN drops an unneeded postseason game. For MLB the sweep calls `MlbScoreboardStore.WithdrawAsync`, which takes the same locks as acceptance. In one save it sets `canceled` and clears the frame, score, inning and `status_detail`, so no frame contradicts the status. It sets `scoreboard_updated_at` to the cycle's time and raises the source revision to the board's `Date` header. A withdrawal is refused if the game is no longer scheduled, or if the board is older than the last accepted frame by either time. A board that returns the game later is accepted as usual. A board observed before the withdrawal cannot bring the old frame back. A withdrawal that fails or misses its deadline is logged at Error with its own templates, `Withdrawing ESPN MLB game {GameId}, which left its scoreboard, failed` and `Withdrawing ESPN MLB game {GameId}, which left its scoreboard, exceeded its {Deadline} deadline`, so it is not mistaken for a failed acceptance. Odds snapshots made in the same cycle copy the accepted score and inning. Other sports are unchanged.
 
 ### Status
 
@@ -108,7 +108,7 @@ Ingestion maps ESPN's status to the coarse `games.status` and to the report's `s
 
 `AcceptAsync` opens its own connection and takes the pro-hype fence, the advisory lock and the row lock. A caller that holds any of these in an open transaction would wait on itself. The cycle therefore accepts reports after it has saved the games and the playoff series, outside every transaction it opens. It records completion evidence after acceptance, so evidence that confirms a completion sees the `final` status the same cycle accepted. Do not call `MlbScoreboardIngestion.AcceptAsync` or `MlbScoreboardStore.AcceptAsync` inside a transaction.
 
-Each acceptance has a deadline of `MlbScoreboardIngestion.Deadline` (5 seconds), linked to the cycle's token. When the deadline passes, the game keeps its stored observation, the cycle logs an Error and goes on to the next game. Cancelling the cycle itself still cancels the cycle.
+Each acceptance and withdrawal has a deadline of `MlbScoreboardIngestion.Deadline` (5 seconds), linked to the cycle's token. When the deadline passes, the game keeps its stored observation, the cycle logs an Error and goes on to the next game. Cancelling the cycle itself still cancels the cycle.
 
 ### Failures
 
@@ -123,7 +123,7 @@ Sentry events per hour, inferred from the 30-second live cycle:
 | Malformed or rejected provider frame | 0 | 0 |
 | Missing (404) or malformed scoreboard body | 0 | 0 |
 | Stored frame that no longer validates | 0 | 1 per game and observation per process |
-| Acceptance deadline | 0 | 1 per game per cycle it stops, so at most 120 per stuck game per hour |
+| Acceptance or withdrawal deadline | 0 | 1 per game per cycle it stops, so at most 120 per stuck game per hour |
 | Other acceptance or withdrawal failure, such as a database error | 0 | 1 per game per failing cycle, so at most 120 per game per hour |
 
 ## Reading a game

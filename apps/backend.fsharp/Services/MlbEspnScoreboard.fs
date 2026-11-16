@@ -203,7 +203,8 @@ type MlbScoreboardIngestion(store: MlbScoreboardStore, logger: ILogger<MlbScoreb
         if warned.GetOrAdd(gameId, fun _ -> ConcurrentDictionary()).TryAdd(struct (digest, fault), ()) then
             logger.LogWarning("Rejected the ESPN MLB scoreboard frame for {GameId}: {Fault}", gameId, fault)
 
-    let guarded (gameId: string) (cancellationToken: CancellationToken) (work: CancellationToken -> Task<bool>) =
+    let guarded (deadlineTemplate: string) (failureTemplate: string) (gameId: string) (cancellationToken: CancellationToken)
+        (work: CancellationToken -> Task<bool>) =
         task {
             use limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
             limit.CancelAfter deadline
@@ -213,10 +214,10 @@ type MlbScoreboardIngestion(store: MlbScoreboardStore, logger: ILogger<MlbScoreb
             | :? OperationCanceledException when cancellationToken.IsCancellationRequested ->
                 return raise (OperationCanceledException(cancellationToken))
             | :? OperationCanceledException as ex ->
-                logger.LogError(ex, "Accepting the ESPN MLB scoreboard frame for {GameId} exceeded its {Deadline} deadline", gameId, deadline)
+                logger.LogError(ex, deadlineTemplate, gameId, deadline)
                 return false
             | ex ->
-                logger.LogError(ex, "Accepting the ESPN MLB scoreboard frame for {GameId} failed", gameId)
+                logger.LogError(ex, failureTemplate, gameId)
                 return false
         }
 
@@ -230,7 +231,10 @@ type MlbScoreboardIngestion(store: MlbScoreboardStore, logger: ILogger<MlbScoreb
                 warnOnce gameId (event.GetRawText()) fault
                 return false
             | Ok report ->
-                return! guarded gameId ct (fun limit ->
+                return! guarded
+                    "Accepting the ESPN MLB scoreboard frame for {GameId} exceeded its {Deadline} deadline"
+                    "Accepting the ESPN MLB scoreboard frame for {GameId} failed"
+                    gameId ct (fun limit ->
                     task {
                         let status = MlbEspnScoreboard.gameStatus null event
                         match! store.AcceptAsync(report, status, limit) with
@@ -245,7 +249,10 @@ type MlbScoreboardIngestion(store: MlbScoreboardStore, logger: ILogger<MlbScoreb
         }
 
     member _.WithdrawAsync(gameId: string, observedAt: DateTime, revision: Nullable<DateTimeOffset>, ct: CancellationToken) : Task<bool> =
-        guarded gameId ct (fun limit ->
+        guarded
+            "Withdrawing ESPN MLB game {GameId}, which left its scoreboard, exceeded its {Deadline} deadline"
+            "Withdrawing ESPN MLB game {GameId}, which left its scoreboard, failed"
+            gameId ct (fun limit ->
             task {
                 let! withdrawn = store.WithdrawAsync(gameId, observedAt, revision, limit)
                 if withdrawn then warned.TryRemove(gameId) |> ignore
