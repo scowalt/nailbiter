@@ -124,6 +124,7 @@ Sentry events per hour, inferred from the 30-second live cycle:
 | Missing (404) or malformed scoreboard body | 0 | 0 |
 | Stored frame that no longer validates | 0 | 1 per game and observation per process |
 | Acceptance deadline | 0 | 1 per game per cycle it stops, so at most 120 per stuck game per hour |
+| Other acceptance or withdrawal failure, such as a database error | 0 | 1 per game per failing cycle, so at most 120 per game per hour |
 
 ## Reading a game
 
