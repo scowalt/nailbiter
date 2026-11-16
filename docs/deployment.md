@@ -152,7 +152,7 @@ Each step creates a virtual environment under `$RUNNER_TEMP` and runs `uv pip in
 
 The test also fails on any requirements line that is not an exact pin followed only by sha256 hashes.
 
-A word counts as uv when it is `uv`, or when it is a path ending in `/uv` where a command starts: first on the line, after `&&`, `||`, `;` or `|`, or after `NAME=value` assignments. So `mkdir -p "$RUNNER_TEMP/uv"`, `directory="$RUNNER_TEMP/uv"` and `--cache-dir "$RUNNER_TEMP/uv"` pass. `uv pip install` knows only `--python`, `-r` and `--requirement` as options that take a value, so it still rejects `uv pip install --cache-dir "$RUNNER_TEMP/uv" …` as naming a package. That fails closed: put `--cache-dir` before `pip` or use `UV_CACHE_DIR`.
+A word counts as uv when it is `uv`, or when it is a path ending in `/uv` where a command starts: first on the line, after `&&`, `||`, `;` or `|`, or after `NAME=value` assignments. So `mkdir -p "$RUNNER_TEMP/uv"`, `directory="$RUNNER_TEMP/uv"` and `--cache-dir "$RUNNER_TEMP/uv"` pass. `uv pip install` knows only `--python`, `-r` and `--requirement` as options that take a value, so it still rejects `uv pip install --cache-dir "$RUNNER_TEMP/uv" …` as naming a package. That fails closed: set the cache directory with `UV_CACHE_DIR` instead.
 
 The test reads one command line at a time and splits it like a shell, without running a shell parser. These spellings still pass, and none occurs in CI today:
 
