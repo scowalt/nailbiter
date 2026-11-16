@@ -248,6 +248,25 @@ public sealed class MlbScoreboardTests(SharedPostgreSql server) : IClassFixture<
     }
 
     [Fact]
+    public async Task An_older_frame_is_rejected_even_when_the_stored_frame_no_longer_matches_the_game()
+    {
+        await host.SeedAsync(MlbGame("991300104"), []);
+        At("2027-07-10T23:30:00Z");
+        Accepted(await AcceptAsync(Frame("active-complete", "opening")));
+        await UpdateAsync(s => s.SetProperty(g => g.HomeTeamId, "9103").SetProperty(g => g.AwayTeamId, "9121"));
+        var before = await RowAsync("991300104");
+        var older = Frame("active-complete", "opening");
+        older["homeTeamId"] = "9103";
+        older["awayTeamId"] = "9121";
+        older["observedAt"] = "2027-07-10T23:29:00Z";
+        older["sourceRevisionAt"] = null;
+
+        Rejected(MlbScoreboardRejection.RegressingObservation, await AcceptAsync(older));
+
+        Assert.Equal(before, await RowAsync("991300104"));
+    }
+
+    [Fact]
     public async Task A_newer_frame_from_another_provider_is_rejected_and_writes_nothing()
     {
         await host.SeedAsync(MlbGame("991300104"), []);
