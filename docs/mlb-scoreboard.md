@@ -17,7 +17,9 @@ An accepted observation also sets `home_score`, `away_score`, `status_detail`, `
 
 ## Writing an observation
 
-Call `MlbScoreboardStore.AcceptAsync(db, timeProvider, report, cancellationToken)`. It returns `Ok frame` or `Error rejection`. A rejection writes nothing.
+Inject the singleton `MlbScoreboardStore` and call `AcceptAsync(report, cancellationToken)`. It returns `Ok frame` or `Error rejection`. A rejection writes nothing.
+
+The store creates its own service scope and `ExcitementDbContext` for each call, and it does not accept a caller's context. A caller's tracked `Game` therefore cannot stand in for the locked row, and the caller's pending changes are neither saved nor discarded by an accepted report.
 
 The write runs in one transaction. On PostgreSQL it takes the pro-hype write fence, then the transaction advisory lock `(683, hashtext(game id))`, then the game row with `FOR UPDATE`. It saves once and commits only when the report is accepted. Concurrent writers for one game therefore compare against the same stored observation.
 

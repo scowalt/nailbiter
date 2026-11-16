@@ -8,6 +8,7 @@ open backend.Data
 open backend.Models
 open Backend.FSharp
 open Microsoft.EntityFrameworkCore
+open Microsoft.Extensions.DependencyInjection
 
 [<CLIMutable>]
 type MlbCountReport = { Balls: Nullable<int>; Strikes: Nullable<int>; Outs: Nullable<int> }
@@ -367,12 +368,13 @@ module MlbScoreboard =
                 else None
               Completed = completed }
 
-[<AbstractClass; Sealed>]
-type MlbScoreboardStore private () =
-    static member AcceptAsync(db: ExcitementDbContext, timeProvider: TimeProvider, report: MlbScoreboardReport, cancellationToken: CancellationToken)
+type MlbScoreboardStore(scopes: IServiceScopeFactory, timeProvider: TimeProvider) =
+    member _.AcceptAsync(report: MlbScoreboardReport, cancellationToken: CancellationToken)
         : Task<Result<MlbScoreboardFrame, MlbScoreboardRejection>> =
         task {
             let gameId = report |> ofObj |> Option.map _.GameId |> Option.defaultValue null
+            use scope = scopes.CreateScope()
+            let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
             use! transaction = db.Database.BeginTransactionAsync(cancellationToken)
             let! game =
                 if db.Database.IsNpgsql() then

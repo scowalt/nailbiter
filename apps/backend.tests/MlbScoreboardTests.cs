@@ -282,7 +282,7 @@ public sealed class MlbScoreboardTests(SharedPostgreSql server) : IClassFixture<
         older["observedAt"] = "2027-07-10T23:40:00Z";
         older["sourceRevisionAt"] = null;
 
-        Rejected(MlbScoreboardRejection.RegressingObservation, await MlbScoreboardStore.AcceptAsync(db, host.Clock, Parse(older), CancellationToken.None));
+        Rejected(MlbScoreboardRejection.RegressingObservation, await AcceptAsync(older));
 
         Assert.Equal(Utc("2027-07-10T23:50:00Z"), before.ScoreboardUpdatedAt);
         Assert.Equal(before, await RowAsync("991300104"));
@@ -298,8 +298,8 @@ public sealed class MlbScoreboardTests(SharedPostgreSql server) : IClassFixture<
         var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
         (await db.Games.SingleAsync(g => g.Id == "991300101")).StatusDetail = "Unrelated pending change";
 
-        Rejected(MlbScoreboardRejection.FutureObservation, await MlbScoreboardStore.AcceptAsync(db, host.Clock, Parse(Frame("future", "future")), CancellationToken.None));
-        Accepted(await MlbScoreboardStore.AcceptAsync(db, host.Clock, Parse(Frame("active-complete", "opening")), CancellationToken.None));
+        Rejected(MlbScoreboardRejection.FutureObservation, await AcceptAsync(Frame("future", "future")));
+        Accepted(await AcceptAsync(Frame("active-complete", "opening")));
 
         Assert.Null((await RowAsync("991300101")).Detail);
         Assert.Equal(1, await db.SaveChangesAsync());
@@ -554,9 +554,7 @@ public sealed class MlbScoreboardTests(SharedPostgreSql server) : IClassFixture<
 
     private async Task<FSharpResult<MlbScoreboardFrame, MlbScoreboardRejection>> AcceptAsync(JsonObject report)
     {
-        using var scope = host.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
-        return await MlbScoreboardStore.AcceptAsync(db, host.Clock, Parse(report), CancellationToken.None);
+        return await host.Services.GetRequiredService<MlbScoreboardStore>().AcceptAsync(Parse(report), CancellationToken.None);
     }
 
     private static MlbScoreboardReport Parse(JsonObject report) =>
