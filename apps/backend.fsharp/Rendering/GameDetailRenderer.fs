@@ -270,7 +270,7 @@ module GameDetailRenderer =
                         match scoreboard with
                         | Some view ->
                             let homeProbability = latestOdds |> Option.map (fun odds -> odds.HomeWinProbability)
-                            match MlbScoreboardRenderer.probability isFinal isLive view homeProbability with
+                            match MlbScoreboardRenderer.probability game.Status view homeProbability with
                             | MlbScoreboardRenderer.Probability.Current p ->
                                 Elem.div [ cls "detail-probability" ] [
                                     ProbabilityBar.render false game.HomeTeamAbbreviation game.AwayTeamAbbreviation p (1.0 - p) colors

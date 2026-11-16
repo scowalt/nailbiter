@@ -257,7 +257,7 @@ module SseFragmentRenderer =
         let awayAbbr = if String.IsNullOrEmpty update.AwayTeamAbbreviation then update.AwayTeam else update.AwayTeamAbbreviation
         let fragments = [
             renderDetailExcitement excitementScore isLive isFinal
-            match MlbScoreboardRenderer.probability isFinal isLive scoreboard (Option.ofNullable update.HomeWinProbability) with
+            match MlbScoreboardRenderer.probability (update.Status.ToDbValue()) scoreboard (Option.ofNullable update.HomeWinProbability) with
             | MlbScoreboardRenderer.Probability.Current p -> renderDetailProbBar p homeAbbr awayAbbr colors false
             | MlbScoreboardRenderer.Probability.Unavailable ->
                 Elem.div [ Attr.id "detail-probbar"; cls "detail-unavailable-note" ] [ Text.raw "Live probability unavailable" ]

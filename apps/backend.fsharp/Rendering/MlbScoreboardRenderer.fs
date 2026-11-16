@@ -89,12 +89,16 @@ module MlbScoreboardRenderer =
             | Some board when board.Innings > 9 -> Clock.Status $"Final · {board.Innings} innings"
             | _ -> Clock.Status "Final"
 
-    let probability (gameFinal: bool) (gameInProgress: bool) (view: MlbScoreboardView) (homeProbability: float option) =
-        let final = gameFinal || view.Phase = MlbScoreboardPhase.Final
+    let probability (storedStatus: string) (view: MlbScoreboardView) (homeProbability: float option) =
+        let gameOff =
+            match storedStatus, view.Phase with
+            | ("final" | "postponed" | "canceled"), _
+            | _, (MlbScoreboardPhase.Final | MlbScoreboardPhase.Postponed | MlbScoreboardPhase.Canceled) -> true
+            | _ -> false
         match homeProbability with
-        | _ when final -> Probability.Hidden
+        | _ when gameOff -> Probability.Hidden
         | Some p -> Probability.Current p
-        | None when gameInProgress -> Probability.Unavailable
+        | None when storedStatus = "in_progress" -> Probability.Unavailable
         | None -> Probability.Hidden
 
     let statusBadge (storedStatus: string) (view: MlbScoreboardView) =
@@ -103,6 +107,7 @@ module MlbScoreboardRenderer =
         | MlbScoreboardPhase.Suspended -> "Suspended", "status-scheduled"
         | MlbScoreboardPhase.Postponed -> "Postponed", "status-scheduled"
         | MlbScoreboardPhase.Canceled -> "Canceled", "status-final"
+        | _ when view.Board.IsNone && storedStatus = "postponed" -> "Postponed", "status-scheduled"
         | MlbScoreboardPhase.Live
         | MlbScoreboardPhase.Stale
         | MlbScoreboardPhase.Recorded
