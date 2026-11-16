@@ -4,26 +4,35 @@ using System.Text.Json;
 
 namespace ListingCheck;
 
-public enum FailureKind { InvalidConfig = 2, Request = 3, Deadline = 4, Content = 5, QueryWork = 6, Budget = 7 }
+public enum FailureKind { InvalidConfig = 2, Request = 3, Deadline = 4, Content = 5, QueryWork = 6, Budget = 7, Readiness = 8, Revision = 9 }
 
 public enum CheckMode { Url, Fixture }
 
 public sealed record Failure(FailureKind Kind, string? Path, string Message)
 {
     public static string Name(FailureKind kind) => JsonNamingPolicy.KebabCaseLower.ConvertName(kind.ToString());
+
+    public static int Severity(FailureKind kind) => kind switch
+    {
+        FailureKind.InvalidConfig => 0,
+        FailureKind.Readiness or FailureKind.Revision => 1,
+        _ => (int)kind
+    };
 }
 
 public sealed record CheckOptions(Uri? BaseUrl, IReadOnlyList<string> Paths, int Samples, int Warmup, TimeSpan TtfbBudget,
-    TimeSpan CompletionBudget, TimeSpan RequestTimeout, string? ReportPath, bool AllowRemoteHost)
+    TimeSpan CompletionBudget, TimeSpan RequestTimeout, string? ReportPath, bool AllowRemoteHost, ExpectedRelease? Release = null)
 {
     private const int MaxTimeoutMs = 60_000;
+    private const int MaxReadyWithinMs = 600_000;
+    private const int DefaultReadyWithinMs = 120_000;
     private const int MaxPaths = 6;
     private static readonly string[] SharedFlags =
         ["--samples", "--warmup", "--ttfb-budget-ms", "--completion-budget-ms", "--request-timeout-ms", "--report"];
 
     private static readonly Dictionary<CheckMode, (int Samples, int MaxSamples, int Warmup, int MaxWarmup, string[] Flags)> Modes = new()
     {
-        [CheckMode.Url] = (3, 5, 1, 2, ["--base-url", "--path", "--allow-remote-host", .. SharedFlags]),
+        [CheckMode.Url] = (3, 5, 1, 2, ["--base-url", "--path", "--allow-remote-host", "--expected-revision", "--ready-within-ms", .. SharedFlags]),
         [CheckMode.Fixture] = (10, 100, 2, 20, SharedFlags)
     };
 
@@ -66,7 +75,8 @@ public sealed record CheckOptions(Uri? BaseUrl, IReadOnlyList<string> Paths, int
             ("--warmup", limits.Warmup, 0, limits.MaxWarmup),
             ("--ttfb-budget-ms", null, 1, MaxTimeoutMs),
             ("--completion-budget-ms", null, 1, MaxTimeoutMs),
-            ("--request-timeout-ms", 10_000, 1, MaxTimeoutMs)
+            ("--request-timeout-ms", 10_000, 1, MaxTimeoutMs),
+            ("--ready-within-ms", DefaultReadyWithinMs, 1, MaxReadyWithinMs)
         })
         {
             if (!values.TryGetValue(flag, out var text))
@@ -95,12 +105,33 @@ public sealed record CheckOptions(Uri? BaseUrl, IReadOnlyList<string> Paths, int
             if (paths.Distinct().Count() < paths.Count) return Fail("--path values must be distinct");
         }
 
+        ExpectedRelease? release = null;
+        if (values.TryGetValue("--expected-revision", out var revision))
+        {
+            if (!ExpectedRelease.IsRevision(revision)) return Fail("--expected-revision must be a full 40-character lowercase commit SHA");
+            release = new(revision, TimeSpan.FromMilliseconds(numbers["--ready-within-ms"]));
+        }
+        else if (values.ContainsKey("--ready-within-ms")) return Fail("--ready-within-ms needs --expected-revision");
+
         return (new CheckOptions(baseUrl, paths, numbers["--samples"], numbers["--warmup"],
             TimeSpan.FromMilliseconds(numbers["--ttfb-budget-ms"]), TimeSpan.FromMilliseconds(numbers["--completion-budget-ms"]),
-            TimeSpan.FromMilliseconds(numbers["--request-timeout-ms"]), values.GetValueOrDefault("--report"), allowRemoteHost), null);
+            TimeSpan.FromMilliseconds(numbers["--request-timeout-ms"]), values.GetValueOrDefault("--report"), allowRemoteHost, release), null);
     }
 
     private static string Name(CheckMode mode) => JsonNamingPolicy.KebabCaseLower.ConvertName(mode.ToString());
+}
+
+public sealed record ExpectedRelease(string Revision, TimeSpan ReadyWithin)
+{
+    public const string Header = "X-Nailbiter-Revision";
+
+    public static bool IsRevision(string? text) => text is { Length: 40 } && text.All(c => char.IsAsciiDigit(c) || c is >= 'a' and <= 'f');
+
+    public static string? Served(HttpResponseMessage response) =>
+        response.Headers.TryGetValues(Header, out var values) ? string.Join(",", values) : null;
+
+    public static string Describe(string? served) =>
+        served is null ? "served no revision" : IsRevision(served) ? $"served revision {served}" : "served an unrecognized revision";
 }
 
 public static class ListingRoute

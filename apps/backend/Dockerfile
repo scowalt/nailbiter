@@ -18,6 +18,8 @@ RUN apt-get update \
 WORKDIR /app
 COPY --from=build /app/publish .
 
+ARG SOURCE_REVISION=
+ENV SourceRevision=${SOURCE_REVISION}
 ENV ASPNETCORE_URLS=http://+:5093
 ENV ASPNETCORE_ENVIRONMENT=Production
 

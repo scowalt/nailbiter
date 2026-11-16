@@ -30,13 +30,13 @@ class PipelineTests(unittest.TestCase):
         for job in self.jobs.values():
             self.assertEqual(job['runs-on'], 'ubuntu-24.04')
             self.assertNotIn('container', job)
-        for name in ['checks', 'backend-tests', 'validate', 'image']:
+        for name in ['checks', 'backend-tests', 'validate', 'image', 'listing-checker']:
             serialized = json.dumps(self.jobs[name])
             self.assertNotIn('secrets.', serialized)
             self.assertTrue(all(value in {'read', 'none'} for value in self.jobs[name].get('permissions', self.workflow['permissions']).values()))
             self.assertNotIn('environment', self.jobs[name])
         release = self.jobs['release']
-        self.assertEqual(release['needs'], ['validate', 'image'])
+        self.assertEqual(release['needs'], ['validate', 'image', 'listing-checker'])
         self.assertEqual(release['environment'], 'production')
         self.assertEqual(release['concurrency'], {'group': 'production-release', 'cancel-in-progress': False})
         for guard in ["github.repository == 'scowalt/nailbiter'", "github.ref == 'refs/heads/main'", "vars.PRODUCTION_RELEASES_ENABLED == 'true'", "github.event_name == 'push'", "github.event_name == 'workflow_dispatch'"]:
@@ -103,7 +103,7 @@ class PipelineTests(unittest.TestCase):
         names = [step.get('name') for step in release['steps']]
         self.assertLess(names.index('Verify trusted main and publish the scanned image'), names.index('Deploy the tested backend revision and immutable image'))
         downloads = [step for step in release['steps'] if step.get('uses', '').startswith('actions/download-artifact@')]
-        self.assertEqual({step['with']['name'] for step in downloads}, {'backend-${{ github.sha }}', 'marketing-${{ github.sha }}'})
+        self.assertEqual({step['with']['name'] for step in downloads}, {'backend-${{ github.sha }}', 'marketing-${{ github.sha }}', 'listing-checker-${{ github.sha }}'})
         self.assertTrue(all('run-id' not in step['with'] and 'repository' not in step['with'] for step in downloads))
 
     def test_marketing_paths_and_manual_releases(self):

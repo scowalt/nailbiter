@@ -50,17 +50,25 @@ that produces each failure class.
 | `--base-url` | URL | Required. An `http` or `https` origin with no credentials, path, query or fragment. |
 | `--path` | URL | Up to 6 distinct listing paths: `/`, `/nba`, `/nfl`, `/nhl`, `/mlb` or `/cfb`, each with an optional `?date=YYYY-MM-DD`. Default `/`. |
 | `--allow-remote-host` | URL | Required for any host that is not loopback. Without it, the run fails as `invalid-config` and sends nothing. |
+| `--expected-revision` | URL | A full 40-character lowercase commit SHA. The check first polls `/health` until its `X-Nailbiter-Revision` header equals it, then requires that header on every listing response. |
+| `--ready-within-ms` | URL | How long to poll `/health`, 1 to 600000. Default 120000. Requires `--expected-revision`. |
 
 A round requests every path once, in order, one request at a time. URL mode
-therefore sends at most `(2 + 5) × 6 = 42` requests. The client sends GET only,
+therefore sends at most `(2 + 5) × 6 = 42` listing requests. With
+`--expected-revision`, it first sends one `/health` request every 5 s until the
+revision is served or the readiness period ends, so at most
+`ready-within-ms / 5000 + 1` polls. The client sends GET only,
 does not follow redirects, sends no cookies and has no option for headers or
-credentials. Fixture mode owns its paths, so `--path`, `--base-url` and
+credentials. Every request, including `/health`, carries the fixed User-Agent
+`nailbiter-listing-check/1 (+https://github.com/scowalt/nailbiter)`. Fixture mode owns its paths, so `--path`, `--base-url` and
 `--allow-remote-host` are invalid there.
 
 ## Failure classes
 
 The outcome is the most severe failure class present. The exit code identifies
-it.
+it. `invalid-config` is the most severe, then `readiness` and `revision`,
+because a response from another revision makes every other result unattributable
+to the release. The other classes follow in exit-code order.
 
 | Exit | Outcome | Meaning |
 |---|---|---|
@@ -72,6 +80,8 @@ it.
 | 5 | `content` | A 2xx HTML page failed a content rule. |
 | 6 | `query-work` | Fixture mode only. A page broke a deterministic database-work rule. |
 | 7 | `budget` | All requests succeeded, but a page's measured median TTFB or completion exceeded its budget. |
+| 8 | `readiness` | `/health` did not serve `--expected-revision` within `--ready-within-ms`. No listing is requested. The message gives the poll count and the last poll's status or served revision. |
+| 9 | `revision` | A listing response named a revision other than `--expected-revision`, or none. |
 | 130 | — | Interrupted by Ctrl-C (SIGINT) or SIGTERM before the report was written. One `cancelled:` line is printed to stderr and no report is written. Fixture mode still removes its container. |
 
 If the interrupt arrives after the report was written, the run keeps the
@@ -422,7 +432,8 @@ The JSON report (schema `nailbiter.listing-check/1`) has these fields:
 | `schema`, `mode`, `outcome`, `exitCode` | Report version, `url` or `fixture`, result. |
 | `startedAtUtc`, `durationMs` | When the run started and how long it took. |
 | `target` | The origin (`scheme://host:port`) in URL mode, or `in-process fixture (loopback)`. |
-| `config` | Samples, warmup, budgets, timeout and paths. |
+| `config` | Samples, warmup, budgets, timeout, paths, `expectedRevision` and `readyWithinMs` (both `null` without `--expected-revision`). |
+| `readiness` | `null` without `--expected-revision`. Otherwise `ready`, `polls`, `waitedMs`, `servedRevision` (only a well-formed SHA, else `null`) and `lastPoll`. |
 | `host` | 1-minute load average before and after, and the processor count. |
 | `pages` | Per path: measured count, `ttfb` and `completion` min, median and max in ms, and `withinBudget`. Only measured, successful samples count. |
 | `samples` | Every request: path, `warmup` or `measured`, round, status, TTFB, completion, bytes, failure class and detail. |
@@ -451,29 +462,38 @@ host is an upper bound on the app's work, not a measurement of it.
 
 ## Use after a deployment (#8)
 
-Issue #8 runs URL mode against the deployed live app after a release. This
-repository does not run that check yet, and nothing here has requested a
-production host. The intended call, after #8's own readiness wait, uses the
-live app origin from `docs/deployment.md`; #8 confirms which origin serves the
-listing pages:
+Every backend release runs URL mode against `https://live.nailbiter.app`, the
+origin users load the listings from, through `scripts/ci/verify-listings.sh`.
+[deployment.md](../deployment.md#deployed-listing-check) describes the step,
+its failure messages and where its report is kept. The call is:
 
 ```sh
-dotnet run --project apps/listing-check -c Release -- url \
+.ci/listing-checker/listing-check url \
   --base-url https://live.nailbiter.app --allow-remote-host \
-  --path / --path /nhl --samples 3 --warmup 1 \
-  --ttfb-budget-ms <budget> --completion-budget-ms <budget> \
-  --report listing-postdeploy.json
+  --expected-revision "$GITHUB_SHA" --ready-within-ms 120000 \
+  --path / --path /nfl --path /nba --path /nhl --path /mlb --path /cfb \
+  --samples 3 --warmup 1 --ttfb-budget-ms 1500 --completion-budget-ms 2500 \
+  --request-timeout-ms 10000 --report .ci/listing-check.json
 ```
 
-- Readiness and revision checks belong to #8. The checker does not poll
-  `/health` and does not know which revision is deployed. Wrap the call so the
-  report is stored with the deployed revision and image digest.
-- Map exit codes to #8's failures: 3 and 4 are request failures, 5 is wrong
-  content, and 7 is an exceeded budget. Readiness expiry and revision mismatch
-  come from #8's wrapper.
 - Without `?date=`, league pages show the server's current day, which may
   legitimately be empty. The content rules accept an empty listing.
-- The report has no secrets, so the whole file can be kept as the release
-  record.
+- The report has no secrets, so the whole file is kept as the release record.
 - `--allow-remote-host` is required for a production host. Do not add it in
   tests or local runs.
+
+### Basis of the initial budget
+
+The budget is 1,500 ms median TTFB and 2,500 ms median completion per page,
+with three measured samples after one warmup. These are the budgets #144
+documented for both modes. Its fixture run against about 122,000 synthetic
+snapshots measured medians of 133, 68 and 68 ms for the three paths at load
+3.2. That fixture does not predict production latency, so these budgets are a
+starting point, not a measured production baseline: they leave room for the
+network from a GitHub runner and a busier database, and they still fail a page
+that takes seconds, the kind of slow listing a client gives up on. The median
+of three ignores one slow sample.
+
+A failed budget is evidence, not a reason to raise the number. Change the
+budget only in a reviewed PR that cites the `listing-check-<sha>` reports
+behind the change.
