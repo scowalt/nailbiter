@@ -408,7 +408,7 @@ MLB_STATUSES = {
     'scheduled': ('STATUS_SCHEDULED', 'pre', False, 'Scheduled'),
     'in': ('STATUS_IN_PROGRESS', 'in', False, 'In Progress'),
     'final': ('STATUS_FINAL', 'post', True, 'Final'),
-    'postponed': ('STATUS_POSTPONED', 'post', True, 'Postponed'),
+    'postponed': ('STATUS_POSTPONED', 'post', False, 'Postponed'),
     'canceled': ('STATUS_CANCELED', 'post', False, 'Canceled'),
     'delayed': ('STATUS_RAIN_DELAY', 'in', False, 'Rain Delay'),
     'suspended': ('STATUS_SUSPENDED', 'post', False, 'Suspended'),
