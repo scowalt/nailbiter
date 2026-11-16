@@ -137,6 +137,58 @@ public sealed class MlbScoreboardSentryTests : IClassFixture<SharedPostgreSql>, 
         Assert.Equal("Top 5th", (await Read()).Board.Value.Detail);
     }
 
+    [Fact]
+    public async Task A_failing_withdrawal_sends_one_error_event_named_for_the_withdrawal_and_keeps_the_game()
+    {
+        await Observe("opening");
+        await using (var connection = new NpgsqlConnection(ConnectionString()))
+        {
+            await connection.OpenAsync();
+            await using var fail = new NpgsqlCommand("""
+                CREATE FUNCTION fail_withdrawal() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN RAISE EXCEPTION 'synthetic withdrawal failure'; END $$;
+                CREATE TRIGGER fail_withdrawal BEFORE UPDATE ON games FOR EACH ROW
+                WHEN (NEW.id = '991300106' AND NEW.status = 'canceled')
+                EXECUTE FUNCTION fail_withdrawal();
+                """, connection);
+            await fail.ExecuteNonQueryAsync();
+        }
+        provider.Withdraw("991300106");
+
+        host.Clock.Advance(TimeSpan.FromSeconds(30));
+        await Run();
+
+        var sent = Assert.Single(await Events());
+        Assert.Equal(("error", "backend.Services.MlbScoreboardIngestion"), (sent.Level, sent.Logger));
+        Assert.Contains("991300106", sent.Json);
+        Assert.Contains("Withdrawing ESPN MLB game {GameId}, which left its scoreboard, failed", sent.Json);
+        Assert.DoesNotContain("Accepting", sent.Json);
+        Assert.Equal(MlbScoreboardPhase.Pregame, (await Read("991300106")).Phase);
+    }
+
+    [Fact]
+    public async Task A_withdrawal_deadline_sends_one_error_event_named_for_the_withdrawal()
+    {
+        await Observe("opening");
+        await using var holder = new NpgsqlConnection(ConnectionString());
+        await holder.OpenAsync();
+        await using (var hold = new NpgsqlCommand("SELECT pg_advisory_lock(683, hashtext('991300106'))", holder))
+            await hold.ExecuteNonQueryAsync();
+        provider.Withdraw("991300106");
+
+        host.Clock.Advance(TimeSpan.FromSeconds(30));
+        await Run();
+
+        var sent = Assert.Single(await Events());
+        Assert.Equal(("error", "backend.Services.MlbScoreboardIngestion"), (sent.Level, sent.Logger));
+        Assert.Contains("991300106", sent.Json);
+        Assert.Contains("Withdrawing ESPN MLB game {GameId}, which left its scoreboard, exceeded its {Deadline} deadline", sent.Json);
+        Assert.DoesNotContain("Accepting", sent.Json);
+    }
+
+    private async Task<MlbScoreboardView> Read(string gameId) =>
+        (await host.Services.GetRequiredService<MlbScoreboardStore>().ReadAsync(gameId, CancellationToken.None)).Value;
+
     private async Task<MlbScoreboardView> Read() =>
         (await host.Services.GetRequiredService<MlbScoreboardStore>().ReadAsync("991300104", CancellationToken.None)).Value;
 
