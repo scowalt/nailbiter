@@ -94,7 +94,7 @@ Marketing is built during validation and deployed from that same run's checked a
 
 ### CI .NET SDK
 
-Every CI job that runs `dotnet` (`checks`, `backend-tests` and `listing-checker`) installs the SDK with `scripts/ci/install-dotnet-sdk.sh`, not through mise. The workflow sets `MISE_DISABLE_TOOLS` so that `jdx/mise-action` does not install the `mise-plugins/mise-dotnet-core` plugin, which would clone the plugin at its default branch and run an unpinned `dotnet-install.sh` with no hash check. Local development still uses the plugin through `.mise.toml`.
+Every CI job that runs `dotnet` on the runner (`checks`, `backend-tests` and `listing-checker`) installs the SDK with `scripts/ci/install-dotnet-sdk.sh`, not through mise. The workflow sets `MISE_DISABLE_TOOLS` so that `jdx/mise-action` does not install the `mise-plugins/mise-dotnet-core` plugin, which would clone the plugin at its default branch and run an unpinned `dotnet-install.sh` with no hash check. The mise steps use `cache_key_prefix: mise-v2`, because a `mise-v1` cache saved before this change still holds the plugin and an unchecked SDK, and mise runs the cached plugin's scripts. Local development still uses the plugin through `.mise.toml`. The `image` job builds inside Docker from `mcr.microsoft.com/dotnet/sdk`, referenced by tag, which this script does not cover.
 
 The script downloads `dotnet-sdk-<version>-linux-x64.tar.gz` from `builds.dotnet.microsoft.com` over HTTPS only. If the tarball does not match its line in `scripts/ci/dotnet-sdk.sha512`, the step fails with a `.NET SDK checksum mismatch` annotation and extracts nothing. If that file has no line for the `global.json` version, the step fails before it downloads anything.
 

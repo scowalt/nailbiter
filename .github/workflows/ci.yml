@@ -30,6 +30,8 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        with:
+          cache_key_prefix: mise-v2
       - name: Verify event checkout and synthetic fixture provenance
         run: |
           sh scripts/ci/verify-checkout.sh
@@ -144,6 +146,8 @@ jobs:
         with:
           persist-credentials: false
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c
+        with:
+          cache_key_prefix: mise-v2
       - name: Install the pinned .NET SDK
         run: sh scripts/ci/install-dotnet-sdk.sh
       - name: Build the C# test suite
