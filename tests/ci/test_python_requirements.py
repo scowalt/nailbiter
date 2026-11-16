@@ -292,6 +292,7 @@ class InstallRuleTests(unittest.TestCase):
         ]
         allowed = [
             ['--directory', str(sub), 'plain.py'],
+            [f'--directory={sub}', 'plain.py'],
             ['--env-file', 'e', 'python', '-m', 'unittest'],
             ['--cache-dir', '$RUNNER_TEMP/uv', 'python', '-c', '1'],
             ['-q', '--frozen', '--env-file=e', 'python', '-c', '1'],
