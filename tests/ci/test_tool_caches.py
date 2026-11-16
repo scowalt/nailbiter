@@ -16,6 +16,12 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 SHA256 = re.compile(r'\b[0-9a-f]{64}\b')
 INSTALL_BUN = 'sh scripts/ci/install-bun.sh'
+BUN_ADVISORIES = {
+    'GHSA-v9mx-4pqq-h232': ((0, 0, 13), (1, 1, 30)),
+    'GHSA-663w-cv8g-jj2p': ((1, 0, 21), (1, 4, 4)),
+    'GHSA-26q8-h657-pf84': ((0, 0, 0), (1, 4, 4)),
+    'GHSA-cf8x-9m69-3gg3': ((1, 3, 14), (1, 4, 4)),
+}
 RUNS_BUN = re.compile(r'(?<![\w./-])bunx?(?![\w.-])')
 INSTALL_TRIVY = 'sh scripts/ci/install-trivy.sh'
 TRIVY_ADVISORIES = {
@@ -196,6 +202,12 @@ class PinnedBunInstallTests(InstallScriptTests):
         script = self.script.read_text()
         self.assertEqual(len(SHA256.findall(script)), 1)
         return self.run_install(SHA256.sub(hashlib.sha256(archive).hexdigest(), script), archive)
+
+    def test_the_pinned_bun_is_outside_every_known_advisory_range(self):
+        version = re.fullmatch(r'([0-9]+)\.([0-9]+)\.([0-9]+)', self.pinned_version())
+        self.assertIsNotNone(version)
+        pinned = tuple(int(part) for part in version.groups())
+        self.assertEqual({advisory: pinned for advisory, (introduced, fixed) in BUN_ADVISORIES.items() if introduced <= pinned < fixed}, {})
 
     def test_the_pinned_bun_is_the_mise_toml_version(self):
         self.assertEqual(self.pinned_version(), tomllib.loads((ROOT / '.mise.toml').read_text())['tools']['bun'])

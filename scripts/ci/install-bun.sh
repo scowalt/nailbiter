@@ -1,8 +1,8 @@
 #!/bin/sh
 set -eu
 
-version=1.4.2
-sha256=36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913
+version=1.4.4
+sha256=bf8ccbfb2b0b80159e0f9a6d15c55317add8077534dbc6130a3edb52fccb395c
 archive="${RUNNER_TEMP:?Runner temp is required}/bun.zip"
 directory="$RUNNER_TEMP/bun"
 curl --fail --silent --show-error --location --proto '=https' --output "$archive" "https://github.com/oven-sh/bun/releases/download/bun-v$version/bun-linux-x64.zip"
