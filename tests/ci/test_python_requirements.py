@@ -147,6 +147,16 @@ class InstallRuleTests(unittest.TestCase):
     def test_allows_uv_run_without_extra_packages(self):
         self.assertEqual(self.problems('uv run --no-project python -m unittest'), [])
 
+    def test_rejects_versioned_pip_uv_sync_and_uv_run_that_reads_a_project(self):
+        for line in ['pip3 install pyyaml', 'pip3.14 install --require-hashes -r r.txt', 'uv sync', 'uv sync --frozen', 'uv pip sync r.txt', 'cd apps/analysis && uv run python -m unittest', 'uv run --project apps/analysis python', 'uv --directory apps/analysis run python', 'uv run python -m unittest && uv run --no-project python -c 1']:
+            with self.subTest(line=line):
+                self.assertNotEqual(line_install_problems(line), [])
+
+    def test_allows_the_commands_ci_runs(self):
+        for line in ['uv venv "$RUNNER_TEMP/tests-ci"', f'uv pip install --python "$RUNNER_TEMP/v" --require-hashes --no-build -r {self.hashed}', 'uv run --no-project python -m unittest', 'bunx playwright install --with-deps chromium']:
+            with self.subTest(line=line):
+                self.assertEqual(line_install_problems(line), [])
+
     def test_hashed_file_rejects_ranges_missing_hashes_and_extra_options(self):
         digest = '--hash=sha256:' + 'a' * 64
         cases = {

@@ -1,5 +1,6 @@
 from pathlib import Path
 import re
+import tempfile
 import unittest
 
 import yaml
@@ -41,6 +42,14 @@ class MiseVersionTests(unittest.TestCase):
     def test_the_pinned_binary_hash_matches_the_runner_platform(self):
         runners = {source: job.get('runs-on') for source, job, _ in self.uses}
         self.assertEqual({source: runner for source, runner in runners.items() if not X64_LINUX_RUNNER.match(str(runner))}, {})
+
+
+class MiseActionMatchTests(unittest.TestCase):
+    def test_matches_the_action_in_any_letter_case_and_any_workflow_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workflows = Path(directory)
+            (workflows / 'other.yaml').write_text('jobs:\n  build:\n    runs-on: ubuntu-24.04\n    steps:\n      - uses: JDX/Mise-Action@' + 'a' * 40 + '\n')
+            self.assertEqual([source for source, _, _ in mise_action_uses(workflows)], ['other.yaml:build[0]'])
 
 
 if __name__ == '__main__':

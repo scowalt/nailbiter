@@ -139,6 +139,24 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(backend['environment']['Highlights__Worker__AuthorizeLaunchCatchup'], 'false')
 
 
+class ActionPinRuleTests(unittest.TestCase):
+    def test_every_workflow_file_pins_step_and_job_uses_in_any_letter_case(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workflows = Path(directory)
+            (workflows / 'ci.yml').write_text(f'jobs:\n  build:\n    steps:\n      - uses: actions/checkout@{"a" * 40}\n        with:\n          persist-credentials: false\n')
+            (workflows / 'other.yaml').write_text(f'''jobs:
+  call:
+    uses: octo/reusable/.github/workflows/build.yml@main
+  build:
+    steps:
+      - uses: actions/setup-node@v4
+      - uses: docker://alpine:3.20
+      - uses: Actions/Checkout@{"a" * 40}
+''')
+            problems = action_pin_problems(workflows)
+        self.assertEqual([problem.split(':', 2)[1] for problem in problems], ['call', 'build[0]', 'build[1]', 'build[2]'], problems)
+
+
 class ScriptTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
