@@ -25,7 +25,7 @@ fi
 
 rm -rf "$sdk" "$download"
 mkdir -p "$download"
-curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --retry 3 \
+curl --fail --silent --show-error --location --tlsv1.2 --proto '=https' --proto-redir '=https' --retry 3 \
   --output "$download/$archive" "https://builds.dotnet.microsoft.com/dotnet/Sdk/$version/$archive"
 if ! printf '%s  %s\n' "$sha512" "$archive" | (cd "$download" && sha512sum --check --strict --quiet); then
   rm -rf "$download"

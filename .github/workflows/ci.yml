@@ -43,6 +43,8 @@ jobs:
           gitleaks git --config .gitleaks.toml --redact=100 --log-opts=--all
       - name: Install the pinned .NET SDK
         run: sh scripts/ci/install-dotnet-sdk.sh
+      - name: Check that dotnet is the pinned SDK
+        run: sh scripts/ci/check-dotnet-sdk.sh
       - name: Lint and browser regressions
         run: |
           bun install --frozen-lockfile --ignore-scripts
@@ -112,6 +114,8 @@ jobs:
           persist-credentials: false
       - name: Install the pinned .NET SDK
         run: sh scripts/ci/install-dotnet-sdk.sh
+      - name: Check that dotnet is the pinned SDK
+        run: sh scripts/ci/check-dotnet-sdk.sh
       - name: Publish the self-contained checker
         id: package
         env:
@@ -150,6 +154,8 @@ jobs:
           cache_key_prefix: mise-v2
       - name: Install the pinned .NET SDK
         run: sh scripts/ci/install-dotnet-sdk.sh
+      - name: Check that dotnet is the pinned SDK
+        run: sh scripts/ci/check-dotnet-sdk.sh
       - name: Build the C# test suite
         run: |
           sh scripts/ci/verify-checkout.sh
