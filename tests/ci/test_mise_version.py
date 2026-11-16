@@ -42,6 +42,9 @@ class MiseVersionTests(unittest.TestCase):
         runners = {source: job.get('runs-on') for source, job, _ in self.uses}
         self.assertEqual({source: runner for source, runner in runners.items() if not X64_LINUX_RUNNER.match(str(runner))}, {})
 
+    def test_no_mise_action_use_restores_its_tool_cache(self):
+        self.assertEqual({source: inputs.get('cache') for source, _, inputs in self.uses if inputs.get('cache') is not False}, {})
+
 
 if __name__ == '__main__':
     unittest.main()
