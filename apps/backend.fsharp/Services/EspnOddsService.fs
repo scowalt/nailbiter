@@ -227,6 +227,7 @@ type EspnOddsService
             let suppliedSeriesIds = HashSet<string>()
             let mlbEvents = if sportLower = "mlb" then MlbEspnScoreboard.events scoreboard.RawJson else Map.empty
             let mlbObservations = ResizeArray<struct (string * JsonElement)>()
+            let mlbWithdrawals = ResizeArray<Game>()
             if supportsSeries then
                 let mutable rawEvents = Unchecked.defaultof<JsonElement>
                 if scoreboard.RawJson.TryGetProperty("events", &rawEvents) && rawEvents.ValueKind = JsonValueKind.Array then
@@ -646,7 +647,6 @@ type EspnOddsService
                         .Where(fun g ->
                             g.Sport = sportLower
                             && g.Status = "scheduled"
-                            && (sportLower <> "mlb" || g.MlbScoreboardJson = null)
                             && g.ScheduledStart >= dayStart
                             && g.ScheduledStart < dayEnd
                             && not (espnIdList.Contains(g.Id)))
@@ -657,11 +657,13 @@ type EspnOddsService
                     if isNull prior || prior.ObservedAt < seriesObservedAt then
                         if supportsSeries then
                             seriesObservations.Add(PlayoffSeriesCollector.Observe(game, scoreboard.RawJson, seriesObservedAt))
-                        game.Status <- "canceled"
-                        publishGameIds.Add(game.Id) |> ignore
-                        logger.LogInformation(
-                            "Canceled stale game {GameId} ({Away} @ {Home}) - no longer on ESPN scoreboard",
-                            game.Id, game.AwayTeam, game.HomeTeam)
+                        if sportLower = "mlb" then mlbWithdrawals.Add(game)
+                        else
+                            game.Status <- "canceled"
+                            publishGameIds.Add(game.Id) |> ignore
+                            logger.LogInformation(
+                                "Canceled stale game {GameId} ({Away} @ {Home}) - no longer on ESPN scoreboard",
+                                game.Id, game.AwayTeam, game.HomeTeam)
             | _ -> ()
 
             let! rejectedSeriesIds = PlayoffSeriesCollector.SaveAsync(db, seriesObservations, suppliedSeriesIds, ct)
@@ -669,6 +671,14 @@ type EspnOddsService
             match mlbIngestion with
             | None -> ()
             | Some mlbIngestion ->
+                for game in mlbWithdrawals do
+                    if not (rejectedSeriesIds.Contains(game.Id)) then
+                        let! withdrawn = mlbIngestion.WithdrawAsync(game.Id, now, scoreboard.ResponseDate, ct)
+                        if withdrawn then
+                            publishGameIds.Add(game.Id) |> ignore
+                            logger.LogInformation(
+                                "Canceled stale game {GameId} ({Away} @ {Home}) - no longer on ESPN scoreboard",
+                                game.Id, game.AwayTeam, game.HomeTeam)
                 for struct (gameId, rawEvent) in mlbObservations do
                     if not (rejectedSeriesIds.Contains(gameId)) then
                         let! _ = mlbIngestion.AcceptAsync(gameId, rawEvent, now, scoreboard.ResponseDate, ct)

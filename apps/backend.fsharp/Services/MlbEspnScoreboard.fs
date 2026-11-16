@@ -203,6 +203,23 @@ type MlbScoreboardIngestion(store: MlbScoreboardStore, logger: ILogger<MlbScoreb
         if warned.GetOrAdd(gameId, fun _ -> ConcurrentDictionary()).TryAdd(struct (digest, fault), ()) then
             logger.LogWarning("Rejected the ESPN MLB scoreboard frame for {GameId}: {Fault}", gameId, fault)
 
+    let guarded (gameId: string) (cancellationToken: CancellationToken) (work: CancellationToken -> Task<bool>) =
+        task {
+            use limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
+            limit.CancelAfter deadline
+            try
+                return! work limit.Token
+            with
+            | :? OperationCanceledException when cancellationToken.IsCancellationRequested ->
+                return raise (OperationCanceledException(cancellationToken))
+            | :? OperationCanceledException as ex ->
+                logger.LogError(ex, "Accepting the ESPN MLB scoreboard frame for {GameId} exceeded its {Deadline} deadline", gameId, deadline)
+                return false
+            | ex ->
+                logger.LogError(ex, "Accepting the ESPN MLB scoreboard frame for {GameId} failed", gameId)
+                return false
+        }
+
     static member Deadline = deadline
 
     member _.AcceptAsync(gameId: string, event: JsonElement, observedAt: DateTime, revision: Nullable<DateTimeOffset>, ct: CancellationToken)
@@ -213,24 +230,24 @@ type MlbScoreboardIngestion(store: MlbScoreboardStore, logger: ILogger<MlbScoreb
                 warnOnce gameId (event.GetRawText()) fault
                 return false
             | Ok report ->
-                use limit = CancellationTokenSource.CreateLinkedTokenSource(ct)
-                limit.CancelAfter deadline
-                try
-                    let status = MlbEspnScoreboard.gameStatus null event
-                    match! store.AcceptAsync(report, status, limit.Token) with
-                    | Ok _ ->
-                        if status = "final" || status = "canceled" then warned.TryRemove(gameId) |> ignore
-                        return true
-                    | Error rejection ->
-                        let frame = JsonSerializer.Serialize({ report with ObservedAt = Nullable(); SourceRevisionAt = Nullable() })
-                        warnOnce gameId frame (string rejection)
-                        return false
-                with
-                | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
-                | :? OperationCanceledException as ex ->
-                    logger.LogError(ex, "Accepting the ESPN MLB scoreboard frame for {GameId} exceeded its {Deadline} deadline", gameId, deadline)
-                    return false
-                | ex ->
-                    logger.LogError(ex, "Accepting the ESPN MLB scoreboard frame for {GameId} failed", gameId)
-                    return false
+                return! guarded gameId ct (fun limit ->
+                    task {
+                        let status = MlbEspnScoreboard.gameStatus null event
+                        match! store.AcceptAsync(report, status, limit) with
+                        | Ok _ ->
+                            if status = "final" || status = "canceled" then warned.TryRemove(gameId) |> ignore
+                            return true
+                        | Error rejection ->
+                            let frame = JsonSerializer.Serialize({ report with ObservedAt = Nullable(); SourceRevisionAt = Nullable() })
+                            warnOnce gameId frame (string rejection)
+                            return false
+                    })
         }
+
+    member _.WithdrawAsync(gameId: string, observedAt: DateTime, revision: Nullable<DateTimeOffset>, ct: CancellationToken) : Task<bool> =
+        guarded gameId ct (fun limit ->
+            task {
+                let! withdrawn = store.WithdrawAsync(gameId, observedAt, revision, limit)
+                if withdrawn then warned.TryRemove(gameId) |> ignore
+                return withdrawn
+            })
