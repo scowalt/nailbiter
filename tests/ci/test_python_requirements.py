@@ -10,9 +10,30 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENT = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*==[0-9][A-Za-z0-9.+!-]*$')
 HASH = re.compile(r'^--hash=sha256:[0-9a-f]{64}$')
-INSTALLERS = {'uvx', 'pipx'}
+INSTALLERS = {'uvx', 'pipx', 'pip-sync', 'piptools'}
 PIP = re.compile(r'pip[0-9.]*')
 SEPARATORS = {'&&', '||', ';', '|'}
+ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=.*', re.DOTALL)
+RUN_OPTIONS_WITH_VALUES = {
+    '--allow-insecure-host', '--cache-dir', '--color', '--config-file', '--config-setting', '--config-settings-package',
+    '--default-index', '--directory', '--env-file', '--exclude-newer', '--exclude-newer-package', '--extra',
+    '--extra-index-url', '--find-links', '--fork-strategy', '--group', '--index', '--index-strategy', '--index-url',
+    '--keyring-provider', '--link-mode', '--no-binary-package', '--no-build-isolation-package', '--no-build-package',
+    '--no-editable-package', '--no-extra', '--no-group', '--no-sources-package', '--only-group', '--package',
+    '--prerelease', '--project', '--python', '--python-platform', '--refresh-package', '--reinstall-package',
+    '--resolution', '--upgrade-group', '--upgrade-package', '--with', '--with-editable', '--with-requirements',
+    '-C', '-P', '-f', '-i', '-p', '-w',
+}
+RUN_FLAGS = {
+    '--active', '--all-extras', '--all-groups', '--all-packages', '--compile-bytecode', '--exact', '--frozen',
+    '--gui-script', '--help', '--isolated', '--locked', '--managed-python', '--module', '--no-binary', '--no-build',
+    '--no-build-isolation', '--no-cache', '--no-config', '--no-default-groups', '--no-dev', '--no-editable',
+    '--no-env-file', '--no-index', '--no-managed-python', '--no-progress', '--no-project', '--no-python-downloads',
+    '--no-sources', '--no-sync', '--offline', '--only-dev', '--quiet', '--refresh', '--reinstall', '--script',
+    '--system-certs', '--upgrade', '--verbose', '-U', '-h', '-m', '-n', '-q', '-s', '-v',
+}
+SCRIPT_FLAGS = {'--script', '-s', '--gui-script'}
+INLINE_METADATA = re.compile(r'^# /// script\s*$', re.MULTILINE)
 MIN_HASHED_FILES = 3
 
 
@@ -47,22 +68,75 @@ def hashed_file_problems(path):
     return problems
 
 
+def program(token):
+    return token.rsplit('/', 1)[-1]
+
+
+def uv_run_problems(args):
+    problems = []
+    options, target, directory = [], None, '.'
+    remaining = iter(args)
+    for arg in remaining:
+        if arg == '--':
+            target = next(remaining, None)
+            break
+        if arg == '-' or not arg.startswith('-'):
+            target = arg
+            break
+        name, attached, value = arg.partition('=')
+        options.append(name)
+        if name in RUN_OPTIONS_WITH_VALUES:
+            if not attached:
+                value = next(remaining, '')
+            if name == '--directory':
+                directory = value
+        elif name not in RUN_FLAGS:
+            problems.append(f'uv run {arg} is not an option this check knows, so it cannot tell whether it hides the script uv runs')
+    if '--no-project' not in options:
+        problems.append('uv run needs --no-project before the command it runs, or it installs the nearest pyproject.toml project instead of a hashed requirements file')
+    if any(re.fullmatch(r'--with([-=]\S*)?|-w\S*', arg) for arg in args):
+        problems.append('uv run --with resolves packages without checking hashes; use uv pip install --require-hashes')
+    if target == '-' or '://' in (target or ''):
+        problems.append(f'uv run {target} runs a script whose PEP 723 dependencies this check cannot read')
+    elif target and (SCRIPT_FLAGS & set(options) or target.lower().endswith(('.py', '.pyw'))):
+        script = ROOT / directory / target
+        if not script.is_file():
+            problems.append(f'uv run names script {target!r}, which this check cannot read for PEP 723 dependencies')
+        elif INLINE_METADATA.search(script.read_text(errors='replace')):
+            problems.append(f'uv run resolves the PEP 723 dependencies in {target!r} without checking hashes')
+    return problems
+
+
+def command_starts(tokens):
+    starts, expecting = set(), True
+    for index, token in enumerate(tokens):
+        if token in SEPARATORS:
+            expecting = True
+        elif expecting and not ASSIGNMENT.fullmatch(token):
+            starts.add(index)
+            expecting = False
+    return starts
+
+
 def install_problems(tokens):
     problems = []
+    starts = command_starts(tokens)
     for start, token in enumerate(tokens):
-        if token in INSTALLERS:
+        if program(token) in INSTALLERS:
             problems.append(f'{token} installs packages without a hashed requirements file')
-        if token == 'uv':
+        if token.startswith('UV_VENV_SEED='):
+            problems.append('UV_VENV_SEED installs pip into the virtual environment without a hash')
+        if token == 'uv' or program(token) == 'uv' and start in starts:
             command = list(itertools.takewhile(lambda arg: arg not in SEPARATORS, tokens[start + 1:]))
             if command[:1] == ['run']:
-                if '--no-project' not in command:
-                    problems.append('uv run without --no-project installs the nearest pyproject.toml project instead of a hashed requirements file')
-                if any(re.fullmatch(r'--with([-=]\S*)?|-w\S*', arg) for arg in command):
-                    problems.append('uv run --with resolves packages without checking hashes; use uv pip install --require-hashes')
-            elif command[:1] != ['venv'] and command[:2] != ['pip', 'install']:
+                problems.extend(uv_run_problems(command[1:]))
+            elif command[:1] == ['venv']:
+                if '--seed' in command:
+                    problems.append('uv venv --seed installs pip into the virtual environment without a hash')
+            elif command[:2] != ['pip', 'install']:
                 problems.append(f'uv {" ".join(command[:2])} is not one of uv venv, uv pip install or uv run --no-project')
-        if PIP.fullmatch(token) and tokens[start + 1:start + 2] == ['install']:
-            if tokens[start - 1:start] != ['uv']:
+        if PIP.fullmatch(program(token)) and tokens[start + 1:start + 2] == ['install']:
+            if start == 0 or program(tokens[start - 1]) != 'uv':
                 problems.append('use uv pip install, not pip install')
                 continue
             args = tokens[start + 2:]
@@ -88,7 +162,7 @@ def install_problems(tokens):
 
 
 def line_install_problems(line):
-    if not re.search(r'\b(pip[0-9.]*|uvx|pipx|uv)\b', line):
+    if not re.search(r'\b(pip[0-9.]*|piptools|uvx|pipx|uv|UV_VENV_SEED)\b', line):
         return []
     return install_problems(shlex.split(line, comments=True))
 
@@ -166,6 +240,75 @@ class InstallRuleTests(unittest.TestCase):
         for line in ['uv venv "$RUNNER_TEMP/tests-ci"', f'uv pip install --python "$RUNNER_TEMP/v" --require-hashes --no-build -r {self.hashed}', 'uv run --no-project python -m unittest', 'bunx playwright install --with-deps chromium']:
             with self.subTest(line=line):
                 self.assertEqual(line_install_problems(line), [])
+
+    def test_rejects_path_qualified_installers_and_pip_tools(self):
+        for line in ['/usr/bin/pip install pyyaml', '.venv/bin/pip3 install -r r.txt', '"$RUNNER_TEMP/v/bin/pip" install pyyaml', '/usr/local/bin/uv sync', '/opt/bin/uvx ruff check', '~/.local/bin/pipx run ruff', 'pip-sync r.txt', '/usr/bin/pip-sync r.txt', 'python -m piptools sync r.txt']:
+            with self.subTest(line=line):
+                self.assertNotEqual(line_install_problems(line), [])
+        for line in [f'"$RUNNER_TEMP/bin/uv" pip install --python "$RUNNER_TEMP/v" --require-hashes --no-build -r {self.hashed}', '/usr/local/bin/uv venv "$RUNNER_TEMP/v"']:
+            with self.subTest(line=line):
+                self.assertEqual(line_install_problems(line), [])
+
+    def test_rejects_a_seeded_uv_venv(self):
+        for line in ['uv venv --seed "$RUNNER_TEMP/v"', 'uv venv "$RUNNER_TEMP/v" --seed', 'UV_VENV_SEED=1 uv venv "$RUNNER_TEMP/v"', 'export UV_VENV_SEED=true']:
+            with self.subTest(line=line):
+                self.assertNotEqual(line_install_problems(line), [])
+
+    def test_no_project_counts_only_before_the_command_uv_runs(self):
+        for line in ['uv run python -c 1 --no-project', 'uv run python -m unittest --no-project', 'uv run --python 3.14 python --no-project', 'uv run -- python --no-project']:
+            with self.subTest(line=line):
+                self.assertNotEqual(line_install_problems(line), [])
+        for line in ['uv run --python 3.14 --no-project python -c 1', 'uv run -p 3.14 --no-project python -c 1', 'uv run --no-project -- python -c 1']:
+            with self.subTest(line=line):
+                self.assertEqual(line_install_problems(line), [])
+
+    def test_rejects_uv_run_on_a_script_with_inline_dependencies(self):
+        inline = '# /// script\n# dependencies = ["six"]\n# ///\nprint(1)\n'
+        for name, text in {'inline.py': inline, 'inline': inline, 'inline.pyw': inline, 'plain.py': 'print(1)\n'}.items():
+            (self.directory / name).write_text(text)
+        rejected = ['inline.py', 'inline.pyw', '--script inline', '-s inline', '--gui-script inline', '-', 'https://example.invalid/script', 'missing.py']
+        allowed = ['plain.py', 'python inline.py', 'python -m inline']
+        for command, expected in [(c, False) for c in rejected] + [(c, True) for c in allowed]:
+            words = [str(self.directory / word) if word.startswith(('inline', 'plain', 'missing')) else word for word in command.split()]
+            line = shlex.join(['uv', 'run', '--no-project', *words])
+            with self.subTest(line=line):
+                self.assertEqual(line_install_problems(line) == [], expected, line_install_problems(line))
+
+    def test_options_that_take_values_do_not_hide_the_script(self):
+        inline = '# /// script\n# dependencies = ["six"]\n# ///\nprint(1)\n'
+        sub = self.directory / 'sub'
+        sub.mkdir()
+        for path, text in {sub / 's.py': inline, sub / 'plain.py': 'print(1)\n', self.directory / 'UPPER.PY': inline, self.directory / 'mixed.Pyw': inline}.items():
+            path.write_text(text)
+        rejected = [
+            ['--directory', str(sub), 's.py'],
+            [f'--directory={sub}', 's.py'],
+            ['--env-file', 'e', str(sub / 's.py')],
+            ['--cache-dir', 'c', '-p', '3.14', str(sub / 's.py')],
+            [str(self.directory / 'UPPER.PY')],
+            [str(self.directory / 'mixed.Pyw')],
+            ['--python-preference', 'only-system', str(sub / 's.py')],
+            ['--native-tls', 'python', '-c', '1'],
+        ]
+        allowed = [
+            ['--directory', str(sub), 'plain.py'],
+            [f'--directory={sub}', 'plain.py'],
+            ['--env-file', 'e', 'python', '-m', 'unittest'],
+            ['--cache-dir', '$RUNNER_TEMP/uv', 'python', '-c', '1'],
+            ['-q', '--frozen', '--env-file=e', 'python', '-c', '1'],
+        ]
+        for words, expected in [(w, False) for w in rejected] + [(w, True) for w in allowed]:
+            line = shlex.join(['uv', 'run', '--no-project', *words])
+            with self.subTest(line=line):
+                self.assertEqual(line_install_problems(line) == [], expected, line_install_problems(line))
+
+    def test_a_path_ending_in_uv_is_uv_only_where_a_command_starts(self):
+        for line in ['mkdir -p "$RUNNER_TEMP/uv"', 'directory="$RUNNER_TEMP/uv"', 'uv venv --cache-dir "$RUNNER_TEMP/uv" "$RUNNER_TEMP/v"', 'cp -r "$RUNNER_TEMP/uv" build && echo copied']:
+            with self.subTest(line=line):
+                self.assertEqual(line_install_problems(line), [])
+        for line in ['"$RUNNER_TEMP/uv" sync', 'mkdir -p d && "$RUNNER_TEMP/bin/uv" sync', 'UV_CACHE_DIR=c /usr/bin/uv sync', 'timeout 60 uv sync', 'mise exec -- uv sync']:
+            with self.subTest(line=line):
+                self.assertNotEqual(line_install_problems(line), [])
 
     def test_hashed_file_rejects_ranges_missing_hashes_and_extra_options(self):
         digest = '--hash=sha256:' + 'a' * 64

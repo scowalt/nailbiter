@@ -149,7 +149,32 @@ CI installs Python packages only from requirements files that pin every package,
 | `tests/ci` | `scripts/ci/tests-ci-requirements.txt` | `pyyaml` |
 | `apps/analysis` tests | `scripts/ci/analysis-requirements.txt` | `pandas`, `sqlalchemy`, `pydantic` |
 
-Each step creates a virtual environment under `$RUNNER_TEMP` and runs `uv pip install --require-hashes --no-build -r <file>`. uv then stops on a package that the file does not pin with `==`, on a download whose sha256 the file does not list, and on a source distribution that needs a build. CI does not use `uv run --with`: uv 0.11.32 installs from a `--with-requirements` file without checking its hashes. `tests/ci/test_python_requirements.py` fails on any `uv run --with`, `uvx`, `uv tool`, `pipx` or plain `pip install` in the workflow or `scripts/ci`, and on any requirements line that is not an exact pin followed only by sha256 hashes. Nothing updates these files automatically.
+Each step creates a virtual environment under `$RUNNER_TEMP` and runs `uv pip install --require-hashes --no-build -r <file>`. uv then stops on a package that the file does not pin with `==`, on a download whose sha256 the file does not list, and on a source distribution that needs a build. CI does not use `uv run --with`: uv 0.11.32 installs from a `--with-requirements` file without checking its hashes. `tests/ci/test_python_requirements.py` reads each command line in the workflow's `run` steps and in `scripts/ci`. It covers pip, uv and pip-tools only. It fails on any of these, under any path such as `/usr/bin/pip` or `"$RUNNER_TEMP/v/bin/pip"`:
+
+- `uv run --with`, `uvx`, `uv tool`, `pipx`, `pip-sync` or `python -m piptools`;
+- a plain `pip install`;
+- `uv venv --seed` or `UV_VENV_SEED=`, which install pip without a hash;
+- a `uv run` whose `--no-project` is missing or comes after the command, where uv passes it to that command and still installs the project;
+- a `uv run` of a script with a PEP 723 `# /// script` block, of a script it cannot read, of stdin (`-`) or of a URL. uv resolves inline dependencies without a hash check when the target ends in `.py` or `.pyw` in any case, such as `S.PY`, or when `--script`, `-s` or `--gui-script` is given. It does not read them for `uv run python script.py`. The test reads a relative script from the `--directory` that the command gives, because uv changes to that directory first;
+- a `uv run` option that is not in the test's lists, because the test cannot then tell whether the option takes a value. A value hides the script: uv still resolves the dependencies of `s.py` in `uv run --no-project --env-file e s.py`. The lists hold every option that `uv run --help` prints for uv 0.11.32, written alone or as `--name=value`. The test rejects hidden options such as `--python-preference`, option clusters such as `-qq`, and short options with the value attached, such as `-p3.14`. When uv changes, compare `RUN_OPTIONS_WITH_VALUES` and `RUN_FLAGS` with the new `uv run --help`.
+
+The test also fails on any requirements line that is not an exact pin followed only by sha256 hashes.
+
+A word counts as uv when it is `uv`, or when it is a path ending in `/uv` where a command starts: first on the line, after `&&`, `||`, `;` or `|`, or after `NAME=value` assignments. So `mkdir -p "$RUNNER_TEMP/uv"`, `directory="$RUNNER_TEMP/uv"` and `--cache-dir "$RUNNER_TEMP/uv"` pass. `uv pip install` knows only `--python`, `-r` and `--requirement` as options that take a value, so it still rejects `uv pip install --cache-dir "$RUNNER_TEMP/uv" …` as naming a package. That fails closed: set the cache directory with `UV_CACHE_DIR` instead.
+
+The test reads one command line at a time and splits it like a shell, without running a shell parser. These spellings still pass, and none occurs in CI today:
+
+- `bash -c "uv sync"`, `sh -c '…'` and `eval "…"`, because the command is inside a quoted string;
+- `(uv sync)`, `x=$(uv sync)` and `uv run …;uv sync` with no space around `;`, because the splitter keeps the punctuation in the word;
+- `$UV sync`, `${{ env.UV }} sync` and `PIP=pip; $PIP install`, because the program name is not known until the shell runs;
+- a path ending in `/uv` after another program, as in `timeout 60 /usr/bin/uv sync` or `sudo "$RUNNER_TEMP/bin/uv" sync`, because the test does not know which programs run their arguments. A bare `uv` counts anywhere, so `timeout 60 uv sync` fails;
+- `UV_VENV_SEED` or another `UV_` setting that comes from an `env:` mapping, from `$GITHUB_ENV` written in an earlier step, or from a `uv.toml`, because the test reads commands and not the environment that uv starts with.
+
+Catching these would need a shell parser and the step's environment. A reviewer has to check them by hand. `python -m venv` and `python -m ensurepip` also pass. They install the pip wheel that ships inside the pinned Python, without a download.
+
+The test does not look for other Python installers: `virtualenv`, `poetry`, `pipenv`, `pdm`, `conda`, `easy_install` and `python setup.py install`. Each needs the tool on the runner. The `ubuntu-24.04` image (version 20261111.370.1) lists Miniconda 26.9.4 at `$CONDA`, so `"$CONDA/bin/conda" install` would run with no earlier step. It lists none of the others. The pinned Python 3.14.8 bundles pip but not setuptools, so `easy_install` and `setup.py install` would need setuptools installed first. A step that installs `virtualenv`, `poetry`, `pipenv` or `pdm` with pip or uv has to install it from a hashed requirements file, like any other package. A reviewer has to read a step that uses conda or the system Python.
+
+Nothing updates these files automatically.
 
 To change a version:
 
