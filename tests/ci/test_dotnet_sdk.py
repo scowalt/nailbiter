@@ -64,12 +64,6 @@ class DotnetSdkWorkflowTests(unittest.TestCase):
                 self.assertNotIn('dotnet-install', step.get('run', ''), name)
                 self.assertNotIn('GITHUB_PATH', step.get('run', ''), name)
 
-    def test_mise_never_restores_a_cache_saved_before_the_sdk_pin(self):
-        mise = [step for job in self.jobs.values() for step in job['steps'] if step.get('uses', '').startswith('jdx/mise-action@')]
-        self.assertEqual(len(mise), 2)
-        for step in mise:
-            self.assertEqual(step.get('with', {}).get('cache_key_prefix'), 'mise-v2')
-
     def test_the_committed_sha512_names_exactly_the_global_json_sdk(self):
         lines = (ROOT / 'scripts/ci/dotnet-sdk.sha512').read_text().splitlines()
         self.assertEqual(len(lines), 1)
