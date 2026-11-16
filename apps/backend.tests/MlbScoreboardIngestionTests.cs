@@ -212,6 +212,21 @@ public sealed class MlbScoreboardIngestionTests : IClassFixture<SharedPostgreSql
     }
 
     [Fact]
+    public async Task A_live_game_accepted_as_final_is_confirmed_complete_in_the_same_cycle()
+    {
+        await Observe("opening");
+        await Observe("advance");
+
+        await Observe("resumption");
+
+        using var scope = host.Services.CreateScope();
+        var game = await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Games.AsNoTracking().SingleAsync(g => g.Id == "991300104");
+        Assert.Equal(("final", (DateTime?)Served("resumption").UtcDateTime), (game.Status, game.CompletionConfirmedAt));
+        Assert.True(MlbCompletionEvidence.IsActuallyCompleted(game));
+        Assert.NotNull(game.HighlightsDiscoveryExpiresAt);
+    }
+
+    [Fact]
     public async Task A_postponed_event_returned_as_scheduled_or_in_progress_leaves_postponed()
     {
         await Observe("opening");
