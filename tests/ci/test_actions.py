@@ -173,6 +173,17 @@ class ActionPinRuleTests(unittest.TestCase):
         flagged = [list(refs)[int(problem.split('[', 1)[1].split(']', 1)[0])] for problem in problems]
         self.assertEqual(flagged, [name for name in refs if name != 'full'], problems)
 
+    def test_text_before_the_owner_is_not_part_of_a_pin(self):
+        full = '0123456789abcdef0123456789abcdef01234567'
+        uses = {'pinned': f'octo/action@{full}', 'leading space': f' octo/action@{full}', 'leading newline': f'\nocto/action@{full}', 'docker host': f'docker://host/octo/action@{full}', 'scheme': f'https://github.com/octo/action@{full}'}
+        with tempfile.TemporaryDirectory() as directory:
+            workflows = Path(directory)
+            steps = [{'name': name, 'uses': value} for name, value in uses.items()]
+            (workflows / 'ci.yml').write_text(yaml.safe_dump({'jobs': {'build': {'steps': steps}}}))
+            problems = action_pin_problems(workflows)
+        flagged = [list(uses)[int(problem.split('[', 1)[1].split(']', 1)[0])] for problem in problems]
+        self.assertEqual(flagged, [name for name in uses if name != 'pinned'], problems)
+
 
 class ScriptTests(unittest.TestCase):
     def setUp(self):
