@@ -157,6 +157,11 @@ module FormatHelpers =
         | GameStatus.CANCELED -> "Canceled"
         | _ -> status.ToString()
 
+    let storedStatusLabel (game: backend.Models.Game) =
+        let status = GameStatusExtensions.FromDbValue(game.Status)
+        if status.HasValue then getStatusLabel status.Value
+        else Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(game.Status.Replace("_", " "))
+
     let getStatusClass (status: GameStatus) =
         match status with
         | GameStatus.IN_PROGRESS -> "status-live animate-live-pulse"

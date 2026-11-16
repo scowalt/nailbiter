@@ -26,7 +26,7 @@ module LeaguePageRenderer =
             | true, o -> Some o
             | _ -> None
 
-        let statusLabel = if status.HasValue then FormatHelpers.getStatusLabel status.Value else ""
+        let statusLabel = FormatHelpers.storedStatusLabel game
         let statusClass = if status.HasValue then FormatHelpers.getStatusClass status.Value else ""
         let isLive = game.Status = "in_progress"
 

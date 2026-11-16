@@ -133,7 +133,7 @@ module HomePageRenderer =
             | true, o -> Some o
             | _ -> None
 
-        let statusLabel = if status.HasValue then FormatHelpers.getStatusLabel status.Value else Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(game.Status.Replace("_", " "))
+        let statusLabel = FormatHelpers.storedStatusLabel game
         let statusClass = if status.HasValue then FormatHelpers.getStatusClass status.Value else ""
         let isLive = game.Status = "in_progress"
         let isPregame = game.Status = "scheduled"
