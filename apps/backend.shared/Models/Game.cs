@@ -29,6 +29,8 @@ public class Game
     public string? GameClock { get; set; }
     public string? StatusDetail { get; set; }
     public DateTime? ScoreboardUpdatedAt { get; set; }
+    public string? MlbScoreboardJson { get; set; }
+    public DateTime? ScoreboardSourceRevisionAt { get; set; }
 
     public string? HomeMarketTicker { get; set; }
     public string? AwayMarketTicker { get; set; }

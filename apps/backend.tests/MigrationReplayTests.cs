@@ -120,6 +120,30 @@ public sealed class MigrationReplayTests
         Assert.Equal(expected, await StatusTypeAsync(db));
     }
 
+    [Fact]
+    public async Task Replaying_every_migration_adds_nullable_mlb_scoreboard_storage_that_round_trips_through_the_game_model()
+    {
+        await using var container = await ReplayEveryMigrationTwiceAsync();
+        await using var db = Context(container);
+
+        var columns = await db.Database.SqlQueryRaw<string>(
+            "SELECT column_name || ':' || data_type || ':' || is_nullable AS \"Value\" FROM information_schema.columns "
+            + "WHERE table_name = 'games' AND column_name IN ('mlb_scoreboard_json', 'scoreboard_source_revision_at') ORDER BY column_name").ToListAsync();
+        Assert.Equal(["mlb_scoreboard_json:text:YES", "scoreboard_source_revision_at:timestamp with time zone:YES"], columns);
+
+        var revision = new DateTime(2027, 7, 10, 23, 29, 55, DateTimeKind.Utc);
+        db.Games.AddRange(Game("observed"), Game("unobserved"));
+        await db.SaveChangesAsync();
+        await db.Games.Where(g => g.Id == "observed").ExecuteUpdateAsync(s => s
+            .SetProperty(g => g.MlbScoreboardJson, "{\"gameId\":\"observed\"}")
+            .SetProperty(g => g.ScoreboardSourceRevisionAt, revision));
+        db.ChangeTracker.Clear();
+
+        var stored = await db.Games.AsNoTracking().OrderBy(g => g.Id).Select(g => new { g.Id, g.MlbScoreboardJson, g.ScoreboardSourceRevisionAt }).ToListAsync();
+        Assert.Equal([new { Id = "observed", MlbScoreboardJson = (string?)"{\"gameId\":\"observed\"}", ScoreboardSourceRevisionAt = (DateTime?)revision },
+            new { Id = "unobserved", MlbScoreboardJson = (string?)null, ScoreboardSourceRevisionAt = (DateTime?)null }], stored);
+    }
+
     private static async Task<PostgreSqlContainer> ReplayEveryMigrationTwiceAsync()
     {
         var container = await StartAsync();

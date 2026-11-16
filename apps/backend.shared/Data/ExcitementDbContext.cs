@@ -191,6 +191,8 @@ public class ExcitementDbContext : DbContext
             entity.Property(e => e.GameClock).HasColumnName("game_clock");
             entity.Property(e => e.StatusDetail).HasColumnName("status_detail");
             entity.Property(e => e.ScoreboardUpdatedAt).HasColumnName("scoreboard_updated_at");
+            entity.Property(e => e.MlbScoreboardJson).HasColumnName("mlb_scoreboard_json");
+            entity.Property(e => e.ScoreboardSourceRevisionAt).HasColumnName("scoreboard_source_revision_at");
             entity.Property(e => e.HomeMarketTicker).HasColumnName("home_market_ticker");
             entity.Property(e => e.AwayMarketTicker).HasColumnName("away_market_ticker");
             entity.Property(e => e.CollegeCompetition).HasColumnName("college_competition");
