@@ -814,4 +814,182 @@
   #game-highlights a {
     text-decoration: underline;
   }
+
+  .scoreboard-side {
+    font-size: var(--text-xs);
+    line-height: var(--text-xs-line-height);
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-subtle);
+  }
+
+  .mlb-clock-status {
+    font-size: var(--text-sm);
+    line-height: var(--text-sm-line-height);
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    text-align: center;
+  }
+
+  .mlb-situation {
+    margin-top: 1rem;
+    font-size: var(--text-sm);
+    line-height: var(--text-sm-line-height);
+    text-align: center;
+    color: var(--color-text-secondary);
+  }
+
+  .mlb-situation:empty {
+    margin-top: 0;
+  }
+
+  .situation-note {
+    color: var(--color-text-subtle);
+  }
+
+  .situation-facts {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem 1.5rem;
+  }
+
+  .situation-fact {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  .situation-fact dt {
+    font-size: var(--text-xs);
+    line-height: var(--text-xs-line-height);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--color-text-subtle);
+  }
+
+  .situation-fact dd {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+
+  .bases-diamond {
+    position: relative;
+    display: block;
+    width: 2.25rem;
+    height: 1.75rem;
+  }
+
+  .base {
+    position: absolute;
+    width: 0.75rem;
+    height: 0.75rem;
+    border: 2px solid var(--color-border-strong);
+    border-radius: 0.125rem;
+    transform: rotate(45deg);
+  }
+
+  .base.is-occupied {
+    border-color: var(--color-text-primary);
+    background-color: var(--color-text-primary);
+  }
+
+  .base-first {
+    inset-inline-end: 0.125rem;
+    bottom: 0.125rem;
+  }
+
+  .base-second {
+    inset-inline-start: 0.75rem;
+    top: 0.125rem;
+  }
+
+  .base-third {
+    inset-inline-start: 0.125rem;
+    bottom: 0.125rem;
+  }
+
+  .bases-runner {
+    font-weight: 400;
+    color: var(--color-text-secondary);
+  }
+
+  .line-score-scroll {
+    position: relative;
+    overflow-x: auto;
+    direction: rtl;
+    border-radius: var(--radius-md);
+  }
+
+  .line-score-scroll:focus-visible {
+    outline: 2px solid var(--color-accent-hover);
+    outline-offset: 2px;
+  }
+
+  .line-score {
+    direction: ltr;
+    width: 100%;
+    min-width: max-content;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+    line-height: var(--text-sm-line-height);
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-primary);
+  }
+
+  .line-score th,
+  .line-score td {
+    padding-block: 0.375rem;
+    padding-inline: 0.5rem;
+    text-align: center;
+  }
+
+  .line-score thead th {
+    border-bottom: 1px solid var(--color-border);
+    font-size: var(--text-xs);
+    line-height: var(--text-xs-line-height);
+    font-weight: 500;
+    color: var(--color-text-subtle);
+  }
+
+  .line-score tbody tr + tr {
+    border-top: 1px solid var(--color-border);
+  }
+
+  .line-score th[scope="row"],
+  .line-score thead th:first-child {
+    position: sticky;
+    inset-inline-start: 0;
+    background-color: var(--color-bg-card);
+    box-shadow: 1px 0 0 var(--color-border);
+    text-align: start;
+  }
+
+  .line-score th[scope="row"] {
+    font-weight: 600;
+  }
+
+  .line-score abbr {
+    text-decoration: none;
+  }
+
+  .line-score-total,
+  .line-score tbody td:nth-last-child(-n + 3) {
+    border-inline-start: 1px solid var(--color-border);
+    font-weight: 600;
+  }
+
+  .line-score-missing,
+  .line-score-not-played {
+    color: var(--color-text-subtle);
+  }
 }
