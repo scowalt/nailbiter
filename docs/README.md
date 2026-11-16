@@ -30,6 +30,7 @@ Each document below is the authoritative source for its topic. [AGENTS.md](../AG
 - [nhl-guru-rankings.md](nhl-guru-rankings.md) and [nhl-power-ranking-source-research.md](nhl-power-ranking-source-research.md): NHL quality from power rankings.
 - [college-football.md](college-football.md): college football support.
 - [mlb-highlights-application.md](mlb-highlights-application.md) and [mlb-highlights-lifecycle.md](mlb-highlights-lifecycle.md): MLB highlights.
+- [mlb-scoreboard.md](mlb-scoreboard.md): the stored MLB scoreboard observation, its validation and ordering, and how a game's scoreboard resolves.
 
 ## Testing
 

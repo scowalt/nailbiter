@@ -82,6 +82,19 @@ A game in which play began but was stopped for later continuation with its exist
 **Canceled game**:
 A game that will not be played, rather than one awaiting a new start time.
 
+**Scoreboard observation**:
+One complete report of an MLB game's score, status detail, line score and optional at-bat situation, as a provider presented it at one instant. A newer observation replaces the earlier one in full; missing fields are not filled in from earlier observations.
+_Avoid_: Scoreboard update (when it means a partial patch)
+
+**Active context**:
+The batting half, count, bases and matchup of a game in progress, shown only while the latest live scoreboard observation is under two minutes old. Delayed, suspended, final, recorded and older observations have no active context.
+
+**Source revision high-water mark**:
+The latest provider revision time accepted for a game's scoreboard. A report with an older revision is rejected even when it arrives later.
+
+**Recorded observation**:
+A scoreboard observation captured after the fact or imported from history rather than seen live. It keeps its score and line score but never has an active context.
+
 **Championship probability**:
 The estimated chance that a team wins its season's championship, not merely qualifies for the playoffs.
 _Avoid_: Playoff probability
