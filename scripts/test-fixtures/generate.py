@@ -483,7 +483,7 @@ def mlb_scoreboard():
         '991300105': mlb_frame('postponed', 0, 'Postponed', not_started, not_started),
         '991300106': mlb_frame('scheduled', 0, '7/11 - 4:10 PM EDT', not_started, not_started),
         '991300107': mlb_frame('canceled', 0, 'Canceled', not_started, not_started),
-        '991300108': mlb_frame('delayed', 6, 'Rain Delay', line([0, 0, 0, 1, 0, 0], 1, 4, 0), line([0, 2, 0, 0, 0], 2, 5, 0)),
+        '991300108': mlb_frame('delayed', 6, 'Rain Delay', line([0, 2, 0, 0, 0], 2, 5, 0), line([0, 0, 0, 1, 0, 0], 1, 4, 0)),
         '991300109': mlb_frame('suspended', 7, 'Suspended', line([1, 0, 0, 0, 0, 2, 0], 3, 6, 0), line([0, 0, 1, 0, 0, 0], 1, 4, 1)),
     }
     advanced = mlb_frame('in', 6, 'Bottom 6th', line([0, 2, 0, 0, 1, 0], 3, 7, 0), line([1, 0, 0, 0, 0, 1], 2, 5, 1))
