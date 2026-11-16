@@ -151,6 +151,139 @@ class SyntheticFixtureTests(unittest.TestCase):
             score = 20 * sum(abs(integral(right) - integral(left)) for left, right in zip(probabilities, probabilities[1:]))
             self.assertEqual(score, expected)
 
+    def test_mlb_scoreboard_observations_cover_every_authored_baseball_case(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        eastern = lambda value: datetime.fromisoformat(value).astimezone(ZoneInfo('America/New_York')).strftime('%Y%m%d')
+        prefix = ROOT / 'apps/backend.tests/Fixtures/MlbScoreboard'
+        fixture = json.loads((prefix / 'espn-basic.json').read_text())
+        self.assertTrue(fixture['synthetic'])
+        self.assertIn('no provider responses', fixture['provenance'])
+        self.assertIn('not current provider conformance, field availability, authorization or live latency', fixture['evidenceLimit'])
+        contests = fixture['contests']
+        self.assertEqual({c['case'] for c in contests.values()}, {
+            'final-unplayed-bottom-ninth', 'final-extra-innings', 'doubleheader-game-1', 'doubleheader-game-2', 'postponed',
+            'makeup', 'canceled', 'rain-delay', 'suspended-then-resumed'})
+        self.assertTrue(all(identity.startswith('9913001') and c['competitionId'] == identity for identity, c in contests.items()))
+        self.assertEqual(len({c['home']['id'] for c in contests.values()} | {c['away']['id'] for c in contests.values()}), 14)
+        for contest in contests.values():
+            self.assertNotEqual(contest['home']['id'], contest['away']['id'])
+        first, second = contests['991300103'], contests['991300104']
+        self.assertEqual((first['doubleheader'], second['doubleheader']), ({'game': 1, 'pairedWith': '991300104'}, {'game': 2, 'pairedWith': '991300103'}))
+        self.assertEqual((first['home'], first['away'], eastern(first['start'])), (second['home'], second['away'], eastern(second['start'])))
+        self.assertEqual(contests['991300106']['makeupOf'], '991300105')
+        self.assertEqual((contests['991300106']['home'], contests['991300106']['away']), (contests['991300105']['home'], contests['991300105']['away']))
+        self.assertEqual(contests['991300102']['listed'], ['away', 'home'])
+
+        observations = {o['id']: o for o in fixture['observations']}
+        self.assertEqual(list(observations), ['opening', 'advance', 'partial', 'out-of-order', 'future', 'resumption'])
+        served = [datetime.fromisoformat(o['servedAt']) for o in observations.values()]
+        self.assertEqual(served, sorted(served))
+        moment = {key: datetime.fromisoformat(o['responseDate']) for key, o in observations.items()}
+        self.assertLess(moment['out-of-order'], moment['advance'])
+        self.assertGreater(moment['future'], datetime.fromisoformat(observations['future']['servedAt']))
+        expected = {key: {identity: state for board in o['boards'] for identity, state in board['expected'].items()} for key, o in observations.items()}
+        dates = {key: {identity: board['date'] for board in o['boards'] for identity in board['expected']} for key, o in observations.items()}
+        self.assertEqual(expected['out-of-order'], expected['opening'])
+        self.assertEqual((expected['opening']['991300104']['detail'], expected['advance']['991300104']['detail'], expected['future']['991300104']['detail']),
+                         ('Top 5th', 'Bottom 6th', 'Top 7th'))
+        self.assertEqual((dates['opening']['991300109'], dates['resumption']['991300109']), ('20270710', '20270711'))
+        self.assertEqual((expected['opening']['991300109']['status'], expected['resumption']['991300109']['status']), ('suspended', 'final'))
+        resumed = expected['resumption']['991300109']
+        for side in ['away', 'home']:
+            suspended = expected['opening']['991300109'][side]['innings']
+            self.assertEqual(resumed[side]['innings'][:len(suspended)], suspended)
+        self.assertEqual({expected['resumption'][i]['status'] for i in ['991300105', '991300106', '991300107']}, {'postponed', 'final', 'canceled'})
+
+        statuses = {'final': ('STATUS_FINAL', 'post', True), 'postponed': ('STATUS_POSTPONED', 'post', False), 'canceled': ('STATUS_CANCELED', 'post', False),
+                    'delayed': ('STATUS_RAIN_DELAY', 'in', False), 'suspended': ('STATUS_SUSPENDED', 'post', False),
+                    'in': ('STATUS_IN_PROGRESS', 'in', False), 'scheduled': ('STATUS_SCHEDULED', 'pre', False)}
+        self.assertEqual({state['status'] for states in expected.values() for state in states.values()}, set(statuses))
+        for key, observation in observations.items():
+            for board in observation['boards']:
+                self.assertEqual(board['url'], f'https://site.web.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={board["date"]}')
+                events = {event['id']: event for event in board['body']['events']}
+                self.assertEqual(set(events), set(board['expected']))
+                for identity, state in board['expected'].items():
+                    resumed_later = (key, identity) == ('resumption', '991300109')
+                    self.assertEqual(board['date'], '20270711' if resumed_later else eastern(contests[identity]['start']), (key, identity))
+                    self.assertEqual((state['name'], state['state'], state['completed']), statuses[state['status']])
+                    competition, = events[identity]['competitions']
+                    self.assertEqual(competition['id'], identity)
+                    self.assertEqual([c['homeAway'] for c in competition['competitors']], contests[identity]['listed'])
+                    for side in ['home', 'away']:
+                        line = state[side]
+                        competitor, = [c for c in competition['competitors'] if c['homeAway'] == side]
+                        self.assertEqual(competitor['team']['id'], contests[identity][side]['id'])
+                        self.assertEqual(competitor['score'], str(line['runs']))
+                        for count in ['hits', 'errors']:
+                            self.assertEqual(competitor.get(count), line[count])
+                            self.assertEqual(count in competitor, line[count] is not None)
+                        self.assertEqual('linescores' in competitor, line['innings'] is not None)
+                        if line['innings'] is not None:
+                            self.assertEqual(sum(line['innings']), line['runs'], (key, identity, side))
+                            self.assertEqual([i['period'] for i in competitor['linescores']], list(range(1, len(line['innings']) + 1)))
+
+        opening = expected['opening']
+        self.assertEqual((len(opening['991300101']['away']['innings']), len(opening['991300101']['home']['innings'])), (9, 8))
+        self.assertEqual(opening['991300101']['away']['innings'][8], 0)
+        self.assertEqual(opening['991300101']['home']['errors'], 0)
+        self.assertEqual((opening['991300102']['period'], len(opening['991300102']['away']['innings'])), (11, 11))
+        self.assertEqual(expected['resumption']['991300106']['home']['innings'], [0] * 9)
+        for identity in ['991300105', '991300107']:
+            self.assertEqual(opening[identity]['home'], {'innings': None, 'runs': 0, 'hits': None, 'errors': None})
+        partial = expected['partial']['991300104']
+        self.assertEqual((partial['away']['hits'], partial['away']['errors'], partial['home']['innings']), (None, 0, None))
+
+    def test_mlb_line_scores_follow_half_inning_order_in_every_observation(self):
+        import re
+        fixture = json.loads((ROOT / 'apps/backend.tests/Fixtures/MlbScoreboard/espn-basic.json').read_text())
+        checked = 0
+        for observation in fixture['observations']:
+            for board in observation['boards']:
+                for identity, state in board['expected'].items():
+                    away, home = state['away']['innings'], state['home']['innings']
+                    if away is None or home is None:
+                        continue
+                    where = (observation['id'], identity)
+                    self.assertIn(len(away) - len(home), (0, 1), where)
+                    self.assertEqual(len(away), state['period'], where)
+                    half = re.fullmatch(r'(Top|Bottom) (\d+)(?:st|nd|rd|th)', state['detail'])
+                    if half:
+                        inning = int(half[2])
+                        self.assertEqual((len(away), len(home)), (inning, inning - 1 if half[1] == 'Top' else inning), where)
+                    if state['status'] == 'final':
+                        self.assertGreaterEqual(len(away), 9, where)
+                        if len(home) < len(away):
+                            self.assertGreater(sum(home), sum(away), where)
+                    checked += 1
+        self.assertEqual(checked, 36)
+
+    def test_mlb_rich_frames_are_normalized_inputs_with_nulls_distinct_from_zero(self):
+        prefix = ROOT / 'apps/backend.tests/Fixtures/MlbScoreboard'
+        contests = json.loads((prefix / 'espn-basic.json').read_text())['contests']
+        fixture = json.loads((prefix / 'rich-frames.json').read_text())
+        self.assertTrue(fixture['synthetic'] and fixture['normalized'])
+        self.assertIn('not an ESPN situation schema', fixture['provenance'])
+        frames = {frame['id']: frame for frame in fixture['frames']}
+        self.assertEqual(len(frames), len(fixture['frames']))
+        self.assertTrue(all(frame['gameId'] in contests for frame in frames.values()))
+        self.assertEqual(set(frames), {
+            'active-complete', 'zero-count-empty-bases', 'partial-optional', 'runner-unknown', 'rich-unavailable', 'out-of-order', 'future',
+            'retained-after-final', 'retained-while-delayed', 'retained-while-suspended'})
+        zero = frames['zero-count-empty-bases']
+        self.assertEqual(zero['count'], {'balls': 0, 'strikes': 0, 'outs': 0})
+        self.assertTrue(all(base == {'occupied': False, 'runner': None} for base in zero['bases'].values()))
+        self.assertIsNone(frames['partial-optional']['bases'])
+        self.assertIsNone(frames['partial-optional']['matchup']['pitcher'])
+        self.assertEqual(frames['runner-unknown']['bases']['first'], {'occupied': True, 'runner': None})
+        unavailable = frames['rich-unavailable']
+        self.assertEqual([unavailable[key] for key in ['half', 'count', 'bases', 'matchup']], [None] * 4)
+        self.assertLess(frames['out-of-order']['sourceRevisionAt'], frames['zero-count-empty-bases']['sourceRevisionAt'])
+        self.assertGreater(frames['future']['observedAt'], frames['future']['receivedAt'])
+        self.assertEqual({contests[frames[f'retained-{case}']['gameId']]['case'] for case in ['after-final', 'while-delayed', 'while-suspended']},
+                         {'final-unplayed-bottom-ninth', 'rain-delay', 'suspended-then-resumed'})
+
 
 if __name__ == '__main__':
     unittest.main()

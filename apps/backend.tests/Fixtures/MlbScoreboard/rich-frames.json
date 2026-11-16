@@ -1,0 +1,292 @@
+{
+  "synthetic": true,
+  "normalized": true,
+  "provenance": "Independently constructed normalized Nailbiter rendering inputs; not an ESPN situation schema and not provider data.",
+  "evidenceLimit": "Checked for shape only; nothing renders or ingests these frames yet, and they do not show that any provider or production ingestion supplies these fields.",
+  "frames": [
+    {
+      "id": "active-complete",
+      "gameId": "991300104",
+      "receivedAt": "2027-07-10T23:30:00Z",
+      "observedAt": "2027-07-10T23:30:00Z",
+      "sourceRevisionAt": "2027-07-10T23:29:55Z",
+      "inning": 5,
+      "half": "top",
+      "count": {
+        "balls": 2,
+        "strikes": 1,
+        "outs": 1
+      },
+      "bases": {
+        "first": {
+          "occupied": true,
+          "runner": "Synthetic Runner A"
+        },
+        "second": {
+          "occupied": false,
+          "runner": null
+        },
+        "third": {
+          "occupied": true,
+          "runner": "Synthetic Runner B"
+        }
+      },
+      "matchup": {
+        "batter": "Synthetic Batter 7",
+        "pitcher": "Synthetic Pitcher 3"
+      }
+    },
+    {
+      "id": "zero-count-empty-bases",
+      "gameId": "991300104",
+      "receivedAt": "2027-07-10T23:50:00Z",
+      "observedAt": "2027-07-10T23:50:00Z",
+      "sourceRevisionAt": "2027-07-10T23:49:55Z",
+      "inning": 6,
+      "half": "bottom",
+      "count": {
+        "balls": 0,
+        "strikes": 0,
+        "outs": 0
+      },
+      "bases": {
+        "first": {
+          "occupied": false,
+          "runner": null
+        },
+        "second": {
+          "occupied": false,
+          "runner": null
+        },
+        "third": {
+          "occupied": false,
+          "runner": null
+        }
+      },
+      "matchup": {
+        "batter": "Synthetic Batter 2",
+        "pitcher": "Synthetic Pitcher 5"
+      }
+    },
+    {
+      "id": "partial-optional",
+      "gameId": "991300104",
+      "receivedAt": "2027-07-11T00:00:00Z",
+      "observedAt": "2027-07-11T00:00:00Z",
+      "sourceRevisionAt": null,
+      "inning": 6,
+      "half": "bottom",
+      "count": {
+        "balls": 1,
+        "strikes": 0,
+        "outs": 2
+      },
+      "bases": null,
+      "matchup": {
+        "batter": "Synthetic Batter 12",
+        "pitcher": null
+      }
+    },
+    {
+      "id": "runner-unknown",
+      "gameId": "991300104",
+      "receivedAt": "2027-07-11T00:05:00Z",
+      "observedAt": "2027-07-11T00:05:00Z",
+      "sourceRevisionAt": null,
+      "inning": 6,
+      "half": "bottom",
+      "count": {
+        "balls": 0,
+        "strikes": 1,
+        "outs": 2
+      },
+      "bases": {
+        "first": {
+          "occupied": true,
+          "runner": null
+        },
+        "second": {
+          "occupied": false,
+          "runner": null
+        },
+        "third": {
+          "occupied": false,
+          "runner": null
+        }
+      },
+      "matchup": null
+    },
+    {
+      "id": "rich-unavailable",
+      "gameId": "991300104",
+      "receivedAt": "2027-07-11T00:10:00Z",
+      "observedAt": "2027-07-11T00:10:00Z",
+      "sourceRevisionAt": null,
+      "inning": 6,
+      "half": null,
+      "count": null,
+      "bases": null,
+      "matchup": null
+    },
+    {
+      "id": "out-of-order",
+      "gameId": "991300104",
+      "receivedAt": "2027-07-11T00:30:00Z",
+      "observedAt": "2027-07-11T00:30:00Z",
+      "sourceRevisionAt": "2027-07-10T23:40:00Z",
+      "inning": 5,
+      "half": "top",
+      "count": {
+        "balls": 1,
+        "strikes": 1,
+        "outs": 0
+      },
+      "bases": {
+        "first": {
+          "occupied": false,
+          "runner": null
+        },
+        "second": {
+          "occupied": false,
+          "runner": null
+        },
+        "third": {
+          "occupied": false,
+          "runner": null
+        }
+      },
+      "matchup": {
+        "batter": "Synthetic Batter 9",
+        "pitcher": "Synthetic Pitcher 3"
+      }
+    },
+    {
+      "id": "future",
+      "gameId": "991300104",
+      "receivedAt": "2027-07-11T00:50:00Z",
+      "observedAt": "2027-07-11T01:00:00Z",
+      "sourceRevisionAt": "2027-07-11T00:59:50Z",
+      "inning": 7,
+      "half": "top",
+      "count": {
+        "balls": 0,
+        "strikes": 1,
+        "outs": 0
+      },
+      "bases": {
+        "first": {
+          "occupied": false,
+          "runner": null
+        },
+        "second": {
+          "occupied": false,
+          "runner": null
+        },
+        "third": {
+          "occupied": false,
+          "runner": null
+        }
+      },
+      "matchup": {
+        "batter": "Synthetic Batter 4",
+        "pitcher": "Synthetic Pitcher 8"
+      }
+    },
+    {
+      "id": "retained-after-final",
+      "gameId": "991300101",
+      "receivedAt": "2027-07-10T23:30:00Z",
+      "observedAt": "2027-07-10T23:29:00Z",
+      "sourceRevisionAt": "2027-07-10T23:28:59Z",
+      "inning": 9,
+      "half": "top",
+      "count": {
+        "balls": 1,
+        "strikes": 2,
+        "outs": 3
+      },
+      "bases": {
+        "first": {
+          "occupied": false,
+          "runner": null
+        },
+        "second": {
+          "occupied": false,
+          "runner": null
+        },
+        "third": {
+          "occupied": false,
+          "runner": null
+        }
+      },
+      "matchup": {
+        "batter": "Synthetic Batter 6",
+        "pitcher": "Synthetic Pitcher 1"
+      }
+    },
+    {
+      "id": "retained-while-delayed",
+      "gameId": "991300108",
+      "receivedAt": "2027-07-10T23:30:00Z",
+      "observedAt": "2027-07-10T23:29:30Z",
+      "sourceRevisionAt": null,
+      "inning": 6,
+      "half": "top",
+      "count": {
+        "balls": 0,
+        "strikes": 0,
+        "outs": 0
+      },
+      "bases": {
+        "first": {
+          "occupied": false,
+          "runner": null
+        },
+        "second": {
+          "occupied": false,
+          "runner": null
+        },
+        "third": {
+          "occupied": false,
+          "runner": null
+        }
+      },
+      "matchup": {
+        "batter": "Synthetic Batter 1",
+        "pitcher": "Synthetic Pitcher 2"
+      }
+    },
+    {
+      "id": "retained-while-suspended",
+      "gameId": "991300109",
+      "receivedAt": "2027-07-10T23:30:00Z",
+      "observedAt": "2027-07-10T23:28:30Z",
+      "sourceRevisionAt": "2027-07-10T23:28:25Z",
+      "inning": 7,
+      "half": "top",
+      "count": {
+        "balls": 1,
+        "strikes": 1,
+        "outs": 0
+      },
+      "bases": {
+        "first": {
+          "occupied": false,
+          "runner": null
+        },
+        "second": {
+          "occupied": true,
+          "runner": "Synthetic Runner C"
+        },
+        "third": {
+          "occupied": false,
+          "runner": null
+        }
+      },
+      "matchup": {
+        "batter": "Synthetic Batter 3",
+        "pitcher": "Synthetic Pitcher 6"
+      }
+    }
+  ]
+}

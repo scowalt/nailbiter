@@ -28,6 +28,7 @@
     <None Update="Fixtures/MoneyPuck/*.csv;Fixtures/MoneyPuck/*.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/NhlGuru/*.html" CopyToOutputDirectory="PreserveNewest" />
     <None Update="Fixtures/Broadcasts/*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/MlbScoreboard/*.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../backend.fsharp.tests/Fixtures/kalshi-nhl-playoffs-2027.json" Link="Fixtures/NhlSeeding/qualification.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../backend.fsharp.tests/Fixtures/kalshi-nba-playoffs-2027.json" Link="Fixtures/NbaSeeding/qualification.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../backend.fsharp.tests/Fixtures/kalshi-mlb-401907993.json" Link="Fixtures/KalshiMlb/schedule-change.json" CopyToOutputDirectory="PreserveNewest" />
