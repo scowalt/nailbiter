@@ -235,6 +235,41 @@ class InstallRuleTests(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertEqual(line_install_problems(line) == [], expected, line_install_problems(line))
 
+    def test_options_that_take_values_do_not_hide_the_script(self):
+        inline = '# /// script\n# dependencies = ["six"]\n# ///\nprint(1)\n'
+        sub = self.directory / 'sub'
+        sub.mkdir()
+        for path, text in {sub / 's.py': inline, sub / 'plain.py': 'print(1)\n', self.directory / 'UPPER.PY': inline, self.directory / 'mixed.Pyw': inline}.items():
+            path.write_text(text)
+        rejected = [
+            ['--directory', str(sub), 's.py'],
+            [f'--directory={sub}', 's.py'],
+            ['--env-file', 'e', str(sub / 's.py')],
+            ['--cache-dir', 'c', '-p', '3.14', str(sub / 's.py')],
+            [str(self.directory / 'UPPER.PY')],
+            [str(self.directory / 'mixed.Pyw')],
+            ['--python-preference', 'only-system', str(sub / 's.py')],
+            ['--native-tls', 'python', '-c', '1'],
+        ]
+        allowed = [
+            ['--directory', str(sub), 'plain.py'],
+            ['--env-file', 'e', 'python', '-m', 'unittest'],
+            ['--cache-dir', '$RUNNER_TEMP/uv', 'python', '-c', '1'],
+            ['-q', '--frozen', '--env-file=e', 'python', '-c', '1'],
+        ]
+        for words, expected in [(w, False) for w in rejected] + [(w, True) for w in allowed]:
+            line = shlex.join(['uv', 'run', '--no-project', *words])
+            with self.subTest(line=line):
+                self.assertEqual(line_install_problems(line) == [], expected, line_install_problems(line))
+
+    def test_a_path_ending_in_uv_is_uv_only_where_a_command_starts(self):
+        for line in ['mkdir -p "$RUNNER_TEMP/uv"', 'directory="$RUNNER_TEMP/uv"', 'uv venv --cache-dir "$RUNNER_TEMP/uv" "$RUNNER_TEMP/v"', 'cp -r "$RUNNER_TEMP/uv" build && echo copied']:
+            with self.subTest(line=line):
+                self.assertEqual(line_install_problems(line), [])
+        for line in ['"$RUNNER_TEMP/uv" sync', 'mkdir -p d && "$RUNNER_TEMP/bin/uv" sync', 'UV_CACHE_DIR=c /usr/bin/uv sync', 'timeout 60 uv sync', 'mise exec -- uv sync']:
+            with self.subTest(line=line):
+                self.assertNotEqual(line_install_problems(line), [])
+
     def test_hashed_file_rejects_ranges_missing_hashes_and_extra_options(self):
         digest = '--hash=sha256:' + 'a' * 64
         cases = {
