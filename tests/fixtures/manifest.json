@@ -12,7 +12,7 @@
     "apps/backend.tests/Fixtures/Broadcasts/mlb-board.json": "f1ce9893b96aad59537d7282523c262764133e8af93445bc56643bbd3096335a",
     "apps/backend.tests/Fixtures/Excitement/context.json": "8ffa1648cb53dfe24b0014725d48e194a93a03c175a976c4964f350dd14f5fdb",
     "apps/backend.tests/Fixtures/Excitement/histories.csv": "590d831763b985a75926d4a6c0bf2e61f2d18b4ce0ee867ea1b54d73c60273d5",
-    "apps/backend.tests/Fixtures/MlbScoreboard/espn-basic.json": "44433b89f068cf6550007d77e74f167e326147effb5b6cd59f739650f56c2212",
+    "apps/backend.tests/Fixtures/MlbScoreboard/espn-basic.json": "19197cabfacb7925b053734f1dceee82364eacf6a19fe12309130e0df21b618b",
     "apps/backend.tests/Fixtures/MlbScoreboard/rich-frames.json": "8573bf309f7baa5c558fac3c197b4216dc545c84fc5b857044e75456bec27099",
     "apps/backend.tests/Fixtures/MoneyPuck/rankings_current.csv": "e177e60b1da75ecea00d9ac5a5c1f2394b314536200c6482a550cbb67dde9473",
     "apps/backend.tests/Fixtures/MoneyPuck/update_time.txt": "36ea5f0ee50d76e383884dc902041d4678ba9e8d16e6a8fe547a205edfad7177",
