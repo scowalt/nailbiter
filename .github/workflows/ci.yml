@@ -24,6 +24,7 @@ jobs:
     timeout-minutes: 30
     outputs:
       marketing: ${{ steps.marketing.outputs.changed }}
+      marketing-sha256: ${{ steps.package-marketing.outputs.sha256 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -77,6 +78,7 @@ jobs:
           dotnet build apps/backend/backend.csproj --no-restore --configuration Release
           dotnet test apps/backend.fsharp.tests/backend.fsharp.tests.fsproj --no-restore --configuration Release
       - name: Build and package marketing once
+        id: package-marketing
         run: |
           bun install --cwd apps/www --frozen-lockfile --ignore-scripts
           bun run --cwd apps/www build
@@ -84,7 +86,8 @@ jobs:
           (cd apps/www && bunx wrangler --version)
           mkdir -p .ci
           tar -C apps/www -cf .ci/marketing.tar dist
-          sha256sum .ci/marketing.tar > .ci/marketing.sha256
+          digest=$(sha256sum .ci/marketing.tar | cut -d ' ' -f 1)
+          printf 'sha256=%s\n' "$digest" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$GITHUB_SHA" > .ci/marketing.commit
       - name: Select marketing release paths
         id: marketing
@@ -96,7 +99,6 @@ jobs:
           name: marketing-${{ github.sha }}
           path: |
             .ci/marketing.tar
-            .ci/marketing.sha256
             .ci/marketing.commit
           include-hidden-files: true
           if-no-files-found: error
@@ -172,6 +174,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       marketing: ${{ needs.checks.outputs.marketing }}
+      marketing-sha256: ${{ needs.checks.outputs.marketing-sha256 }}
     steps:
       - name: Require every validation job
         env:
@@ -185,6 +188,9 @@ jobs:
   image:
     name: Build and scan backend image
     runs-on: ubuntu-24.04
+    outputs:
+      sha256: ${{ steps.bind.outputs.sha256 }}
+      image-id: ${{ steps.bind.outputs.image-id }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -204,18 +210,18 @@ jobs:
           vuln-type: os,library
           exit-code: '1'
       - name: Bind the scanned image to this revision
+        id: bind
         run: |
-          sha256sum .ci/backend.tar > .ci/backend.sha256
+          digest=$(sha256sum .ci/backend.tar | cut -d ' ' -f 1)
+          image_id=$(docker image inspect --format '{{.Id}}' nailbiter-backend:scan)
+          printf 'sha256=%s\nimage-id=%s\n' "$digest" "$image_id" >> "$GITHUB_OUTPUT"
           printf '%s\n' "$GITHUB_SHA" > .ci/backend.commit
-          docker image inspect --format '{{.Id}}' nailbiter-backend:scan > .ci/backend.image-id
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:
           name: backend-${{ github.sha }}
           path: |
             .ci/backend.tar
-            .ci/backend.sha256
             .ci/backend.commit
-            .ci/backend.image-id
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
@@ -263,6 +269,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GHCR_TOKEN: ${{ github.token }}
+          BACKEND_SHA256: ${{ needs.image.outputs.sha256 }}
+          BACKEND_IMAGE_ID: ${{ needs.image.outputs.image-id }}
         run: sh scripts/ci/publish-image.sh
       - name: Install pinned Tailscale binaries
         run: sh scripts/ci/install-tailscale.sh
@@ -277,10 +285,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          MARKETING_SHA256: ${{ needs.validate.outputs.marketing-sha256 }}
         run: |
           sh scripts/ci/require-release.sh
           test "$(tr -d '\n' < .ci/marketing.commit)" = "$GITHUB_SHA"
-          sha256sum --check .ci/marketing.sha256
+          : "${MARKETING_SHA256:?The marketing-sha256 output is required from the checks job}"
+          printf '%s  .ci/marketing.tar\n' "$MARKETING_SHA256" | sha256sum --check
           tar -C apps/www -xf .ci/marketing.tar
           bun install --cwd apps/www --frozen-lockfile --ignore-scripts
           cd apps/www

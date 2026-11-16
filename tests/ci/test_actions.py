@@ -227,9 +227,8 @@ sys.exit(1 if "FAIL" in sql else 0)
         import hashlib
         body = b'synthetic archive bytes'
         (self.root / '.ci/backend.tar').write_bytes(body)
-        (self.root / '.ci/backend.sha256').write_text(hashlib.sha256(body).hexdigest() + '  .ci/backend.tar\n')
         (self.root / '.ci/backend.commit').write_text(SHA + '\n')
-        (self.root / '.ci/backend.image-id').write_text('sha256:' + 'c' * 64 + '\n')
+        self.env |= {'BACKEND_SHA256': hashlib.sha256(body).hexdigest(), 'BACKEND_IMAGE_ID': 'sha256:' + 'c' * 64}
 
     def test_publisher_checks_bytes_identity_and_pushes_without_rebuilding(self):
         self.prepare_image()
