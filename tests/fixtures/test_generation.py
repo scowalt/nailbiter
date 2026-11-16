@@ -235,6 +235,30 @@ class SyntheticFixtureTests(unittest.TestCase):
         partial = expected['partial']['991300104']
         self.assertEqual((partial['away']['hits'], partial['away']['errors'], partial['home']['innings']), (None, 0, None))
 
+    def test_mlb_line_scores_follow_half_inning_order_in_every_observation(self):
+        import re
+        fixture = json.loads((ROOT / 'apps/backend.tests/Fixtures/MlbScoreboard/espn-basic.json').read_text())
+        checked = 0
+        for observation in fixture['observations']:
+            for board in observation['boards']:
+                for identity, state in board['expected'].items():
+                    away, home = state['away']['innings'], state['home']['innings']
+                    if away is None or home is None:
+                        continue
+                    where = (observation['id'], identity)
+                    self.assertIn(len(away) - len(home), (0, 1), where)
+                    self.assertEqual(len(away), state['period'], where)
+                    half = re.fullmatch(r'(Top|Bottom) (\d+)(?:st|nd|rd|th)', state['detail'])
+                    if half:
+                        inning = int(half[2])
+                        self.assertEqual((len(away), len(home)), (inning, inning - 1 if half[1] == 'Top' else inning), where)
+                    if state['status'] == 'final':
+                        self.assertGreaterEqual(len(away), 9, where)
+                        if len(home) < len(away):
+                            self.assertGreater(sum(home), sum(away), where)
+                    checked += 1
+        self.assertEqual(checked, 36)
+
     def test_mlb_rich_frames_are_normalized_inputs_with_nulls_distinct_from_zero(self):
         prefix = ROOT / 'apps/backend.tests/Fixtures/MlbScoreboard'
         contests = json.loads((prefix / 'espn-basic.json').read_text())['contests']
