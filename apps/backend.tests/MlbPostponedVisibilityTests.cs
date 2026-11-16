@@ -1,8 +1,11 @@
 using System.Net;
+using System.Text.Json;
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
+using backend.Data;
 using backend.Models;
 using backend.Services;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -16,7 +19,7 @@ public sealed class MlbPostponedVisibilityTests : IClassFixture<SharedPostgreSql
     private readonly HostedGameFixture host;
 
     public MlbPostponedVisibilityTests(SharedPostgreSql server) =>
-        host = new(new DateTimeOffset(2027, 7, 10, 23, 30, 0, TimeSpan.Zero), services => services.AddSingleton<ILoggerProvider>(logs), server);
+        host = new(new DateTimeOffset(ProHypeTests.Now), services => services.AddSingleton<ILoggerProvider>(logs), server);
 
     public Task InitializeAsync() => host.InitializeAsync();
     public Task DisposeAsync() => host.DisposeAsync();
@@ -63,11 +66,47 @@ public sealed class MlbPostponedVisibilityTests : IClassFixture<SharedPostgreSql
                 var lifecycle = scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>();
                 await lifecycle.CaptureAsync();
                 Assert.Null((await lifecycle.ResolveAsync(Id)).Total);
+                var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+                Assert.False(await db.ProHypeSnapshots.AnyAsync(s => s.GameId == Id && s.SnapshotJson != null));
+                Assert.False(await db.StartHypes.AnyAsync(h => h.GameId == Id));
             }
             Assert.Equal(requests, host.RejectedOutboundRequests);
         }
 
         Assert.Empty(logs.Entries.Where(e => e.Level >= LogLevel.Error));
+    }
+
+    [Theory]
+    [InlineData("scheduled", true)]
+    [InlineData("postponed", false)]
+    public async Task Only_a_scheduled_game_is_captured_for_pregame_hype(string status, bool captured)
+    {
+        var game = ProHypeTests.Game("mlb");
+        game.ScheduledStart = ProHypeTests.Now.AddDays(6);
+        game.Status = status;
+        game.ProEvidenceJson = JsonSerializer.Serialize(ProHypeContinuityInputs.Evidence(game));
+        await host.SeedAsync(game, []);
+        using (var scope = host.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+            db.PregameOdds.Add(ProHypeTests.Odds(game));
+            db.TeamRatings.AddRange(ProHypeTests.Ranks(game));
+            foreach (var team in new[] { game.HomeTeamAbbreviation, game.AwayTeamAbbreviation })
+                db.TeamRatings.Add(new TeamRating { Sport = "mlb", TeamAbbreviation = team, Season = game.SeasonYear!.Value,
+                    SourceSeason = game.SeasonYear, Source = "kalshi", PlayoffProbability = .5, FetchedAt = ProHypeTests.Now });
+            await db.SaveChangesAsync();
+        }
+
+        using (var scope = host.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().CaptureAsync();
+
+        using (var scope = host.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+            Assert.Equal(captured, await db.ProHypeSnapshots.AnyAsync(s => s.GameId == game.Id && s.SnapshotJson != null));
+            Assert.Equal(captured, await db.StartHypes.AnyAsync(h => h.GameId == game.Id));
+        }
+        Assert.Equal(0, host.RejectedOutboundRequests);
     }
 
     private async Task<IDocument> Page(string path)
