@@ -162,6 +162,17 @@ class ActionPinRuleTests(unittest.TestCase):
             problems = action_pin_problems(workflows)
         self.assertEqual([problem.split(':', 2)[1] for problem in problems], ['call', 'build[0]', 'build[1]', 'build[2]'], problems)
 
+    def test_only_a_full_lowercase_forty_character_sha_counts_as_a_pin(self):
+        full = '0123456789abcdef0123456789abcdef01234567'
+        refs = {'full': full, 'short': full[:7], 'twelve': full[:12], 'one short': full[:39], 'one long': full + '8', 'uppercase': full.upper(), 'trailing newline': full + '\n', 'trailing space': full + ' '}
+        with tempfile.TemporaryDirectory() as directory:
+            workflows = Path(directory)
+            steps = [{'name': name, 'uses': f'octo/action@{ref}'} for name, ref in refs.items()]
+            (workflows / 'ci.yml').write_text(yaml.safe_dump({'jobs': {'build': {'steps': steps}}}))
+            problems = action_pin_problems(workflows)
+        flagged = [list(refs)[int(problem.split('[', 1)[1].split(']', 1)[0])] for problem in problems]
+        self.assertEqual(flagged, [name for name in refs if name != 'full'], problems)
+
 
 class ScriptTests(unittest.TestCase):
     def setUp(self):
