@@ -3,6 +3,7 @@ import io
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tarfile
 import tempfile
@@ -172,10 +173,19 @@ class PinnedBunInstallTests(InstallScriptTests):
         self.assertIn('release', users)
         self.assertEqual(problems, {})
 
-    def test_the_pinned_bun_is_the_mise_toml_version(self):
+    def pinned_version(self):
         version = re.search(r'^version=(\S+)$', self.script.read_text(), re.MULTILINE)
         self.assertIsNotNone(version)
-        self.assertEqual(version.group(1), tomllib.loads((ROOT / '.mise.toml').read_text())['tools']['bun'])
+        return version.group(1)
+
+    def install_matching(self, stub):
+        archive = bun_archive(stub)
+        script = self.script.read_text()
+        self.assertEqual(len(SHA256.findall(script)), 1)
+        return self.run_install(SHA256.sub(hashlib.sha256(archive).hexdigest(), script), archive)
+
+    def test_the_pinned_bun_is_the_mise_toml_version(self):
+        self.assertEqual(self.pinned_version(), tomllib.loads((ROOT / '.mise.toml').read_text())['tools']['bun'])
 
     def test_a_download_that_does_not_match_the_pin_fails_before_bun_reaches_the_path(self):
         result, added = self.run_install(self.script.read_text(), bun_archive(b'#!/bin/sh\necho tampered\n'))
@@ -187,11 +197,18 @@ class PinnedBunInstallTests(InstallScriptTests):
         self.assertIn('--proto =https', ' '.join(request))
         self.assertEqual([arg for arg in request if '://' in arg and not arg.startswith('https://')], [])
 
+    def test_a_matching_download_whose_bun_does_not_report_the_pinned_version_stays_off_the_path(self):
+        version = self.pinned_version()
+        for name, stub in {'exits 1': f'#!/bin/sh\necho {version}\nexit 1\n', 'other version': '#!/bin/sh\necho 1.4.3\n', 'extra output': f'#!/bin/sh\necho {version}\necho {version}\n'}.items():
+            with self.subTest(stub=name):
+                shutil.rmtree(self.root / 'runner-temp', ignore_errors=True)
+                result, added = self.install_matching(stub.encode())
+                self.assertIn('bun.zip: OK', result.stdout)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(added, [])
+
     def test_a_download_that_matches_the_pin_puts_only_bun_and_bunx_on_the_path(self):
-        archive = bun_archive(b'#!/bin/sh\necho genuine "${0##*/}"\n')
-        script = self.script.read_text()
-        self.assertEqual(len(SHA256.findall(script)), 1)
-        result, added = self.run_install(SHA256.sub(hashlib.sha256(archive).hexdigest(), script), archive)
+        result, added = self.install_matching(f'#!/bin/sh\nif [ "$*" = --version ]; then echo {self.pinned_version()}; else echo genuine "${{0##*/}}"; fi\n'.encode())
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(len(added), 1)
         self.assertEqual(sorted(path.name for path in added[0].iterdir()), ['bun', 'bunx'])
