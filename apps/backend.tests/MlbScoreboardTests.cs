@@ -248,6 +248,22 @@ public sealed class MlbScoreboardTests(SharedPostgreSql server) : IClassFixture<
     }
 
     [Fact]
+    public async Task A_newer_frame_from_another_provider_is_rejected_and_writes_nothing()
+    {
+        await host.SeedAsync(MlbGame("991300104"), []);
+        At("2027-07-10T23:30:00Z");
+        Accepted(await AcceptAsync(Frame("active-complete", "opening")));
+        At("2027-07-10T23:50:00Z");
+        var before = await RowAsync("991300104");
+        var report = Frame("zero-count-empty-bases", "advance");
+        report["provider"] = "synthetic-other";
+
+        Rejected(MlbScoreboardRejection.ProviderChanged, await AcceptAsync(report));
+
+        Assert.Equal(before, await RowAsync("991300104"));
+    }
+
+    [Fact]
     public async Task A_partial_frame_replaces_the_whole_frame_instead_of_borrowing_older_fields()
     {
         await host.SeedAsync(MlbGame("991300104"), []);
