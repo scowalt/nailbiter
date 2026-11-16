@@ -317,6 +317,39 @@ public sealed class MlbScoreboardIngestionTests : IClassFixture<SharedPostgreSql
     }
 
     [Fact]
+    public async Task An_accepted_canceled_frame_forgets_the_frames_it_was_warned_about()
+    {
+        await Observe("opening");
+        provider.Corrupt("991300107", Corruptions["missing-score"]);
+        await Cycles(2);
+        Assert.Single(Warnings("991300107"));
+
+        provider.Corrupt("991300107", _ => { });
+        await Cycles(1);
+        Assert.Equal("canceled", (await Api())["991300107"].Status);
+        provider.Corrupt("991300107", Corruptions["missing-score"]);
+        await Cycles(1);
+
+        Assert.Equal(2, Warnings("991300107").Count());
+    }
+
+    [Fact]
+    public async Task A_live_game_warns_once_for_a_rejected_frame_even_with_an_accepted_frame_in_between()
+    {
+        await Observe("opening");
+        provider.Corrupt("991300104", Corruptions["missing-score"]);
+        await Cycles(1);
+        provider.Corrupt("991300104", _ => { });
+        await Cycles(1);
+        Assert.Equal(MlbScoreboardPhase.Live, (await View("991300104")).Phase);
+
+        provider.Corrupt("991300104", Corruptions["missing-score"]);
+        await Cycles(2);
+
+        Assert.Single(Warnings("991300104"));
+    }
+
+    [Fact]
     public async Task A_withdrawn_game_forgets_the_frames_it_was_warned_about()
     {
         await Observe("opening");
@@ -547,6 +580,15 @@ public sealed class MlbScoreboardIngestionTests : IClassFixture<SharedPostgreSql
         return body.RootElement.EnumerateArray().ToDictionary(g => g.GetProperty("id").GetString()!, g => new Listed(
             g.GetProperty("status").GetString()!, Int(g.GetProperty("homeScore")), Int(g.GetProperty("awayScore")), Int(g.GetProperty("period"))));
         static int? Int(JsonElement value) => value.ValueKind == JsonValueKind.Number ? value.GetInt32() : null;
+    }
+
+    private async Task Cycles(int count)
+    {
+        for (var cycle = 0; cycle < count; cycle++)
+        {
+            host.Clock.Advance(TimeSpan.FromSeconds(30));
+            await Run();
+        }
     }
 
     private IEnumerable<Entry> Warnings(string gameId) =>
