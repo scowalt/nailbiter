@@ -272,8 +272,10 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
         return game |> ofObj
     }
 
-    member _.GetMlbScoreboardAsync(_: string, _: CancellationToken) =
-        Task.FromResult(Some(MlbScoreboard.resolve (timeProvider.GetUtcNow().UtcDateTime) Unchecked.defaultof<Game>))
+    member _.GetMlbScoreboardAsync(gameId: string, ct: CancellationToken) = task {
+        let! game = publicGames.AsNoTracking().FirstOrDefaultAsync((fun g -> g.Id = gameId && g.Sport = "mlb"), ct)
+        return game |> ofObj |> Option.map (MlbScoreboard.resolve (timeProvider.GetUtcNow().UtcDateTime))
+    }
 
     member _.GetLatestOddsForGamesAsync(gameIds: string list, ct: CancellationToken) = task {
         if gameIds.IsEmpty then return Dictionary<string, OddsSnapshot>()
