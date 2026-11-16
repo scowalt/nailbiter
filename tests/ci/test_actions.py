@@ -258,8 +258,9 @@ sys.exit(1 if "FAIL" in sql else 0)
     def prepare_image(self):
         import hashlib
         body = b'synthetic archive bytes'
-        (self.root / '.ci/backend.tar').write_bytes(body)
-        (self.root / '.ci/backend.commit').write_text(SHA + '\n')
+        (self.root / '.ci/artifacts/backend').mkdir(parents=True)
+        (self.root / '.ci/artifacts/backend/backend.tar').write_bytes(body)
+        (self.root / '.ci/artifacts/backend/backend.commit').write_text(SHA + '\n')
         self.env |= {'BACKEND_SHA256': hashlib.sha256(body).hexdigest(), 'BACKEND_IMAGE_ID': 'sha256:' + 'c' * 64}
 
     def test_publisher_checks_bytes_identity_and_pushes_without_rebuilding(self):
@@ -268,7 +269,7 @@ sys.exit(1 if "FAIL" in sql else 0)
         self.assertEqual(result.returncode, 0, result.stderr)
         commands = self.commands()
         self.assertFalse(any(command['args'][0] == 'build' for command in commands))
-        self.assertEqual(commands[0]['args'], ['load', '--input', '.ci/backend.tar'])
+        self.assertEqual(commands[0]['args'], ['load', '--input', '.ci/artifacts/backend/backend.tar'])
         self.assertIn(['login', 'ghcr.io', '--username', 'scowalt', '--password-stdin'], [command['args'] for command in commands])
         self.assertEqual((self.root / '.ci/backend-image.txt').read_text().strip(), DIGEST)
         self.assertEqual([command['args'][1] for command in commands if command['args'][0] == 'push'], [IMAGE + ':sha-' + SHA, IMAGE + ':latest'])
@@ -287,11 +288,11 @@ sys.exit(1 if "FAIL" in sql else 0)
 
     def test_publisher_rejects_wrong_commit_or_corrupted_artifact_before_login(self):
         self.prepare_image()
-        (self.root / '.ci/backend.commit').write_text('b' * 40)
+        (self.root / '.ci/artifacts/backend/backend.commit').write_text('b' * 40)
         self.assertNotEqual(self.run_script('publish-image.sh', env={'GHCR_TOKEN': 'fixture-token'}).returncode, 0)
         self.assertEqual(self.commands(), [])
-        (self.root / '.ci/backend.commit').write_text(SHA)
-        (self.root / '.ci/backend.tar').write_bytes(b'changed')
+        (self.root / '.ci/artifacts/backend/backend.commit').write_text(SHA)
+        (self.root / '.ci/artifacts/backend/backend.tar').write_bytes(b'changed')
         self.assertNotEqual(self.run_script('publish-image.sh', env={'GHCR_TOKEN': 'fixture-token'}).returncode, 0)
         self.assertEqual(self.commands(), [])
 

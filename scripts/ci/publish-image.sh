@@ -5,9 +5,9 @@ sh scripts/ci/require-release.sh
 : "${GHCR_TOKEN:?A package-write token for the canonical repository is required}"
 : "${BACKEND_SHA256:?The sha256 output is required from the image job}"
 : "${BACKEND_IMAGE_ID:?The image-id output is required from the image job}"
-[ "$(tr -d '\n' < .ci/backend.commit)" = "$GITHUB_SHA" ]
-printf '%s  .ci/backend.tar\n' "$BACKEND_SHA256" | sha256sum --check
-docker load --input .ci/backend.tar
+[ "$(tr -d '\n' < .ci/artifacts/backend/backend.commit)" = "$GITHUB_SHA" ]
+printf '%s  .ci/artifacts/backend/backend.tar\n' "$BACKEND_SHA256" | sha256sum --check
+docker load --input .ci/artifacts/backend/backend.tar
 [ "$(docker image inspect --format '{{.Id}}' nailbiter-backend:scan)" = "$BACKEND_IMAGE_ID" ]
 export DOCKER_CONFIG
 DOCKER_CONFIG=$(mktemp -d)

@@ -104,9 +104,22 @@ class ReleaseArtifactHashTests(unittest.TestCase):
         self.assertEqual(len(uploads), 1, artifact)
         return uploads[0]['with']['path'].split()
 
+    def download_path(self, artifact):
+        downloads = [step for step in self.jobs['release']['steps']
+                     if step.get('uses', '').startswith('actions/download-artifact@') and step['with']['name'] == artifact]
+        self.assertEqual(len(downloads), 1, artifact)
+        return Path(downloads[0]['with']['path'])
+
+    def received(self, name):
+        return self.download_path(f'{name}-${{{{ github.sha }}}}')
+
     def transfer(self, artifact):
-        for path in self.upload_paths(artifact):
-            shutil.copy(self.producer / path, self.release / path)
+        paths = [Path(path) for path in self.upload_paths(artifact)]
+        root = Path(os.path.commonpath(paths))
+        for path in paths:
+            target = self.release / self.download_path(artifact) / path.relative_to(root)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(self.producer / path, target)
 
     def produce_image(self):
         (self.producer / '.ci/backend.tar').write_bytes(b'scanned image archive')
@@ -127,8 +140,9 @@ class ReleaseArtifactHashTests(unittest.TestCase):
         return self.run_step(self.release, self.step('release', 'Deploy the tested marketing artifact'))
 
     def replace_artifact(self, name, body):
-        (self.release / f'.ci/{name}.tar').write_bytes(body)
-        (self.release / f'.ci/{name}.sha256').write_text(f'{hashlib.sha256(body).hexdigest()}  .ci/{name}.tar\n')
+        archive = self.received(name) / f'{name}.tar'
+        (self.release / archive).write_bytes(body)
+        (self.release / self.received(name) / f'{name}.sha256').write_text(f'{hashlib.sha256(body).hexdigest()}  {archive}\n')
 
     def test_every_artifact_the_release_downloads_carries_only_its_archive_and_commit(self):
         downloads = [step['with']['name'] for step in self.jobs['release']['steps'] if step.get('uses', '').startswith('actions/download-artifact@')]
@@ -137,12 +151,20 @@ class ReleaseArtifactHashTests(unittest.TestCase):
             with self.subTest(artifact=artifact):
                 self.assertEqual(sorted(Path(path).suffix for path in self.upload_paths(artifact)), ['.commit', '.tar'])
 
+    def test_no_two_downloaded_artifacts_share_or_nest_a_directory(self):
+        paths = [Path(step['with']['path']) for step in self.jobs['release']['steps'] if step.get('uses', '').startswith('actions/download-artifact@')]
+        self.assertEqual(len(paths), 3)
+        for index, path in enumerate(paths):
+            for other in paths[index + 1:]:
+                with self.subTest(path=str(path), other=str(other)):
+                    self.assertFalse(path == other or path in other.parents or other in path.parents)
+
     def test_the_release_publishes_the_image_whose_hash_and_id_the_image_job_reported(self):
         self.produce_image()
         result = self.publish()
         self.assertEqual(result.returncode, 0, result.stderr)
         commands = self.commands()
-        self.assertEqual(commands[0], ['docker', 'load', '--input', '.ci/backend.tar'])
+        self.assertEqual(commands[0], ['docker', 'load', '--input', str(self.received('backend') / 'backend.tar')])
         self.assertEqual([command[2] for command in commands if command[1] == 'push'],
                          ['ghcr.io/scowalt/nailbiter/backend:sha-' + SHA, 'ghcr.io/scowalt/nailbiter/backend:latest'])
 
@@ -152,18 +174,18 @@ class ReleaseArtifactHashTests(unittest.TestCase):
                 self.setUp()
                 self.produce_image()
                 if tamper == 'corrupted':
-                    with open(self.release / '.ci/backend.tar', 'ab') as archive:
+                    with open(self.release / self.received('backend') / 'backend.tar', 'ab') as archive:
                         archive.write(b'x')
                 else:
                     self.replace_artifact('backend', b'foreign image archive')
-                    (self.release / '.ci/backend.image-id').write_text(FOREIGN_IMAGE_ID + '\n')
+                    (self.release / self.received('backend') / 'backend.image-id').write_text(FOREIGN_IMAGE_ID + '\n')
                 result = self.publish(image_id=FOREIGN_IMAGE_ID)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(self.commands(), [])
 
     def test_a_loaded_image_that_is_not_the_scanned_image_is_never_pushed(self):
         self.produce_image()
-        (self.release / '.ci/backend.image-id').write_text(FOREIGN_IMAGE_ID + '\n')
+        (self.release / self.received('backend') / 'backend.image-id').write_text(FOREIGN_IMAGE_ID + '\n')
         result = self.publish(image_id=FOREIGN_IMAGE_ID)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual([command[1] for command in self.commands()], ['load', 'image'])
@@ -181,7 +203,7 @@ class ReleaseArtifactHashTests(unittest.TestCase):
                 self.setUp()
                 self.produce_marketing()
                 if tamper == 'corrupted':
-                    with open(self.release / '.ci/marketing.tar', 'ab') as archive:
+                    with open(self.release / self.received('marketing') / 'marketing.tar', 'ab') as archive:
                         archive.write(b'x')
                 else:
                     staging = self.root / 'foreign'
