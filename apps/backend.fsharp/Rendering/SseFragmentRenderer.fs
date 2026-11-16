@@ -270,7 +270,7 @@ module SseFragmentRenderer =
             | clock -> MlbScoreboardRenderer.renderClock clock []
             MlbScoreboardRenderer.renderStatusBadge (MlbScoreboardRenderer.statusBadge (update.Status.ToDbValue()) scoreboard)
             MlbScoreboardRenderer.renderSituation (MlbScoreboardRenderer.situation isLive scoreboard)
-            yield! MlbScoreboardRenderer.renderLineScore (awayAbbr, update.AwayTeam) (homeAbbr, update.HomeTeam) board
+            MlbScoreboardRenderer.renderLineScore (awayAbbr, update.AwayTeam) (homeAbbr, update.HomeTeam) board
         ]
 
         fragments

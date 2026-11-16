@@ -321,7 +321,7 @@ module GameDetailRenderer =
                         ] []
                     ]
                 match scoreboard with
-                | Some view -> yield! MlbScoreboardRenderer.renderLineScore (game.AwayTeamAbbreviation, game.AwayTeam) (game.HomeTeamAbbreviation, game.HomeTeam) view.Board
+                | Some view -> MlbScoreboardRenderer.renderLineScore (game.AwayTeamAbbreviation, game.AwayTeam) (game.HomeTeamAbbreviation, game.HomeTeam) view.Board
                 | None -> ()
                 yield! renderHighlights highlights
                 if isScheduled && pregameOdds.IsSome then

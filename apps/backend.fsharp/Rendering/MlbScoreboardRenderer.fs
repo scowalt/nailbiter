@@ -253,33 +253,31 @@ module MlbScoreboardRenderer =
             let column (label: string) = Elem.th [ Attr.create "scope" "col" ] [ Text.raw label ]
             let total (title: string) (label: string) =
                 Elem.th [ Attr.create "scope" "col"; cls "line-score-total" ] [ Elem.abbr [ Attr.title title ] [ Text.raw label ] ]
-            [
-                Elem.section [ Attr.id "mlb-line-score"; cls "panel"; Attr.create "aria-labelledby" "mlb-line-score-heading" ] [
-                    Elem.h2 [ Attr.id "mlb-line-score-heading"; cls "panel-title" ] [ Text.raw "Line Score" ]
-                    Elem.div [
-                        cls "line-score-scroll"
-                        Attr.create "role" "region"
-                        Attr.create "aria-labelledby" "mlb-line-score-heading"
-                        Attr.create "tabindex" "0"
-                    ] [
-                        Elem.table [ cls "line-score" ] [
-                            Elem.caption [ cls "visually-hidden" ] [ Text.raw "Runs by inning, then total runs, hits and errors" ]
-                            Elem.thead [] [
-                                Elem.tr [] [
-                                    column "Team"
-                                    for inning in 1 .. board.Innings do
-                                        column $"{inning}"
-                                    total "Runs" "R"
-                                    total "Hits" "H"
-                                    total "Errors" "E"
-                                ]
+            Elem.section [ Attr.id "mlb-line-score"; cls "panel"; Attr.create "aria-labelledby" "mlb-line-score-heading" ] [
+                Elem.h2 [ Attr.id "mlb-line-score-heading"; cls "panel-title" ] [ Text.raw "Line Score" ]
+                Elem.div [
+                    cls "line-score-scroll"
+                    Attr.create "role" "region"
+                    Attr.create "aria-labelledby" "mlb-line-score-heading"
+                    Attr.create "tabindex" "0"
+                ] [
+                    Elem.table [ cls "line-score" ] [
+                        Elem.caption [ cls "visually-hidden" ] [ Text.raw "Runs by inning, then total runs, hits and errors" ]
+                        Elem.thead [] [
+                            Elem.tr [] [
+                                column "Team"
+                                for inning in 1 .. board.Innings do
+                                    column $"{inning}"
+                                total "Runs" "R"
+                                total "Hits" "H"
+                                total "Errors" "E"
                             ]
-                            Elem.tbody [] [
-                                teamRow board.Innings away board.Away
-                                teamRow board.Innings home board.Home
-                            ]
+                        ]
+                        Elem.tbody [] [
+                            teamRow board.Innings away board.Away
+                            teamRow board.Innings home board.Home
                         ]
                     ]
                 ]
             ]
-        | _ -> []
+        | _ -> Elem.section [ Attr.id "mlb-line-score"; Attr.create "hidden" "" ] []

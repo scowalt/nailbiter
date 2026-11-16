@@ -144,7 +144,11 @@ public sealed class HighlightsApplicationTests : IAsyncLifetime
         Assert.Equal("EQMJSt1j-uA", section.QuerySelector("nb-game-highlights")!.GetAttribute("data-video-id"));
         Assert.Equal("https://www.youtube.com/watch?v=EQMJSt1j-uA", section.QuerySelector("#highlights-watch")!.GetAttribute("href"));
         Assert.Null(section.QuerySelector("iframe, img, link, [src]"));
-        Assert.Equal("detail-scoreboard", section.PreviousElementSibling!.Id);
+        var lineScore = section.PreviousElementSibling!;
+        Assert.Equal("mlb-line-score", lineScore.Id);
+        Assert.True(lineScore.HasAttribute("hidden"));
+        Assert.Equal(0, lineScore.ChildNodes.Length);
+        Assert.Equal("detail-scoreboard", lineScore.PreviousElementSibling!.Id);
         Assert.Equal("true", doc.QuerySelector("[data-live-terminal]")!.GetAttribute("data-live-terminal"));
         Assert.DoesNotContain("sentinel-not-live", html);
         Assert.Equal(before, upstreamCalls);
