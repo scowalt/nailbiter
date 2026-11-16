@@ -92,6 +92,18 @@ The check runs inside the `production-release` concurrency group, so a later rel
 
 Marketing is built during validation and deployed from that same run's checked artifact, not rebuilt with credentials. The `checks` job reports the archive's sha256 as its `marketing-sha256` output, and `validate` passes it to the release job, which needs `validate`, not `checks`. The deploy step checks the commit and the archive against that output before it unpacks anything. No artifact that the release job downloads carries its own hash: a step in another job that could replace an artifact cannot also replace the hash that the release job checks it against. `tests/ci/test_release_artifact_hashes.py` runs each chain from the producing step to the release step. Main pushes deploy it only for its source/build/workflow paths; manual main releases deploy both apps. Empty unrelated changes do not imply marketing deployment.
 
+### CI mise
+
+Both `jdx/mise-action` steps in `.github/workflows/ci.yml` (`checks` and `backend-tests`) set `version` and `sha256`. Without `version`, the action installs the newest mise release each time the mise cache misses, and a cache hit keeps whatever binary that cache saved. With `version` set, the action downloads that release from GitHub, and the cache key includes the version. The action compares `sha256` with the `mise` binary on every run, also on a cache hit, and fails the step if they differ. When `sha256` is set, the action skips its own check against the release's signed `SHASUMS256.txt`, so step 2 does that check.
+
+To change mise:
+
+1. Pick a release from `https://github.com/jdx/mise/releases` that is not a prerelease and was published at least 7 days ago. Read `https://github.com/jdx/mise/security/advisories` for advisories that the release fixes or that still affect it.
+2. Download `SHASUMS256.txt` and `SHASUMS256.txt.minisig` from that release. Verify the signature with `minisign -Vm SHASUMS256.txt -P <key>`, where `<key>` is `MISE_MINISIGN_PUBLIC_KEY` in `src/index.ts` of the pinned `jdx/mise-action` commit. Copy the hash of `mise-v<version>-linux-x64`, the bare binary. The `mise` binary in the `.tar.zst` archive has the same hash.
+3. Set `version` and `sha256` in both steps.
+4. Run `tests/ci`. `test_mise_version.py` fails if a step does not have both inputs, if the steps disagree, or if a step runs on a runner that is not x64 Linux.
+5. In the pull request's `Checks` log, check that `Running mise --version` prints the new version.
+
 ### CI .NET SDK
 
 Every CI job that runs `dotnet` on the runner (`checks`, `backend-tests` and `listing-checker`) installs the SDK with `scripts/ci/install-dotnet-sdk.sh`, not through mise. The workflow sets `MISE_DISABLE_TOOLS` so that `jdx/mise-action` does not install the `mise-plugins/mise-dotnet-core` plugin, which would clone the plugin at its default branch and run an unpinned `dotnet-install.sh` with no hash check. The mise steps use `cache_key_prefix: mise-v2`, because a `mise-v1` cache saved before this change still holds the plugin and an unchecked SDK, and mise runs the cached plugin's scripts. Local development still uses the plugin through `.mise.toml`. The `image` job builds inside Docker from `mcr.microsoft.com/dotnet/sdk`, referenced by tag, which this script does not cover.
