@@ -129,7 +129,7 @@ To change Trivy:
 
 ### CI .NET SDK
 
-Every CI job that runs `dotnet` on the runner (`checks`, `backend-tests` and `listing-checker`) installs the SDK with `scripts/ci/install-dotnet-sdk.sh`, not through mise. The workflow sets `MISE_DISABLE_TOOLS` so that `jdx/mise-action` does not install the `mise-plugins/mise-dotnet-core` plugin, which would clone the plugin at its default branch and run an unpinned `dotnet-install.sh` with no hash check. Local development still uses the plugin through `.mise.toml`. The `image` job builds inside Docker from `mcr.microsoft.com/dotnet/sdk`, referenced by tag, which this script does not cover.
+Every CI job that runs `dotnet` on the runner (`checks`, `backend-tests` and `listing-checker`) installs the SDK with `scripts/ci/install-dotnet-sdk.sh`, not through mise. The workflow sets `MISE_DISABLE_TOOLS` so that `jdx/mise-action` does not install the `mise-plugins/mise-dotnet-core` plugin, which would clone the plugin at its default branch and run an unpinned `dotnet-install.sh` with no hash check. Local development still uses the plugin through `.mise.toml`. The `image` job does not use this script. It builds inside Docker, and `apps/backend/Dockerfile` names the `mcr.microsoft.com/dotnet/sdk` and `mcr.microsoft.com/dotnet/aspnet` images by version tag and `@sha256` digest. Docker pulls the digest and ignores the tag, so the tag only records the version that the digest holds.
 
 The script downloads `dotnet-sdk-<version>-linux-x64.tar.gz` from `builds.dotnet.microsoft.com` over HTTPS only, with TLS 1.2 or later. If the tarball does not match its line in `scripts/ci/dotnet-sdk.sha512`, the step fails with a `.NET SDK checksum mismatch` annotation and extracts nothing. If that file has no line for the `global.json` version, the step fails before it downloads anything. The next step, `scripts/ci/check-dotnet-sdk.sh`, fails unless `command -v dotnet` is the pinned install under `$RUNNER_TEMP/dotnet` and `dotnet --version` equals the `global.json` version, and it logs both values.
 
@@ -137,7 +137,8 @@ To change the SDK, for example to .NET 11:
 
 1. Set the version in `apps/backend/global.json` and in `.mise.toml`.
 2. Replace the line in `scripts/ci/dotnet-sdk.sha512` with the `hash` of the `linux-x64` `.tar.gz` SDK file for that version from Microsoft's `https://builds.dotnet.microsoft.com/dotnet/release-metadata/<major>.<minor>/releases.json`, followed by two spaces and the archive name.
-3. Run `tests/ci`. `test_dotnet_sdk.py` fails if the three files disagree.
+3. In `apps/backend/Dockerfile`, set the build image to `mcr.microsoft.com/dotnet/sdk:<sdk>@<digest>` and the runtime image to `mcr.microsoft.com/dotnet/aspnet:<runtime>@<digest>`. `<sdk>` is the `global.json` version. `<runtime>` is the `runtime` version of the `releases.json` release that lists that SDK. Get each digest with `docker buildx imagetools inspect mcr.microsoft.com/dotnet/<image>:<version>`: use the `Digest` of the multi-platform manifest list, not a single-platform digest. Then run the same command with `--format '{{json .Image}}'` and check that every platform's `created` date is at least 7 days ago. A digest points at one exact image, so the bump must change it; Microsoft republishes version tags when it patches the base OS.
+4. Run `tests/ci`. `test_dotnet_sdk.py` fails if the three files disagree, if a `FROM` line has no digest, if the build image tag is not the `global.json` version, or if the runtime image tag is not a patch release of the same major and minor version. The test cannot check that a digest matches its tag, so the `image` job's build and Trivy scan are the check for that.
 
 ### CI Python packages
 
