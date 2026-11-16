@@ -267,6 +267,46 @@ public sealed class MlbScoreboardTests(SharedPostgreSql server) : IClassFixture<
     }
 
     [Fact]
+    public async Task A_caller_context_that_already_tracks_the_game_cannot_let_an_older_frame_regress()
+    {
+        await host.SeedAsync(MlbGame("991300104"), []);
+        At("2027-07-10T23:30:00Z");
+        Accepted(await AcceptAsync(Frame("active-complete", "opening")));
+        At("2027-07-11T00:30:00Z");
+        using var scope = host.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+        await db.Games.SingleAsync(g => g.Id == "991300104");
+        Accepted(await AcceptAsync(Frame("zero-count-empty-bases", "advance")));
+        var before = await RowAsync("991300104");
+        var older = Frame("active-complete", "opening");
+        older["observedAt"] = "2027-07-10T23:40:00Z";
+        older["sourceRevisionAt"] = null;
+
+        Rejected(MlbScoreboardRejection.RegressingObservation, await MlbScoreboardStore.AcceptAsync(db, host.Clock, Parse(older), CancellationToken.None));
+
+        Assert.Equal(Utc("2027-07-10T23:50:00Z"), before.ScoreboardUpdatedAt);
+        Assert.Equal(before, await RowAsync("991300104"));
+    }
+
+    [Fact]
+    public async Task An_unrelated_pending_change_on_the_caller_context_is_neither_committed_nor_discarded()
+    {
+        await host.SeedAsync(MlbGame("991300104"), []);
+        await host.SeedAsync(MlbGame("991300101", "final"), []);
+        At("2027-07-10T23:30:00Z");
+        using var scope = host.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+        (await db.Games.SingleAsync(g => g.Id == "991300101")).StatusDetail = "Unrelated pending change";
+
+        Rejected(MlbScoreboardRejection.FutureObservation, await MlbScoreboardStore.AcceptAsync(db, host.Clock, Parse(Frame("future", "future")), CancellationToken.None));
+        Accepted(await MlbScoreboardStore.AcceptAsync(db, host.Clock, Parse(Frame("active-complete", "opening")), CancellationToken.None));
+
+        Assert.Null((await RowAsync("991300101")).Detail);
+        Assert.Equal(1, await db.SaveChangesAsync());
+        Assert.Equal("Unrelated pending change", (await RowAsync("991300101")).Detail);
+    }
+
+    [Fact]
     public async Task A_newer_frame_from_another_provider_is_rejected_and_writes_nothing()
     {
         await host.SeedAsync(MlbGame("991300104"), []);
@@ -516,9 +556,11 @@ public sealed class MlbScoreboardTests(SharedPostgreSql server) : IClassFixture<
     {
         using var scope = host.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
-        var parsed = JsonSerializer.Deserialize<MlbScoreboardReport>(report.ToJsonString(), JsonSerializerOptions.Web)!;
-        return await MlbScoreboardStore.AcceptAsync(db, host.Clock, parsed, CancellationToken.None);
+        return await MlbScoreboardStore.AcceptAsync(db, host.Clock, Parse(report), CancellationToken.None);
     }
+
+    private static MlbScoreboardReport Parse(JsonObject report) =>
+        JsonSerializer.Deserialize<MlbScoreboardReport>(report.ToJsonString(), JsonSerializerOptions.Web)!;
 
     private async Task<MlbScoreboardView> ReadAsync(string gameId)
     {
