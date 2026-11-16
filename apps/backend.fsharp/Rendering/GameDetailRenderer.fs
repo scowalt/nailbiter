@@ -203,7 +203,7 @@ module GameDetailRenderer =
                             ]
                             Elem.span [ cls "meta-text" ] [ Text.enc game.AwayTeam ]
                             Elem.span [ cls "detail-score"; Attr.id "detail-away-score" ] [
-                                if FormatHelpers.showsScore game then
+                                if FormatHelpers.showsScore game.Status then
                                     match board with
                                     | Some b -> Text.raw $"{b.Away.Runs}"
                                     | None ->
@@ -256,7 +256,7 @@ module GameDetailRenderer =
                             ]
                             Elem.span [ cls "meta-text" ] [ Text.enc game.HomeTeam ]
                             Elem.span [ cls "detail-score"; Attr.id "detail-home-score" ] [
-                                if FormatHelpers.showsScore game then
+                                if FormatHelpers.showsScore game.Status then
                                     match board with
                                     | Some b -> Text.raw $"{b.Home.Runs}"
                                     | None ->

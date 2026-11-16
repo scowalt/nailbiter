@@ -197,7 +197,7 @@ module HomePageRenderer =
                         ]
                     ]
                     Elem.span [ cls "team-score"; Attr.id $"away-score-{game.Id}" ] [
-                        if FormatHelpers.showsScore game && game.AwayScore.HasValue then Text.raw $"{game.AwayScore.Value}"
+                        if FormatHelpers.showsScore game.Status && game.AwayScore.HasValue then Text.raw $"{game.AwayScore.Value}"
                     ]
                 ]
                 Elem.div [ cls "team-row" ] [
@@ -219,7 +219,7 @@ module HomePageRenderer =
                         ]
                     ]
                     Elem.span [ cls "team-score"; Attr.id $"home-score-{game.Id}" ] [
-                        if FormatHelpers.showsScore game && game.HomeScore.HasValue then Text.raw $"{game.HomeScore.Value}"
+                        if FormatHelpers.showsScore game.Status && game.HomeScore.HasValue then Text.raw $"{game.HomeScore.Value}"
                     ]
                 ]
             ]

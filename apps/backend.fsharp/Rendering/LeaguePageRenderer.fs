@@ -37,7 +37,7 @@ module LeaguePageRenderer =
 
         let homeWinProb = latestOdds |> Option.map (fun o -> o.HomeWinProbability) |> Option.defaultValue 0.5
         let liveClass = if isLive then " is-live" else ""
-        let showScores = FormatHelpers.showsScore game
+        let showScores = FormatHelpers.showsScore game.Status
 
         let card = Elem.a [ Attr.href $"/game/{game.Id}"; cls $"league-game{liveClass}" ] [
             Elem.div [ cls "league-game-body" ] [
