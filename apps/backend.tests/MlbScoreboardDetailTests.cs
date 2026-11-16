@@ -229,14 +229,14 @@ public sealed class MlbScoreboardDetailTests : IClassFixture<SharedPostgreSql>, 
     }
 
     [Theory]
-    [InlineData("991300101", "retained-after-final", "final", "Final", 9)]
-    [InlineData("991300102", null, "final", "Final · 11 innings", 11)]
-    [InlineData("991300108", "retained-while-delayed", "in_progress", "Delayed · 6th inning", 6)]
-    [InlineData("991300109", "retained-while-suspended", "in_progress", "Suspended · 7th inning", 7)]
-    [InlineData("991300105", null, "final", "Postponed", 0)]
-    [InlineData("991300107", null, "final", "Canceled", 0)]
-    public async Task Interrupted_and_ended_games_show_a_distinct_clock_label_and_no_situation_facts(
-        string gameId, string? frameId, string status, string clock, int innings)
+    [InlineData("991300101", "retained-after-final", "final", "Final", "Final", "status-final", 9)]
+    [InlineData("991300102", null, "final", "Final · 11 innings", "Final", "status-final", 11)]
+    [InlineData("991300108", "retained-while-delayed", "delayed", "Delayed · 6th inning", "Delayed", "status-scheduled", 6)]
+    [InlineData("991300109", "retained-while-suspended", "suspended", "Suspended · 7th inning", "Suspended", "status-scheduled", 7)]
+    [InlineData("991300105", null, "postponed", "Postponed", "Postponed", "status-scheduled", 0)]
+    [InlineData("991300107", null, "canceled", "Canceled", "Canceled", "status-final", 0)]
+    public async Task Interrupted_and_ended_games_show_a_distinct_clock_label_a_matching_badge_and_no_situation_facts(
+        string gameId, string? frameId, string status, string clock, string badge, string badgeClass, int innings)
     {
         await host.SeedAsync(MlbGame(gameId, status), []);
         At("2027-07-10T23:30:00Z");
@@ -245,6 +245,9 @@ public sealed class MlbScoreboardDetailTests : IClassFixture<SharedPostgreSql>, 
 
         using var page = await PageAsync(gameId);
 
+        var badgeElement = page.QuerySelector("#detail-status")!;
+        Assert.Equal(badge, badgeElement.TextContent.Trim());
+        Assert.Contains(badgeClass, badgeElement.ClassList);
         Assert.Equal(clock, Clock(page));
         var situation = page.QuerySelector("#mlb-situation");
         Assert.NotNull(situation);
