@@ -77,13 +77,17 @@ def install_problems(tokens):
     return problems
 
 
+def line_install_problems(line):
+    if not re.search(r'\b(pip|uvx|pipx|uv\s+run|uv\s+tool)\b', line):
+        return []
+    return install_problems(shlex.split(line, comments=True))
+
+
 def ci_install_problems():
     found = []
     for source, text in ci_sources():
         for line in logical_lines(text):
-            if not re.search(r'\b(pip|uvx|pipx|uv\s+run|uv\s+tool)\b', line):
-                continue
-            for problem in install_problems(shlex.split(line, comments=True)):
+            for problem in line_install_problems(line):
                 found.append(f'{source}: {problem}: {line.strip()}')
     return found
 

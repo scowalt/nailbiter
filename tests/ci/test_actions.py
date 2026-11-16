@@ -17,6 +17,20 @@ DIGEST = IMAGE + '@sha256:' + 'b' * 64
 LEGACY_DIGEST = 'ghcr.io/scowalt/nailbiter-app/backend@sha256:' + 'b' * 64
 
 
+def action_pin_problems(workflows=ROOT / '.github/workflows'):
+    problems = []
+    for job_name, job in yaml.safe_load((workflows / 'ci.yml').read_text())['jobs'].items():
+        for index, step in enumerate(job['steps']):
+            if 'uses' not in step:
+                continue
+            source = f'ci.yml:{job_name}[{index}]'
+            if not re.match(r'^[\w/-]+@[0-9a-f]{40}$', step['uses']):
+                problems.append(f'{source}: {step["uses"]!r} is not pinned to a full commit SHA')
+            if step['uses'].startswith('actions/checkout@') and step.get('with', {}).get('persist-credentials') is not False:
+                problems.append(f'{source}: checkout must set persist-credentials: false')
+    return problems
+
+
 class PipelineTests(unittest.TestCase):
     def setUp(self):
         self.workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
@@ -44,13 +58,7 @@ class PipelineTests(unittest.TestCase):
         self.assertFalse((ROOT / '.woodpecker').exists())
 
     def test_action_pins_and_checkout_credentials(self):
-        for job in self.jobs.values():
-            for step in job['steps']:
-                if 'uses' not in step:
-                    continue
-                self.assertRegex(step['uses'], r'^[\w/-]+@[0-9a-f]{40}$')
-                if step['uses'].startswith('actions/checkout@'):
-                    self.assertFalse(step['with']['persist-credentials'])
+        self.assertEqual(action_pin_problems(), [])
 
     def test_all_validation_contracts_remain(self):
         text = json.dumps([self.jobs[name] for name in ['checks', 'backend-tests', 'validate']])
