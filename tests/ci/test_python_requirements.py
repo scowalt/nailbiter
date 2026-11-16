@@ -13,7 +13,25 @@ HASH = re.compile(r'^--hash=sha256:[0-9a-f]{64}$')
 INSTALLERS = {'uvx', 'pipx', 'pip-sync', 'piptools'}
 PIP = re.compile(r'pip[0-9.]*')
 SEPARATORS = {'&&', '||', ';', '|'}
-RUN_OPTIONS_WITH_VALUES = {'--python', '-p'}
+ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=.*', re.DOTALL)
+RUN_OPTIONS_WITH_VALUES = {
+    '--allow-insecure-host', '--cache-dir', '--color', '--config-file', '--config-setting', '--config-settings-package',
+    '--default-index', '--directory', '--env-file', '--exclude-newer', '--exclude-newer-package', '--extra',
+    '--extra-index-url', '--find-links', '--fork-strategy', '--group', '--index', '--index-strategy', '--index-url',
+    '--keyring-provider', '--link-mode', '--no-binary-package', '--no-build-isolation-package', '--no-build-package',
+    '--no-editable-package', '--no-extra', '--no-group', '--no-sources-package', '--only-group', '--package',
+    '--prerelease', '--project', '--python', '--python-platform', '--refresh-package', '--reinstall-package',
+    '--resolution', '--upgrade-group', '--upgrade-package', '--with', '--with-editable', '--with-requirements',
+    '-C', '-P', '-f', '-i', '-p', '-w',
+}
+RUN_FLAGS = {
+    '--active', '--all-extras', '--all-groups', '--all-packages', '--compile-bytecode', '--exact', '--frozen',
+    '--gui-script', '--help', '--isolated', '--locked', '--managed-python', '--module', '--no-binary', '--no-build',
+    '--no-build-isolation', '--no-cache', '--no-config', '--no-default-groups', '--no-dev', '--no-editable',
+    '--no-env-file', '--no-index', '--no-managed-python', '--no-progress', '--no-project', '--no-python-downloads',
+    '--no-sources', '--no-sync', '--offline', '--only-dev', '--quiet', '--refresh', '--reinstall', '--script',
+    '--system-certs', '--upgrade', '--verbose', '-U', '-h', '-m', '-n', '-q', '-s', '-v',
+}
 SCRIPT_FLAGS = {'--script', '-s', '--gui-script'}
 INLINE_METADATA = re.compile(r'^# /// script\s*$', re.MULTILINE)
 MIN_HASHED_FILES = 3
@@ -56,23 +74,32 @@ def program(token):
 
 def uv_run_problems(args):
     problems = []
-    options, target = [], None
+    options, target, directory = [], None, '.'
     remaining = iter(args)
     for arg in remaining:
+        if arg == '--':
+            target = next(remaining, None)
+            break
         if arg == '-' or not arg.startswith('-'):
             target = arg
             break
-        options.append(arg)
-        if arg in RUN_OPTIONS_WITH_VALUES:
-            next(remaining, None)
+        name, attached, value = arg.partition('=')
+        options.append(name)
+        if name in RUN_OPTIONS_WITH_VALUES:
+            if not attached:
+                value = next(remaining, '')
+            if name == '--directory':
+                directory = value
+        elif name not in RUN_FLAGS:
+            problems.append(f'uv run {arg} is not an option this check knows, so it cannot tell whether it hides the script uv runs')
     if '--no-project' not in options:
         problems.append('uv run needs --no-project before the command it runs, or it installs the nearest pyproject.toml project instead of a hashed requirements file')
     if any(re.fullmatch(r'--with([-=]\S*)?|-w\S*', arg) for arg in args):
         problems.append('uv run --with resolves packages without checking hashes; use uv pip install --require-hashes')
     if target == '-' or '://' in (target or ''):
         problems.append(f'uv run {target} runs a script whose PEP 723 dependencies this check cannot read')
-    elif target and (SCRIPT_FLAGS & set(options) or target.endswith(('.py', '.pyw'))):
-        script = ROOT / target
+    elif target and (SCRIPT_FLAGS & set(options) or target.lower().endswith(('.py', '.pyw'))):
+        script = ROOT / directory / target
         if not script.is_file():
             problems.append(f'uv run names script {target!r}, which this check cannot read for PEP 723 dependencies')
         elif INLINE_METADATA.search(script.read_text(errors='replace')):
@@ -80,14 +107,26 @@ def uv_run_problems(args):
     return problems
 
 
+def command_starts(tokens):
+    starts, expecting = set(), True
+    for index, token in enumerate(tokens):
+        if token in SEPARATORS:
+            expecting = True
+        elif expecting and not ASSIGNMENT.fullmatch(token):
+            starts.add(index)
+            expecting = False
+    return starts
+
+
 def install_problems(tokens):
     problems = []
+    starts = command_starts(tokens)
     for start, token in enumerate(tokens):
         if program(token) in INSTALLERS:
             problems.append(f'{token} installs packages without a hashed requirements file')
         if token.startswith('UV_VENV_SEED='):
             problems.append('UV_VENV_SEED installs pip into the virtual environment without a hash')
-        if program(token) == 'uv':
+        if token == 'uv' or program(token) == 'uv' and start in starts:
             command = list(itertools.takewhile(lambda arg: arg not in SEPARATORS, tokens[start + 1:]))
             if command[:1] == ['run']:
                 problems.extend(uv_run_problems(command[1:]))
