@@ -15,7 +15,7 @@ def mise_action_uses(workflows=ROOT / '.github/workflows'):
     for workflow in sorted(workflows.glob('*.y*ml')):
         for job_name, job in yaml.safe_load(workflow.read_text())['jobs'].items():
             for index, step in enumerate(job.get('steps', [])):
-                if step.get('uses', '').startswith('jdx/mise-action@'):
+                if step.get('uses', '').lower().startswith('jdx/mise-action@'):
                     yield f'{workflow.name}:{job_name}[{index}]', job, step.get('with', {})
 
 
