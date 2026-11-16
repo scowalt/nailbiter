@@ -467,8 +467,8 @@ public sealed class MlbScoreboardTests : IClassFixture<SharedPostgreSql>, IAsync
 
         const string template = "MLB scoreboard stored frame for {GameId} observed at {ObservedAt} is unusable: {Fault}";
         Assert.Equal([
-            new Logged(LogLevel.Error, template, "991300104", Utc("2027-07-10T23:30:00Z"), "WrongTeam Home"),
-            new Logged(LogLevel.Error, template, "991300104", Utc("2027-07-10T23:31:00Z"), "Unreadable"),
+            new Logged(LogLevel.Error, template, "991300104", "2027-07-10T23:30:00.0000000Z", "WrongTeam Home"),
+            new Logged(LogLevel.Error, template, "991300104", "2027-07-10T23:31:00.0000000Z", "Unreadable"),
         ], logs.From<MlbScoreboardStore>());
     }
 
