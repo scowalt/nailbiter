@@ -95,7 +95,7 @@ internal static class ListingFixtureCheck
         var excitement = commands.Where(c => c.Sql.Contains("odds_snapshots") && c.Sql.Contains("is_historical_import")).ToList();
         var readIds = excitement.SelectMany(c => c.Parameters.Select(p => p.Value).OfType<IEnumerable<string>>().SelectMany(ids => ids)
             .Concat(c.Parameters.Select(p => p.Value).OfType<string>())
-            .Concat(manifest.On("/").Select(game => game.Id).Where(id => c.Sql.Contains($"'{id}'", StringComparison.Ordinal)))).ToHashSet();
+            .Concat(manifest.All.Select(game => game.Id).Where(id => c.Sql.Contains($"'{id}'", StringComparison.Ordinal)))).ToHashSet();
         var (relations, planningMs) = latest.Count == 1 ? await ExplainAsync(host.Services, latest[0]) : ([], null);
         var duplicates = relations.GroupBy(name => name).Where(group => group.Count() > 1).Select(group => group.Key).ToList();
         var newestChunks = await NewestSnapshotChunksAsync(host.Services, manifest.On(path).Select(game => game.Id).ToArray());

@@ -1,9 +1,11 @@
 using System.Text.Json;
+using System.Data.Common;
 using AngleSharp.Html.Parser;
 using backend.Data;
 using backend.Models;
 using backend.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FSharp.Collections;
 using Npgsql;
@@ -16,6 +18,7 @@ public sealed class ListingPerformanceTests : IClassFixture<SharedPostgreSql>, I
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 13, 18, 0, 0, TimeSpan.Zero);
     private readonly CommandRecorder recorder = new();
+    private readonly CommandCounter counter = new();
     private readonly HostedGameFixture host;
     private readonly ITestOutputHelper output;
 
@@ -23,7 +26,7 @@ public sealed class ListingPerformanceTests : IClassFixture<SharedPostgreSql>, I
     {
         this.output = output;
         host = new HostedGameFixture(Now, services =>
-            services.AddDbContext<ExcitementDbContext>(options => options.AddInterceptors(recorder)), server);
+            services.AddDbContext<ExcitementDbContext>(options => options.AddInterceptors(recorder, counter)), server);
     }
 
     public Task InitializeAsync() => host.InitializeAsync();
@@ -118,6 +121,29 @@ public sealed class ListingPerformanceTests : IClassFixture<SharedPostgreSql>, I
         Assert.DoesNotContain("'scheduled'", history.Sql);
     }
 
+    [Theory]
+    [InlineData("/")]
+    [InlineData("/nhl?date=2026-10-13")]
+    [InlineData("/cfb")]
+    public async Task Listing_reads_scheduled_hype_in_the_same_commands_however_many_games_are_scheduled(string path)
+    {
+        var commands = new List<int>();
+        foreach (var batch in new[] { 0, 1 })
+        {
+            foreach (var index in Enumerable.Range(3 * batch, 3))
+            {
+                if (path != "/cfb") await host.SeedAsync(Game($"pro-{index}", "scheduled"), []);
+                if (path != "/nhl?date=2026-10-13") await host.SeedAsync(College($"college-{index}"), []);
+            }
+            (await host.Client.GetAsync(path)).EnsureSuccessStatusCode();
+            var before = counter.Count;
+            using var page = await new HtmlParser().ParseDocumentAsync(await host.Client.GetStringAsync(path));
+            commands.Add(counter.Count - before);
+            Assert.Equal(3 * (batch + 1) * (path == "/" ? 2 : 1), page.QuerySelectorAll("a[href^='/game/']").Length);
+        }
+        Assert.Equal(commands[0], commands[1]);
+    }
+
     [Fact]
     public async Task Latest_odds_with_no_requested_games_does_not_query_the_database()
     {
@@ -183,6 +209,38 @@ public sealed class ListingPerformanceTests : IClassFixture<SharedPostgreSql>, I
     {
         Id = id, Sport = "nhl", Status = status, SeasonYear = 2027, SeasonType = 2,
         HomeTeam = "Home", AwayTeam = "Away", HomeTeamAbbreviation = "HOM", AwayTeamAbbreviation = "AWY",
+        ScheduledStart = Now.UtcDateTime.AddHours(3)
+    };
+
+    private sealed class CommandCounter : DbCommandInterceptor
+    {
+        private int count;
+        public int Count => Volatile.Read(ref count);
+
+        private T Counted<T>(T result)
+        {
+            Interlocked.Increment(ref count);
+            return result;
+        }
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result) => Counted(result);
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default) => ValueTask.FromResult(Counted(result));
+        public override InterceptionResult<int> NonQueryExecuting(DbCommand command, CommandEventData eventData,
+            InterceptionResult<int> result) => Counted(result);
+        public override ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<int> result, CancellationToken cancellationToken = default) => ValueTask.FromResult(Counted(result));
+        public override InterceptionResult<object> ScalarExecuting(DbCommand command, CommandEventData eventData,
+            InterceptionResult<object> result) => Counted(result);
+        public override ValueTask<InterceptionResult<object>> ScalarExecutingAsync(DbCommand command, CommandEventData eventData,
+            InterceptionResult<object> result, CancellationToken cancellationToken = default) => ValueTask.FromResult(Counted(result));
+    }
+
+    private static Game College(string id) => new()
+    {
+        Id = id, Sport = "cfb", Status = "scheduled", SeasonYear = 2026, SeasonType = 2, WeekNumber = 8, WeekLabel = "Week 8",
+        CollegeCompetition = "regular", HomeTeam = "Home", AwayTeam = "Away", HomeTeamAbbreviation = "HOM", AwayTeamAbbreviation = "AWY",
         ScheduledStart = Now.UtcDateTime.AddHours(3)
     };
 

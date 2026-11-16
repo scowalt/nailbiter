@@ -7,6 +7,7 @@ using backend.Scoring;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace backend.Services;
 
@@ -16,6 +17,12 @@ public sealed record ProHypeResolution(double? Total, [property: JsonIgnore] Hyp
 public interface IProHypeLifecycle
 {
     Task<ProHypeResolution> ResolveAsync(string gameId, CancellationToken ct = default);
+    async Task<IReadOnlyDictionary<string, ProHypeResolution>> ResolveAsync(IReadOnlyCollection<string> gameIds, CancellationToken ct = default)
+    {
+        var resolutions = new Dictionary<string, ProHypeResolution>();
+        foreach (var gameId in gameIds.Distinct()) resolutions[gameId] = await ResolveAsync(gameId, ct);
+        return resolutions;
+    }
     Task CaptureAsync(CancellationToken ct = default);
 }
 
@@ -60,45 +67,106 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
         }
     }
 
-    public Task<ProHypeResolution> ResolveAsync(string gameId, CancellationToken ct = default) => ResolveAsync(gameId, null, ct);
+    public async Task<ProHypeResolution> ResolveAsync(string gameId, CancellationToken ct = default) =>
+        (await ResolveAsync([gameId], null, ct))[gameId];
 
-    private async Task<ProHypeResolution> ResolveAsync(string gameId, DateTime? captureHorizon, CancellationToken ct)
+    public async Task<IReadOnlyDictionary<string, ProHypeResolution>> ResolveAsync(IReadOnlyCollection<string> gameIds, CancellationToken ct = default) =>
+        await ResolveAsync(gameIds, null, ct);
+
+    private async Task<ProHypeResolution> ResolveAsync(string gameId, DateTime? captureHorizon, CancellationToken ct) =>
+        (await ResolveAsync([gameId], captureHorizon, ct))[gameId];
+
+    private async Task<Dictionary<string, ProHypeResolution>> ResolveAsync(IReadOnlyCollection<string> gameIds, DateTime? captureHorizon, CancellationToken ct)
     {
         var evaluatedAt = clock.GetUtcNow().UtcDateTime;
+        var ids = gameIds.Distinct().ToArray();
+        if (ids.Length == 0) return [];
         await using var db = new ExcitementDbContext(databaseOptions);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await db.LockProHypeFenceAsync(ProHypeFenceAccess.ReadEvidence, ct);
         var revision = await db.ProHypeRevisions.AsNoTracking().SingleAsync(r => r.Id == 1, ct);
         var now = clock.GetUtcNow().UtcDateTime;
-        var game = await db.Games.AsNoTracking().SingleOrDefaultAsync(g => g.Id == gameId, ct);
-        if (game is null || !ProHypePolicy.Supports(game.Sport)) return Unavailable(now, game);
-        var ratings = await db.TeamRatings.AsNoTracking().Where(r => r.Sport == game.Sport && r.Season == game.SeasonYear).ToArrayAsync(ct);
-        var odds = await db.PregameOdds.AsNoTracking().SingleOrDefaultAsync(o => o.GameId == gameId, ct);
+        var games = await db.Games.AsNoTracking().Where(g => ids.Contains(g.Id)).ToDictionaryAsync(g => g.Id, ct);
+        var results = ids.ToDictionary(id => id, id => Unavailable(now, games.GetValueOrDefault(id)));
+        var supported = ids.Select(games.GetValueOrDefault).OfType<Game>().Where(g => ProHypePolicy.Supports(g.Sport)).ToArray();
+        if (supported.Length == 0) return results;
+        var ratings = new Dictionary<(string Sport, int? Season), TeamRating[]>();
+        foreach (var key in supported.Select(g => (g.Sport, g.SeasonYear)).Distinct())
+            ratings[key] = await db.TeamRatings.AsNoTracking().Where(r => r.Sport == key.Sport && r.Season == key.SeasonYear).ToArrayAsync(ct);
+        var supportedIds = supported.Select(g => g.Id).ToArray();
+        var pregame = await db.PregameOdds.AsNoTracking().Where(o => supportedIds.Contains(o.GameId)).ToDictionaryAsync(o => o.GameId, ct);
+        var completed = new Dictionary<(string Sport, int? Season, int? Phase), string[]>();
+        foreach (var key in supported.Select(g => (g.Sport, g.SeasonYear, Identity.Of(g).Phase)).Distinct())
+            completed[key] = await db.Games.AsNoTracking().Where(g => g.Sport == key.Sport && g.SeasonYear == key.SeasonYear
+                && g.SeasonType == key.Phase && g.Status == "final").Select(g => g.Id).ToArrayAsync(ct);
+        var states = await db.ProHypeSnapshots.Where(s => supportedIds.Contains(s.GameId)).ToDictionaryAsync(s => s.GameId, ct);
+        var pending = supported.Select(game =>
+        {
+            if (!states.TryGetValue(game.Id, out var state))
+            {
+                state = new ProHypeSnapshot { GameId = game.Id };
+                db.ProHypeSnapshots.Add(state);
+            }
+            var saved = Parse<Saved>(state.SnapshotJson);
+            if (saved is not null && !ValidSaved(saved, now)) saved = null;
+            string[] subjects = ["game:" + game.Id,
+                $"team:{game.Sport}:{game.SeasonYear}:{ProHypePolicy.TeamKey(game.Sport, game.HomeTeamAbbreviation)}",
+                $"team:{game.Sport}:{game.SeasonYear}:{ProHypePolicy.TeamKey(game.Sport, game.AwayTeamAbbreviation)}"];
+            return (Game: game, State: state, Saved: saved, Subjects: subjects);
+        }).ToArray();
+        var bounds = pending.SelectMany(p => (p.Saved is null ? ["game:" + p.Game.Id] : p.Subjects)
+            .Select(subject => (Subject: subject, Since: p.State.EvidenceRevision, AllKinds: p.Saved is not null))).ToArray();
+        var changes = await db.ProHypeEvidenceChanges.FromSqlRaw(EvidenceChangesSql,
+                new NpgsqlParameter<string[]>("subjects", bounds.Select(b => b.Subject).ToArray()),
+                new NpgsqlParameter<long[]>("since", bounds.Select(b => b.Since).ToArray()),
+                new NpgsqlParameter<bool[]>("all_kinds", bounds.Select(b => b.AllKinds).ToArray()),
+                new NpgsqlParameter<long>("revision", revision.Revision))
+            .AsNoTracking().OrderBy(c => c.Revision).ToArrayAsync(ct);
+        var starts = new List<(Game Game, double? Total, HypeComponents? Components)>();
+        foreach (var (game, state, savedState, gameSubjects) in pending)
+        {
+            var hasSaved = savedState is not null;
+            var gameChanges = changes.Where(c => c.Revision > state.EvidenceRevision && (hasSaved || c.Kind == "games")
+                && (gameSubjects.Contains(c.BeforeSubject) || gameSubjects.Contains(c.AfterSubject)
+                    || (c.BeforeSubject == null && c.AfterSubject == null))).ToArray();
+            var (resolution, start) = Decide(game, state, savedState, gameChanges, ratings[(game.Sport, game.SeasonYear)],
+                pregame.GetValueOrDefault(game.Id), completed[(game.Sport, game.SeasonYear, Identity.Of(game).Phase)],
+                revision.Revision, evaluatedAt, now, captureHorizon);
+            results[game.Id] = resolution;
+            if (start is { } recorded) starts.Add((game, recorded.Total, recorded.Components));
+        }
+        await StartHypes.RecordAsync(db, starts, ct);
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return results;
+    }
+
+    private const string EvidenceChangesSql = """
+        SELECT * FROM pro_hype_evidence_changes WHERE revision = ANY (ARRAY(
+            SELECT c.revision FROM unnest(@subjects, @since, @all_kinds) AS b(subject, since, all_kinds)
+            CROSS JOIN LATERAL (
+                SELECT revision, kind FROM pro_hype_evidence_changes
+                WHERE before_subject = b.subject AND revision > b.since AND revision <= @revision
+                UNION ALL
+                SELECT revision, kind FROM pro_hype_evidence_changes
+                WHERE after_subject = b.subject AND revision > b.since AND revision <= @revision) AS c
+            WHERE b.all_kinds OR c.kind = 'games'
+            UNION
+            SELECT n.revision FROM pro_hype_evidence_changes AS n
+            WHERE n.before_subject IS NULL AND n.after_subject IS NULL AND n.revision <= @revision
+                AND n.revision > (SELECT min(s) FROM unnest(@since) AS u(s))
+                AND EXISTS (SELECT 1 FROM unnest(@since, @all_kinds) AS g(since, all_kinds)
+                    WHERE n.revision > g.since AND (g.all_kinds OR n.kind = 'games'))))
+        """;
+
+    private (ProHypeResolution Resolution, (double? Total, HypeComponents? Components)? Start) Decide(Game game, ProHypeSnapshot state,
+        Saved? saved, ProHypeEvidenceChange[] changes, TeamRating[] ratings, PregameOdds? odds, string[] completed, long revision,
+        DateTime evaluatedAt, DateTime now, DateTime? captureHorizon)
+    {
         var phase = Identity.Of(game).Phase;
-        var completed = await db.Games.AsNoTracking().Where(g => g.Sport == game.Sport && g.SeasonYear == game.SeasonYear
-            && g.SeasonType == phase && g.Status == "final").Select(g => g.Id).ToArrayAsync(ct);
         var evaluation = scorer.EvaluateFromEvidence(game, ratings, odds!, completed, now);
         var total = scorer.CalculateFinalScore(game.Sport, evaluation.Components);
-        var state = await db.ProHypeSnapshots.SingleOrDefaultAsync(s => s.GameId == gameId, ct);
-        if (state is null)
-        {
-            state = new ProHypeSnapshot { GameId = gameId };
-            db.ProHypeSnapshots.Add(state);
-        }
-        var saved = Parse<Saved>(state.SnapshotJson);
         var revoked = Parse<HashSet<string>>(state.RevokedEvidenceJson) ?? [];
-        if (saved is not null && !ValidSaved(saved, now)) saved = null;
-        var gameSubject = "game:" + gameId;
-        var homeSubject = $"team:{game.Sport}:{game.SeasonYear}:{ProHypePolicy.TeamKey(game.Sport, game.HomeTeamAbbreviation)}";
-        var awaySubject = $"team:{game.Sport}:{game.SeasonYear}:{ProHypePolicy.TeamKey(game.Sport, game.AwayTeamAbbreviation)}";
-        var hasSaved = saved is not null;
-        var changes = await db.ProHypeEvidenceChanges.AsNoTracking().Where(c => c.Revision > state.EvidenceRevision
-            && c.Revision <= revision.Revision && (hasSaved || c.Kind == "games")
-            && (c.BeforeSubject == gameSubject || c.AfterSubject == gameSubject
-                || c.BeforeSubject == homeSubject || c.AfterSubject == homeSubject
-                || c.BeforeSubject == awaySubject || c.AfterSubject == awaySubject
-                || (c.BeforeSubject == null && c.AfterSubject == null)))
-            .OrderBy(c => c.Revision).ToArrayAsync(ct);
         state.ConfirmedStarted |= Began(game) || changes.Where(c => c.Kind == "games").Any(c =>
         {
             var before = Row<Game>(c.BeforeJson);
@@ -124,16 +192,12 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
                 phase == 2 ? RegularSeasonFormula(game.Sport) : 0);
             if (!WasRevoked(candidate, game, revoked) && (saved is null || Signature(candidate) != Signature(saved))) saved = candidate;
         }
-        if (Upcoming(game, now) && !state.ConfirmedStarted)
-            await StartHypes.RecordAsync(db, game, saved?.Total, saved?.Components, ct);
+        (double? Total, HypeComponents? Components)? start = Upcoming(game, now) && !state.ConfirmedStarted ? (saved?.Total, saved?.Components) : null;
         state.LastEvaluationTicks = Math.Max(state.LastEvaluationTicks, evaluatedAt.Ticks);
-        state.EvidenceRevision = revision.Revision;
+        state.EvidenceRevision = revision;
         state.SnapshotJson = saved is null ? null : JsonSerializer.Serialize(saved);
         state.RevokedEvidenceJson = JsonSerializer.Serialize(revoked);
-        await db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
-        return saved is not null ? new(saved.Total, saved.Components, saved.EvaluatedAt, game)
-            : new(null, evaluation.Components, now, game);
+        return (saved is not null ? new(saved.Total, saved.Components, saved.EvaluatedAt, game) : new(null, evaluation.Components, now, game), start);
     }
 
     private bool Revokes(ProHypeEvidenceChange change, Saved saved, Game game, HashSet<string> revoked)

@@ -189,6 +189,14 @@ type HypeScoreService
                     |> String.concat " "
         c
 
+    static let collegeEvaluation (game: Game) (rows: seq<TeamRating>) (pregame: PregameOdds) now =
+        let season = PlayoffRatingPolicy.gameSeason game
+        let asOf = min now game.ScheduledStart
+        let qualification team =
+            rows |> Seq.filter (fun r -> r.Season = season && r.TeamAbbreviation = team)
+            |> PlayoffRatingPolicy.playoffProbability "cfb" season asOf |> Option.toNullable
+        collegeComponents game (qualification game.HomeTeamAbbreviation) (qualification game.AwayTeamAbbreviation) pregame now
+
     static let proEvaluation (game: Game) (ratings: seq<TeamRating>) (pregame: PregameOdds) completed now (options: PlayoffRatingsOptions) (selectionCache: PlayoffRatingPolicy.PlayoffSelectionCache) (logger: ILogger<HypeScoreService>) =
         let rows = ratings |> Seq.toArray
         let qualification team =
@@ -333,14 +341,10 @@ type HypeScoreService
             elif game.Sport = "cfb" then
                 let season = PlayoffRatingPolicy.gameSeason game
                 let now = timeProvider.GetUtcNow().UtcDateTime
-                let asOf = min now game.ScheduledStart
                 let! rows = db.TeamRatings.Where(fun r -> r.Sport = "cfb" && r.Season = season
                                                         && (r.Source = "kalshi" || r.Source = PlayoffRatingPolicy.collegeNoMarketSource)).ToListAsync(ct)
-                let qualification team =
-                    rows |> Seq.filter (fun r -> r.TeamAbbreviation = team)
-                    |> PlayoffRatingPolicy.playoffProbability "cfb" season asOf |> Option.toNullable
                 let! pregame = db.PregameOdds.FirstOrDefaultAsync((fun o -> o.GameId = game.Id), ct)
-                return collegeComponents game (qualification game.HomeTeamAbbreviation) (qualification game.AwayTeamAbbreviation) pregame now
+                return collegeEvaluation game rows pregame now
             else
 
             let isNfl = game.Sport = "nfl"
@@ -588,6 +592,29 @@ type HypeScoreService
                 activity.SetTag("hype.score", score) |> ignore
 
             return Nullable<float>(score)
+        }
+
+    member this.CalculateHypeScoresAsync(games: seq<Game>, ct: CancellationToken) : Task<Dictionary<string, Nullable<float>>> =
+        task {
+            let scores = Dictionary<string, Nullable<float>>()
+            let scheduled = games |> Seq.filter (fun g -> g.Status = "scheduled") |> Seq.toArray
+            let college = scheduled |> Array.filter (fun g -> g.Sport = "cfb")
+            if college.Length > 0 then
+                use scope = serviceProvider.CreateScope()
+                let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
+                let now = timeProvider.GetUtcNow().UtcDateTime
+                let seasons = college |> Array.map PlayoffRatingPolicy.gameSeason |> Array.distinct
+                let ids = college |> Array.map (fun g -> g.Id)
+                let! rows = db.TeamRatings.AsNoTracking().Where(fun r -> r.Sport = "cfb" && seasons.Contains(r.Season)
+                                                                       && (r.Source = "kalshi" || r.Source = PlayoffRatingPolicy.collegeNoMarketSource)).ToListAsync(ct)
+                let! pregame = db.PregameOdds.AsNoTracking().Where(fun o -> ids.Contains(o.GameId)).ToDictionaryAsync((fun o -> o.GameId), ct)
+                for game in college do
+                    let components = collegeEvaluation game rows (match pregame.TryGetValue game.Id with | true, odds -> odds | _ -> null) now
+                    scores[game.Id] <- if components.IsComplete then Nullable(this.CalculateFinalScore(game.Sport, components)) else Nullable()
+            for game in scheduled |> Array.filter (fun g -> g.Sport <> "cfb") do
+                let! score = this.CalculateHypeScoreAsync(game, ct)
+                scores[game.Id] <- score
+            return scores
         }
 
     member this.GetHypeComponentsAsync(game: Game, ?ct: CancellationToken) : Task<HypeComponents> =

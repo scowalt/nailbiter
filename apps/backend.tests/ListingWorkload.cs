@@ -12,15 +12,16 @@ using NpgsqlTypes;
 
 namespace backend.tests;
 
-internal sealed record ExpectedGame(string Id, string Sport, string Status, (string Selector, string Text)[] Checks);
+internal sealed record ExpectedGame(string Id, string Sport, string Status, string[] Paths, (string Selector, string Text)[] Checks);
 
 internal sealed record WorkloadDescription(string Image, string TimescaleVersion, string TelemetryLevel, string TimescaleBackgroundWorkers, long Chunks, long CompressedChunks,
     IReadOnlyDictionary<string, int> GamesByStatus, long Snapshots, long ListingSnapshots, DateTimeOffset Clock);
 
 internal sealed class ListingWorkloadManifest(IReadOnlyList<ExpectedGame> listed)
 {
-    public IReadOnlyList<ExpectedGame> On(string path) =>
-        path == "/" ? listed : listed.Where(game => path.StartsWith($"/{game.Sport}?", StringComparison.Ordinal)).ToList();
+    public IReadOnlyList<ExpectedGame> All => listed;
+
+    public IReadOnlyList<ExpectedGame> On(string path) => listed.Where(game => game.Paths.Contains(path)).ToList();
 
     public IReadOnlySet<string> ExcitementIds(string path) =>
         On(path).Where(game => game.Status != "scheduled").Select(game => game.Id).ToHashSet();
@@ -42,11 +43,22 @@ internal sealed class ListingWorkloadManifest(IReadOnlyList<ExpectedGame> listed
 internal static class ListingWorkload
 {
     public static readonly DateTimeOffset Now = new(2026, 10, 13, 23, 30, 0, TimeSpan.Zero);
-    public static readonly string[] Paths = ["/", "/nhl?date=2026-10-13", "/nba?date=2026-10-13"];
+    private const string Today = "/";
+    private const string Nhl = "/nhl?date=2026-10-13";
+    private const string Nba = "/nba?date=2026-10-13";
+    private const string CollegeWeekPage = "/cfb";
+    private const string CollegeFinals = "/cfb?week=7&season=2026&type=2";
+    public static readonly string[] Paths = [Today, Nhl, Nba, CollegeWeekPage, CollegeFinals];
     public static readonly string[] ServerSettings = ["-c", "timescaledb.telemetry_level=off", "-c", "timescaledb.max_background_workers=0"];
     public const int HistoryDays = 28;
     private const int GameMinutes = 180;
     private const int PregameSnapshots = 36;
+    private const int CollegeSeason = 2026;
+    private const int CollegeWeek = 8;
+    private const int CollegeTeams = 136;
+    private const int CollegeGamesPerWeek = 64;
+    private const int CollegeQuotesPerGame = 420;
+    private static readonly TimeSpan CollegeTick = TimeSpan.FromSeconds(30);
     private static readonly TimeZoneInfo EasternTime = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
     private static readonly string[] HistorySports = ["nhl", "nba", "mlb", "nfl"];
     private static readonly (string Status, double Hour)[] Slate =
@@ -57,6 +69,9 @@ internal static class ListingWorkload
         .. Slate.Select(slot => ("nba", slot.Status, slot.Hour)),
         .. new[] { Slate[0], Slate[2], Slate[4] }.Select(slot => ("mlb", slot.Status, slot.Hour))
     ];
+    private static readonly (int Day, double Hour, int Games)[] CollegeSlate =
+        [(0, 19, 1), (1, 19.5, 2), (2, 19.5, 3), (3, 19, 4), (4, 12, 18), (4, 15.5, 18), (4, 19, 14), (4, 22.5, 4)];
+    private static readonly (double Hour, int Games)[] CollegeSaturday = [(12, 22), (15.5, 22), (19, 20)];
 
     private const string Hypertable = """
         CREATE EXTENSION IF NOT EXISTS timescaledb;
@@ -69,7 +84,7 @@ internal static class ListingWorkload
         ALTER TABLE odds_snapshots SET (timescaledb.compress, timescaledb.compress_segmentby = 'game_id');
         """;
 
-    private sealed record Seeded(Game Game, (DateTime At, double Probability)[] Snapshots);
+    private sealed record Seeded(Game Game, (DateTime At, double Probability)[] Snapshots, string[] Paths, PregameOdds? Pregame = null);
 
     public static string Image() =>
         Regex.Match(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "docker-compose.yml")), @"timescaledb:\s*\n\s*image:\s*(\S+)")
@@ -89,13 +104,15 @@ internal static class ListingWorkload
         using var scope = services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
         db.Games.AddRange(seeded.Select(entry => entry.Game));
+        db.PregameOdds.AddRange(seeded.Select(entry => entry.Pregame).OfType<PregameOdds>());
+        db.TeamRatings.AddRange(CollegeRatings());
         await db.SaveChangesAsync();
         await using var transaction = await db.Database.BeginTransactionAsync();
         await db.Database.ExecuteSqlRawAsync("SET LOCAL session_replication_role = replica");
         await using (var writer = await ((NpgsqlConnection)db.Database.GetDbConnection()).BeginBinaryImportAsync(
             "COPY odds_snapshots (game_id, timestamp, home_moneyline, away_moneyline, home_win_probability, away_win_probability, source, is_historical) FROM STDIN (FORMAT BINARY)"))
         {
-            foreach (var (game, snapshots) in seeded)
+            foreach (var (game, snapshots, _, _) in seeded)
                 foreach (var (at, probability) in snapshots)
                 {
                     await writer.StartRowAsync();
@@ -113,7 +130,7 @@ internal static class ListingWorkload
         await db.Database.ExecuteSqlRawAsync(
             "INSERT INTO newest_odds (game_id, timestamp) SELECT game_id, max(timestamp) FROM odds_snapshots GROUP BY game_id");
         await transaction.CommitAsync();
-        return new(seeded.Where(entry => entry.Game.Id.StartsWith("today-", StringComparison.Ordinal)).Select(Expect).ToList());
+        return new(seeded.Where(entry => entry.Paths.Length > 0).Select(Expect).ToList());
     }
 
     public static async Task<WorkloadDescription> CompressAndAnalyzeAsync(IServiceProvider services, string image)
@@ -133,7 +150,7 @@ internal static class ListingWorkload
                 current_setting('timescaledb.max_background_workers'),
                 (SELECT count(*) FROM show_chunks('odds_snapshots')),
                 (SELECT count(*) FROM timescaledb_information.chunks WHERE hypertable_name = 'odds_snapshots' AND is_compressed),
-                (SELECT count(*) FROM odds_snapshots), (SELECT count(*) FROM odds_snapshots WHERE game_id LIKE 'today-%')
+                (SELECT count(*) FROM odds_snapshots), (SELECT count(*) FROM odds_snapshots WHERE game_id LIKE ANY (ARRAY['today-%', 'cfb-w07-%', 'cfb-w08-%']))
             """, connection);
         var statuses = await db.Games.GroupBy(game => game.Status).Select(group => new { group.Key, Count = group.Count() })
             .ToDictionaryAsync(group => group.Key, group => group.Count);
@@ -152,7 +169,78 @@ internal static class ListingWorkload
         var scheduled = 0;
         foreach (var (sport, status, hour) in Listed)
             yield return Create($"today-{sport}-{phase}", sport, status, Eastern(0, hour), phase++,
-                status == "scheduled" ? .55 + .03 * scheduled++ : null);
+                status == "scheduled" ? .55 + .03 * scheduled++ : null) with { Paths = [Today, $"/{sport}?date=2026-10-13"] };
+        for (var week = CollegeWeek - 1; week >= 1 && Eastern(7 * (week - CollegeWeek) + 4, 0) >= Eastern(-historyDays, 0); week--)
+        {
+            var game = 0;
+            foreach (var (hour, count) in CollegeSaturday)
+                for (var i = 0; i < count; i++, game++)
+                    yield return College(week, game, "final", Eastern(7 * (week - CollegeWeek) + 4, hour), phase++)
+                        with { Paths = week == CollegeWeek - 1 ? [CollegeFinals] : [] };
+        }
+        var listed = 0;
+        foreach (var (day, hour, count) in CollegeSlate)
+            for (var i = 0; i < count; i++, listed++)
+            {
+                var status = day == 0 ? "in_progress" : "scheduled";
+                var entry = College(CollegeWeek, listed, status, Eastern(day, hour), phase++);
+                yield return entry with { Paths = day == 0 ? [Today, CollegeWeekPage] : [CollegeWeekPage] };
+            }
+    }
+
+    private static Seeded College(int week, int index, string status, DateTime start, int phase)
+    {
+        var home = (2 * index + 3 * week) % CollegeTeams;
+        var away = (2 * index + 1 + 3 * week) % CollegeTeams;
+        var game = new Game
+        {
+            Id = $"cfb-w{week:00}-{index:00}", Sport = "cfb", Status = status, SeasonYear = CollegeSeason, SeasonType = 2,
+            WeekNumber = week, WeekLabel = $"Week {week}", ScheduledStart = start, CollegeCompetition = "regular",
+            HomeTeam = $"College {home:000}", AwayTeam = $"College {away:000}",
+            HomeTeamAbbreviation = CollegeTeam(home), AwayTeamAbbreviation = CollegeTeam(away),
+            HomeTeamId = $"{1000 + home}", AwayTeamId = $"{1000 + away}",
+            HomeFpi = 20 - home * .3, AwayFpi = 20 - away * .3, RatingsObservedAt = Now.UtcDateTime.AddHours(-1)
+        };
+        var quotes = status switch
+        {
+            "final" => CollegeQuotesPerGame,
+            "in_progress" => (int)((Now.UtcDateTime - start) / CollegeTick),
+            _ => 0
+        };
+        if (status != "scheduled") game.ActualStart = start;
+        if (status == "final") game.EndTime = start + CollegeTick * quotes;
+        if (status == "in_progress") game.MarketObservedAt = start + CollegeTick * (quotes - 1);
+        var snapshots = Enumerable.Range(0, quotes)
+            .Select(i => (start + CollegeTick * i, InGame((int)((long)i * (GameMinutes - 1) / (CollegeQuotesPerGame - 1)), phase))).ToArray();
+        var pregame = status == "scheduled"
+            ? new PregameOdds
+            {
+                GameId = game.Id, HomeWinProbability = .35 + .3 * (index % 7) / 6.0, Source = "Kalshi", SourceSeason = CollegeSeason,
+                ApplicableStart = start, HomeTeamAbbreviation = game.HomeTeamAbbreviation, AwayTeamAbbreviation = game.AwayTeamAbbreviation,
+                FetchedAt = Now.UtcDateTime.AddSeconds(-30)
+            }
+            : null;
+        if (pregame is not null) pregame.AwayWinProbability = 1 - pregame.HomeWinProbability;
+        return new(game, snapshots, [], pregame);
+    }
+
+    private static string CollegeTeam(int index) => $"C{index:000}";
+
+    private static double CollegePlayoffProbability(int index) => Math.Round(Math.Max(.01, .9 - index * .012), 3);
+
+    private static IEnumerable<TeamRating> CollegeRatings() => Enumerable.Range(0, CollegeTeams).Select(index => new TeamRating
+    {
+        Sport = "cfb", TeamAbbreviation = CollegeTeam(index), Source = "kalshi", Season = CollegeSeason, SourceSeason = CollegeSeason,
+        PlayoffProbability = CollegePlayoffProbability(index), FetchedAt = Now.UtcDateTime.AddMinutes(-10)
+    });
+
+    private static double CollegeHype(Game game, PregameOdds pregame)
+    {
+        var home = CollegePlayoffProbability(int.Parse(game.HomeTeamAbbreviation[1..], CultureInfo.InvariantCulture));
+        var away = CollegePlayoffProbability(int.Parse(game.AwayTeamAbbreviation[1..], CultureInfo.InvariantCulture));
+        return CollegeFootballPolicy.Hype(CollegeFootballPolicy.Stakes(game, home, away), CollegeFootballPolicy.Quality(game.HomeFpi, game.AwayFpi),
+            (1 - Math.Abs(pregame.HomeWinProbability - .5) * 2) * 100, CollegeFootballPolicy.CfpRelevance(game, home, away))
+            ?? throw new InvalidOperationException($"{game.Id} has no hype");
     }
 
     private static Seeded Create(string id, string sport, string status, DateTime start, int phase, double? latestPregame)
@@ -174,7 +262,7 @@ internal static class ListingWorkload
             _ => 0
         };
         var inGame = Enumerable.Range(0, minutes).Select(i => (start.AddMinutes(i), InGame(i, phase)));
-        return new(game, [.. pregame, .. inGame]);
+        return new(game, [.. pregame, .. inGame], []);
     }
 
     private static double InGame(int minute, int phase)
@@ -189,12 +277,14 @@ internal static class ListingWorkload
 
     private static ExpectedGame Expect(Seeded entry)
     {
-        var (game, snapshots) = entry;
-        (string, string)[] checks = game.Status == "scheduled"
-            ? [($"#probbar-{game.Id}", $"HOM {Math.Round(snapshots[^1].Probability * 100).ToString(CultureInfo.InvariantCulture)}%"),
-                ($"#excitement-{game.Id}", "Hype unavailable")]
-            : [($"#excitement-{game.Id}", Math.Round(ExcitementScore.Calculate(game.Sport, ListModule.OfSeq(snapshots.Select(s => s.Probability)))
-                ?? throw new InvalidOperationException($"{game.Id} has no excitement score")).ToString(CultureInfo.InvariantCulture))];
-        return new(game.Id, game.Sport, game.Status, checks);
+        var (game, snapshots, paths, _) = entry;
+        (string, string)[] checks = game.Status != "scheduled"
+            ? [($"#excitement-{game.Id}", Math.Round(ExcitementScore.Calculate(game.Sport, ListModule.OfSeq(snapshots.Select(s => s.Probability)))
+                ?? throw new InvalidOperationException($"{game.Id} has no excitement score")).ToString(CultureInfo.InvariantCulture))]
+            : game.Sport == "cfb"
+                ? [($"#excitement-{game.Id}", "Hype" + Math.Round(CollegeHype(game, entry.Pregame!)).ToString(CultureInfo.InvariantCulture))]
+                : [($"#probbar-{game.Id}", $"HOM {Math.Round(snapshots[^1].Probability * 100).ToString(CultureInfo.InvariantCulture)}%"),
+                    ($"#excitement-{game.Id}", "Hype unavailable")];
+        return new(game.Id, game.Sport, game.Status, paths, checks);
     }
 }
