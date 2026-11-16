@@ -7,5 +7,6 @@ mkdir -p .ci
 dotnet publish apps/listing-check/listing-check.csproj --configuration Release --runtime linux-x64 --self-contained \
   -p:PublishSingleFile=true -p:DebugType=none --output .ci/listing-checker
 tar -C .ci -cf .ci/listing-checker.tar listing-checker
-sha256sum .ci/listing-checker.tar > .ci/listing-checker.sha256
+digest=$(sha256sum .ci/listing-checker.tar | cut -d ' ' -f 1)
+printf 'sha256=%s\n' "$digest" >> "${GITHUB_OUTPUT:?The job output file is required}"
 printf '%s\n' "$revision" > .ci/listing-checker.commit

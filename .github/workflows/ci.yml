@@ -96,6 +96,8 @@ jobs:
   listing-checker:
     name: Package the listing checker
     runs-on: ubuntu-24.04
+    outputs:
+      sha256: ${{ steps.package.outputs.sha256 }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -109,6 +111,7 @@ jobs:
           cache: false
           github_token: ''
       - name: Publish the self-contained checker
+        id: package
         env:
           DOTNET_CLI_TELEMETRY_OPTOUT: '1'
           DOTNET_NOLOGO: '1'
@@ -120,7 +123,6 @@ jobs:
           name: listing-checker-${{ github.sha }}
           path: |
             .ci/listing-checker.tar
-            .ci/listing-checker.sha256
             .ci/listing-checker.commit
           include-hidden-files: true
           if-no-files-found: error
@@ -274,6 +276,8 @@ jobs:
       - name: Verify the deployed listing pages
         id: listings
         if: ${{ !cancelled() && steps.backend.outcome == 'success' }}
+        env:
+          LISTING_CHECKER_SHA256: ${{ needs.listing-checker.outputs.sha256 }}
         run: bash scripts/ci/verify-listings.sh
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         if: ${{ !cancelled() && steps.listings.outcome != 'skipped' }}
