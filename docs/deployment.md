@@ -78,10 +78,8 @@ The receiver verifies the exact Git-bundle commit before checkout and deployment
 After a successful backend deploy, the release job runs `scripts/ci/verify-listings.sh` from the GitHub runner against the public `https://live.nailbiter.app` origin. It needs no credential, tunnel or production toggle, and it sends only GET requests with no cookies. It sets one request header itself, the fixed User-Agent `nailbiter-listing-check/1 (+https://github.com/scowalt/nailbiter)`. The .NET HTTP client adds only `Host` and `Accept-Encoding: gzip, deflate, br`.
 
 - **Checker.** The `listing-checker` job publishes `apps/listing-check` as a self-contained Linux binary with `scripts/ci/package-listing-check.sh` and uploads it as `listing-checker-<sha>` with its commit. The job reports the archive's sha256 as its `sha256` output, not as a file in the artifact, so a step in another job that could replace the artifact cannot also replace the hash. The release job needs it, installs no SDK and builds nothing: it checks the commit, checks the archive against the job output, unpacks the binary and runs it. A mismatch, or a missing hash, fails the step with exit 2 before any request.
-- **Checker job.** The binary runs in the credentialed release job, so the job that builds it runs nothing but checkout, the .NET SDK install, the repository's own scripts and the upload: no pip, uv, Bun or Playwright. `test_release_verification.py` fails if the packaging moves into a job with any of them. The SDK comes from `jdx/mise-action`, pinned by commit, with no cache and no GitHub token:
-  - mise 2026.11.8, pinned by version and by the sha256 of its binary;
-  - the `mise-plugins/mise-dotnet-core` asdf plugin, cloned at its default branch, so it is not pinned (its last commit is from 2022);
-  - Microsoft's `dotnet-install.sh` from `dot.net`, which the plugin downloads unpinned, and the SDK version from `.mise.toml`, without a hash check by this repository;
+- **Checker job.** The binary runs in the credentialed release job, so the job that builds it runs nothing but checkout, the .NET SDK install, the repository's own scripts and the upload: no mise, pip, uv, Bun or Playwright. `test_release_verification.py` fails if the packaging moves into a job with any of them. Two inputs come from outside the repository:
+  - the .NET SDK tarball, which `scripts/ci/install-dotnet-sdk.sh` downloads for the version in `apps/backend/global.json` and checks against the sha512 committed in `scripts/ci/dotnet-sdk.sha512` before it extracts anything (see [CI .NET SDK](#ci-net-sdk));
   - the `linux-x64` runtime pack from nuget.org during `dotnet publish`, which NuGet verifies against its package signature.
 
 - **Revision.** `scripts/ci/build-image.sh` bakes the commit SHA into the image as `SourceRevision` and refuses to save an image whose environment lacks it. The backend sends that value in an `X-Nailbiter-Revision` header on every response. The check polls `/health` every 5 s for up to 120 s until the header equals the released SHA, and requires the same header on every listing response. If any other revision, or none, still answers, the check fails as `readiness`, names the expected and served revisions, and requests no listing.
@@ -93,6 +91,18 @@ After a successful backend deploy, the release job runs `scripts/ci/verify-listi
 The check runs inside the `production-release` concurrency group, so a later release cannot replace the container mid-check. It does not call `require-release.sh`: it verifies the release this job just deployed, even if `main` has moved on since.
 
 Marketing is built during validation and deployed from that same run's checked artifact, not rebuilt with credentials. Main pushes deploy it only for its source/build/workflow paths; manual main releases deploy both apps. Empty unrelated changes do not imply marketing deployment.
+
+### CI .NET SDK
+
+Every CI job that runs `dotnet` on the runner (`checks`, `backend-tests` and `listing-checker`) installs the SDK with `scripts/ci/install-dotnet-sdk.sh`, not through mise. The workflow sets `MISE_DISABLE_TOOLS` so that `jdx/mise-action` does not install the `mise-plugins/mise-dotnet-core` plugin, which would clone the plugin at its default branch and run an unpinned `dotnet-install.sh` with no hash check. The mise steps use `cache_key_prefix: mise-v2`, because a `mise-v1` cache saved before this change still holds the plugin and an unchecked SDK, and mise runs the cached plugin's scripts. Local development still uses the plugin through `.mise.toml`. The `image` job builds inside Docker from `mcr.microsoft.com/dotnet/sdk`, referenced by tag, which this script does not cover.
+
+The script downloads `dotnet-sdk-<version>-linux-x64.tar.gz` from `builds.dotnet.microsoft.com` over HTTPS only, with TLS 1.2 or later. If the tarball does not match its line in `scripts/ci/dotnet-sdk.sha512`, the step fails with a `.NET SDK checksum mismatch` annotation and extracts nothing. If that file has no line for the `global.json` version, the step fails before it downloads anything. The next step, `scripts/ci/check-dotnet-sdk.sh`, fails unless `command -v dotnet` is the pinned install under `$RUNNER_TEMP/dotnet` and `dotnet --version` equals the `global.json` version, and it logs both values.
+
+To change the SDK, for example to .NET 11:
+
+1. Set the version in `apps/backend/global.json` and in `.mise.toml`.
+2. Replace the line in `scripts/ci/dotnet-sdk.sha512` with the `hash` of the `linux-x64` `.tar.gz` SDK file for that version from Microsoft's `https://builds.dotnet.microsoft.com/dotnet/release-metadata/<major>.<minor>/releases.json`, followed by two spaces and the archive name.
+3. Run `tests/ci`. `test_dotnet_sdk.py` fails if the three files disagree.
 
 ## Migration record and future handoff safeguards
 

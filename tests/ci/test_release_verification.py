@@ -291,17 +291,9 @@ class ReleaseVerificationWorkflowTests(unittest.TestCase):
             self.assertNotRegex(json.dumps(job['steps']), rf'(?<![\w-]){re.escape(tool)}(?![\w-])')
         steps = job['steps']
         actions = [step['uses'].split('@')[0] for step in steps if 'uses' in step]
-        self.assertEqual(actions, ['actions/checkout', 'jdx/mise-action', 'actions/upload-artifact'])
-        mise = next(step for step in steps if step.get('uses', '').startswith('jdx/mise-action@'))
-        self.assertEqual(mise['with'], {
-            'version': '2026.11.8',
-            'sha256': '32b6abe844efa43d37d7ac4ed21d2ec41e9479d66feb19b0db8d2c548cd6e36d',
-            'install_args': 'asdf:mise-plugins/mise-dotnet-core',
-            'cache': False,
-            'github_token': '',
-        })
+        self.assertEqual(actions, ['actions/checkout', 'actions/upload-artifact'])
         runs = [step['run'] for step in steps if 'run' in step]
-        self.assertEqual(runs, ['sh scripts/ci/verify-checkout.sh\nsh scripts/ci/package-listing-check.sh\n'])
+        self.assertEqual(runs, ['sh scripts/ci/install-dotnet-sdk.sh', 'sh scripts/ci/check-dotnet-sdk.sh', 'sh scripts/ci/verify-checkout.sh\nsh scripts/ci/package-listing-check.sh\n'])
         package = next(i for i, step in enumerate(steps) if 'package-listing-check.sh' in step.get('run', ''))
         self.assertEqual(steps[package]['env'], {'DOTNET_CLI_TELEMETRY_OPTOUT': '1', 'DOTNET_NOLOGO': '1'})
         self.assertEqual(job['outputs'], {'sha256': f"${{{{ steps.{steps[package]['id']}.outputs.sha256 }}}}"})
