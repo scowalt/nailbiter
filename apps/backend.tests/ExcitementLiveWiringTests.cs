@@ -98,6 +98,7 @@ public sealed class ExcitementLiveWiringTests : IAsyncLifetime
         await AssertHttpScore(sport, "single", "0", "low");
 
         provider.Final = true;
+        host.Clock.Advance(TimeSpan.FromSeconds(30));
         historyReads.Commands.Clear();
         await RunProfessional(sport, deadline.Token);
         using (var fragments = await live.ReadForAsync("excitement-drama"))
@@ -334,10 +335,10 @@ public sealed class ExcitementLiveWiringTests : IAsyncLifetime
         {
             id = game.Id, date = game.ScheduledStart, shortName = game.AwayTeam + " @ " + game.HomeTeam,
             season = new { year = 2026, type = 2 }, week = new { number = 5 },
-            status = new { period = Final ? 4 : 2, displayClock = Final ? "0:00" : "5:00", type = new { state = Final ? "post" : "in", name = Final ? "STATUS_FINAL" : "STATUS_IN_PROGRESS" } },
+            status = new { period = Final ? 4 : 2, displayClock = Final ? "0:00" : "5:00", type = new { state = Final ? "post" : "in", name = Final ? "STATUS_FINAL" : "STATUS_IN_PROGRESS", completed = Final, detail = Final ? "Final" : "In Progress" } },
             competitions = new[] { new { id = game.Id, competitors = new[] {
-                new { homeAway = "home", score = Final ? "21" : "14", team = new { id = game.HomeTeamId, displayName = game.HomeTeam, abbreviation = game.HomeTeamAbbreviation } },
-                new { homeAway = "away", score = "10", team = new { id = game.AwayTeamId, displayName = game.AwayTeam, abbreviation = game.AwayTeamAbbreviation } }
+                new { id = game.HomeTeamId, homeAway = "home", score = Final ? "21" : "14", team = new { id = game.HomeTeamId, displayName = game.HomeTeam, abbreviation = game.HomeTeamAbbreviation } },
+                new { id = game.AwayTeamId, homeAway = "away", score = "10", team = new { id = game.AwayTeamId, displayName = game.AwayTeam, abbreviation = game.AwayTeamAbbreviation } }
             } } }
         };
 

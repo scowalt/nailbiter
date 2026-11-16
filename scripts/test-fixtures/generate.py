@@ -218,7 +218,8 @@ def pro_schedules():
     for sport, round_number, identity, label, ordinal, best, wins, scores in definitions:
         home, away = ('FLA', 'EDM') if sport == 'nhl' else ('ATL', 'PHI') if sport == 'mlb' else ('BOS', 'MIA')
         cases.append({'synthetic': True, 'sport': sport, 'round': round_number, 'url': f'https://fixture.invalid/{sport}/round-{round_number}',
-                      'event': event(identity, home, away, '2026-05-01T20:00:00Z', 2026, 3, 'post', 4, scores, f'{label} - Game {ordinal}', wins, best)})
+                      'event': event(identity, home, away, '2026-05-01T20:00:00Z', 2026, 3, 'post', 4, scores, f'{label} - Game {ordinal}', wins, best,
+                                     'Final' if sport == 'mlb' else None)})
     emit(F + 'ProHype/postseason-rounds.json', cases)
     emit(F + 'ProHype/nfl-fpi.json', {'synthetic': True, 'pagination': {'pages': 1}, 'requestedSeason': {'year': 2026}, 'currentValues': {'season': 2026},
          'categories': [{'name': 'fpi', 'names': ['fpi', 'fpirank']}], 'teams': [{'team': {'id': str(i+1), 'abbreviation': t, 'displayName': f'Synthetic {t}'}, 'categories': [{'name': 'fpi', 'values': [16-i, i+1], 'ranks': [str(i+1)]}]}  for i, t in enumerate(TEAMS['nfl'])]})

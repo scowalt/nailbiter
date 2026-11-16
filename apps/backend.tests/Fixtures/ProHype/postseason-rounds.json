@@ -23,7 +23,9 @@
         "type": {
           "name": "STATUS_FINAL",
           "state": "post",
-          "completed": true
+          "completed": true,
+          "detail": "Final",
+          "shortDetail": "Final"
         },
         "period": 4,
         "displayClock": "0:00"
@@ -36,7 +38,9 @@
             "type": {
               "name": "STATUS_FINAL",
               "state": "post",
-              "completed": true
+              "completed": true,
+              "detail": "Final",
+              "shortDetail": "Final"
             },
             "period": 4,
             "displayClock": "0:00"
@@ -115,7 +119,9 @@
         "type": {
           "name": "STATUS_FINAL",
           "state": "post",
-          "completed": true
+          "completed": true,
+          "detail": "Final",
+          "shortDetail": "Final"
         },
         "period": 4,
         "displayClock": "0:00"
@@ -128,7 +134,9 @@
             "type": {
               "name": "STATUS_FINAL",
               "state": "post",
-              "completed": true
+              "completed": true,
+              "detail": "Final",
+              "shortDetail": "Final"
             },
             "period": 4,
             "displayClock": "0:00"
@@ -207,7 +215,9 @@
         "type": {
           "name": "STATUS_FINAL",
           "state": "post",
-          "completed": true
+          "completed": true,
+          "detail": "Final",
+          "shortDetail": "Final"
         },
         "period": 4,
         "displayClock": "0:00"
@@ -220,7 +230,9 @@
             "type": {
               "name": "STATUS_FINAL",
               "state": "post",
-              "completed": true
+              "completed": true,
+              "detail": "Final",
+              "shortDetail": "Final"
             },
             "period": 4,
             "displayClock": "0:00"
@@ -299,7 +311,9 @@
         "type": {
           "name": "STATUS_FINAL",
           "state": "post",
-          "completed": true
+          "completed": true,
+          "detail": "Final",
+          "shortDetail": "Final"
         },
         "period": 4,
         "displayClock": "0:00"
@@ -312,7 +326,9 @@
             "type": {
               "name": "STATUS_FINAL",
               "state": "post",
-              "completed": true
+              "completed": true,
+              "detail": "Final",
+              "shortDetail": "Final"
             },
             "period": 4,
             "displayClock": "0:00"

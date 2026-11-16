@@ -10,6 +10,7 @@
     <Compile Include="OddsConverter.fs" />
     <Compile Include="Services/ExcitementScore.fs" />
     <Compile Include="Services/MlbScoreboard.fs" />
+    <Compile Include="Services/MlbEspnScoreboard.fs" />
     <Compile Include="Rendering/Logos.fs" />
     <Compile Include="Rendering/FormatHelpers.fs" />
     <Compile Include="Rendering/TeamColors.fs" />

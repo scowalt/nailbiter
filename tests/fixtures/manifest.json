@@ -40,6 +40,6 @@
     "apps/backend.tests/Fixtures/ProHype/nhl-seeding-contests.csv": "522c373c49f747b94304c50c9c1990868c10ecdd88a6083ff92c16d31138813a",
     "apps/backend.tests/Fixtures/ProHype/nhl-stakes-401891819.json": "b83a3f6aba5a2d7186596fe1bae7f619a4644294ed24d6f46977e7e6af40b42b",
     "apps/backend.tests/Fixtures/ProHype/nhl-upcoming-board.json": "e0ae73acbf81bc560e3666792cefd92dbb507e66e69b696c16eabd5992495171",
-    "apps/backend.tests/Fixtures/ProHype/postseason-rounds.json": "c54ee55d4ffc69419551eb2383489ad9f57bc6b2260706510b9452eb82dea767"
+    "apps/backend.tests/Fixtures/ProHype/postseason-rounds.json": "0b50ed3d1ab467b14687a7ea8bbfea5c82663bdb92e1c9760ba51ef5ed0f902b"
   }
 }

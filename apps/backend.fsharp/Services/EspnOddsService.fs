@@ -35,6 +35,7 @@ type EspnOddsService
 
     let registeredTime = if isNull serviceProvider then null else serviceProvider.GetService<TimeProvider>()
     let timeProvider = if isNull registeredTime then TimeProvider.System else registeredTime
+    let mlbIngestion = if isNull serviceProvider then None else ofObj (serviceProvider.GetService<MlbScoreboardIngestion>())
 
     static let eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York")
 
@@ -224,6 +225,8 @@ type EspnOddsService
             let completionObservations = ResizeArray<struct (MlbCompletionEvidence * bool)>()
             let seriesObservations = ResizeArray<PlayoffSeriesObservation>()
             let suppliedSeriesIds = HashSet<string>()
+            let mlbEvents = if sportLower = "mlb" then MlbEspnScoreboard.events scoreboard.RawJson else Map.empty
+            let mlbObservations = ResizeArray<struct (string * JsonElement)>()
             if supportsSeries then
                 let mutable rawEvents = Unchecked.defaultof<JsonElement>
                 if scoreboard.RawJson.TryGetProperty("events", &rawEvents) && rawEvents.ValueKind = JsonValueKind.Array then
@@ -339,10 +342,20 @@ type EspnOddsService
                 let allowOrdinaryDiscovery =
                     isNull game || game.Status <> "final" || not (isNull game.EspnCompletionEvidenceJson)
                 let broadcastNetworks = EspnBroadcasts.ofCompetition competition
+                let rawMlbEvent = mlbEvents.TryFind espnEvent.Id
+                let statusFor (existing: string) =
+                    if sportLower <> "mlb" then mapStatus espnEvent.Status.Type.State
+                    else
+                        match rawMlbEvent, espnEvent.Status.Type.State with
+                        | Some event, _ -> MlbEspnScoreboard.gameStatus existing event
+                        | None, "pre" -> "scheduled"
+                        | None, "in" -> "in_progress"
+                        | None, _ -> if isNull existing then "unknown" else existing
+                let providerScore (score: string) =
+                    let mutable value = 0
+                    if sportLower <> "mlb" && Int32.TryParse(score, &value) then Nullable<int>(value) else Nullable<int>()
 
                 if isNull game then
-                    let mutable homeScore = 0
-                    let mutable awayScore = 0
                     let newGame =
                         Game(
                             Id = gameId,
@@ -354,10 +367,10 @@ type EspnOddsService
                             HomeTeamId = homeComp.Id,
                             AwayTeamId = awayComp.Id,
                             ScheduledStart = espnEvent.Date,
-                            Status = mapStatus espnEvent.Status.Type.State,
+                            Status = statusFor null,
                             IsOvertime = isWorldCupOvertime,
-                            HomeScore = (if Int32.TryParse(homeComp.Score, &homeScore) then Nullable<int>(homeScore) else Nullable<int>()),
-                            AwayScore = (if Int32.TryParse(awayComp.Score, &awayScore) then Nullable<int>(awayScore) else Nullable<int>()),
+                            HomeScore = providerScore homeComp.Score,
+                            AwayScore = providerScore awayComp.Score,
                             SeasonYear = seasonYear,
                             SeasonType = seasonType,
                             WeekNumber = weekNumber,
@@ -367,24 +380,12 @@ type EspnOddsService
 
                     db.Games.Add(newGame) |> ignore
                 else
-                    game.Status <- mapStatus espnEvent.Status.Type.State
+                    game.Status <- statusFor game.Status
                     game.IsOvertime <- isWorldCupOvertime
 
-                    let mutable homeScore = 0
-
-                    game.HomeScore <-
-                        if Int32.TryParse(homeComp.Score, &homeScore) then
-                            Nullable<int>(homeScore)
-                        else
-                            Nullable<int>()
-
-                    let mutable awayScore = 0
-
-                    game.AwayScore <-
-                        if Int32.TryParse(awayComp.Score, &awayScore) then
-                            Nullable<int>(awayScore)
-                        else
-                            Nullable<int>()
+                    if sportLower <> "mlb" then
+                        game.HomeScore <- providerScore homeComp.Score
+                        game.AwayScore <- providerScore awayComp.Score
 
                     let sameTeam (provider: EspnCompetitor) (id: string) (abbreviation: string) =
                         not (isNull (box provider.Team))
@@ -463,6 +464,7 @@ type EspnOddsService
                             completionStatus competition.Status,
                             timeProvider.GetUtcNow().UtcDateTime)
                     completionObservations.Add(struct (evidence, allowOrdinaryDiscovery))
+                    rawMlbEvent |> Option.iter (fun rawEvent -> mlbObservations.Add(struct (gameId, rawEvent)))
 
                 let gameState = espnEvent.Status.Type.State
                 if gameState <> "pre" then
@@ -667,6 +669,25 @@ type EspnOddsService
                 if not (rejectedSeriesIds.Contains(evidence.EventId)) then
                     let! _ = evidence.RecordAsync(db, allowOrdinaryDiscovery, ct)
                     ()
+            match mlbIngestion with
+            | None -> ()
+            | Some mlbIngestion ->
+                for struct (gameId, rawEvent) in mlbObservations do
+                    if not (rejectedSeriesIds.Contains(gameId)) then
+                        let! _ = mlbIngestion.AcceptAsync(gameId, rawEvent, now, scoreboard.ResponseDate, ct)
+                        ()
+            if sportLower = "mlb" then
+                for gameId in Seq.append publishGameIds (snapshots |> Seq.map _.GameId) |> Seq.distinct |> Seq.toList do
+                    let! game = db.Games.FindAsync([| gameId :> obj |], ct)
+                    if not (isNull game) then
+                        do! db.Entry(game).ReloadAsync(ct)
+                        for snapshot in snapshots |> Seq.filter (fun snapshot -> snapshot.GameId = gameId) do
+                            snapshot.HomeScore <- game.HomeScore
+                            snapshot.AwayScore <- game.AwayScore
+                            snapshot.Period <- game.Period
+                if snapshots.Count > 0 then
+                    let! _ = db.SaveChangesAsync(ct)
+                    ()
             logger.LogInformation("Stored {Count} odds snapshots for {Sport}", snapshots.Count, sport)
 
             let publishGameIdList = publishGameIds |> Seq.toList
@@ -716,7 +737,10 @@ type EspnOddsService
                         let awayWinProbability = if useSnapshotForOdds then Nullable<float>(snapshot.AwayWinProbability) else Nullable<float>()
                         let drawWinProbability = if useSnapshotForOdds then snapshot.DrawWinProbability else Nullable<float>()
                         let gameClock = if hasCurrentSnapshot then snapshot.GameClock else null
-                        let period = if hasCurrentSnapshot then snapshot.Period else Nullable<int>()
+                        let period =
+                            if hasCurrentSnapshot then snapshot.Period
+                            elif game.Sport = "mlb" then game.Period
+                            else Nullable<int>()
                         let updatedAt = if useSnapshotForOdds then snapshot.Timestamp else now
 
                         let update =

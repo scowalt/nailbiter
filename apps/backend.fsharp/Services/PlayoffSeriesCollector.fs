@@ -149,12 +149,18 @@ module private PlayoffSeriesEvidence =
             HomeWins = homeWins, AwayWins = awayWins, BestOf = bestOf, SeriesCompleted = completed,
             RoundLabel = round, CurrentGameNumber = ordinal, GameStatus = gameStatus, GameCompleted = gameCompleted,
             WinnerTeamId = if winners.Length = 1 then identity winners.[0] else null)
-        if snapshot.IsUsableFor(game) then snapshot else null
+        let score participant =
+            match Int32.TryParse(text participant "score") with
+            | true, value -> Nullable value
+            | _ -> Nullable()
+        let homeScore, awayScore = if game.Sport = "mlb" then score home, score away else game.HomeScore, game.AwayScore
+        if snapshot.IsUsableFor(game, homeScore, awayScore) then snapshot else null
 
 module private PlayoffSeriesPersistence =
-    let refreshFields =
+    let refreshFields (sport: string) =
         [| "Sport"; "HomeTeam"; "AwayTeam"; "HomeTeamAbbreviation"; "AwayTeamAbbreviation"; "HomeTeamId"; "AwayTeamId"
            "ScheduledStart"; "Status"; "IsOvertime"; "HomeScore"; "AwayScore"; "SeasonYear"; "SeasonType"; "WeekNumber"; "WeekLabel" |]
+        |> Array.filter (fun name -> sport <> "mlb" || (name <> "HomeScore" && name <> "AwayScore"))
 
 [<AbstractClass; Sealed>]
 type PlayoffSeriesCollector private () =
@@ -207,11 +213,11 @@ type PlayoffSeriesCollector private () =
                             let desired = entry.CurrentValues.Clone()
                             entry.CurrentValues.SetValues(stored)
                             entry.State <- EntityState.Unchanged
-                            for name in PlayoffSeriesPersistence.refreshFields do
+                            for name in PlayoffSeriesPersistence.refreshFields game.Sport do
                                 entry.Property(name).CurrentValue <- desired.[name]
                         if entry.State <> EntityState.Added && (not (isNull observation.Snapshot)
                             || (not (isNull previous) && not (isNull previous.Snapshot))) then
-                            for name in PlayoffSeriesPersistence.refreshFields do
+                            for name in PlayoffSeriesPersistence.refreshFields game.Sport do
                                 entry.Property(name).IsModified <- true
                         game.SeriesObservationJson <-
                             if not (isNull previous) && previous.ObservedAt >= observation.ObservedAt then stored.SeriesObservationJson

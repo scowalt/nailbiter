@@ -116,6 +116,7 @@ builder.Services.AddSingleton<MoneyPuckRefreshGate>();
 
 builder.Services.AddScoped<GameDataService>();
 builder.Services.AddSingleton<MlbScoreboardStore>();
+builder.Services.AddSingleton<MlbScoreboardIngestion>();
 builder.Services.AddScoped<GameHighlightsInspectionService>();
 
 builder.Services.AddSingleton<ISseBroadcaster, SseBroadcaster>();
