@@ -49,9 +49,9 @@ public sealed class PlayoffSeriesSnapshot
     public string? RoundLabel { get; init; }
     public int? CurrentGameNumber { get; init; }
 
-    public bool IsUsableFor(Game game) => IsUsableFor(game, game.HomeScore, game.AwayScore);
+    public bool IsUsableFor(Game game) => IsUsableFor(game, game.Status, game.HomeScore, game.AwayScore);
 
-    public bool IsUsableFor(Game game, int? homeScore, int? awayScore)
+    public bool IsUsableFor(Game game, string status, int? homeScore, int? awayScore)
     {
         if (!PlayoffSeriesCatalogue.Supports(Sport) || Sport != game.Sport || GameId != game.Id || CompetitionId != game.Id
             || SeasonYear <= 0 || SeasonYear != game.SeasonYear || SeasonType != 3 || SeasonType != game.SeasonType
@@ -60,7 +60,7 @@ public sealed class PlayoffSeriesSnapshot
             || Home != ProHypePolicy.TeamKey(Sport, game.HomeTeamAbbreviation) || Away != ProHypePolicy.TeamKey(Sport, game.AwayTeamAbbreviation)
             || (game.HomeTeamId is not null && HomeTeamId != game.HomeTeamId) || (game.AwayTeamId is not null && AwayTeamId != game.AwayTeamId)
             || BestOf is not (3 or 5 or 7) || HomeWins < 0 || AwayWins < 0
-            || GameStatus != game.Status || GameStatus is not ("scheduled" or "in_progress" or "final")
+            || GameStatus != status || GameStatus is not ("scheduled" or "in_progress" or "final")
             || GameCompleted != (GameStatus == "final")) return false;
         if (!PlayoffSeriesCatalogue.RoundMatches(Sport, RoundLabel, BestOf)) return false;
         var threshold = BestOf / 2 + 1;

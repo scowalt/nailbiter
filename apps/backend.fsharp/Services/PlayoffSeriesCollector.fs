@@ -154,7 +154,7 @@ module private PlayoffSeriesEvidence =
             | true, value -> Nullable value
             | _ -> Nullable()
         let homeScore, awayScore = if game.Sport = "mlb" then score home, score away else game.HomeScore, game.AwayScore
-        if snapshot.IsUsableFor(game, homeScore, awayScore) then snapshot else null
+        if snapshot.IsUsableFor(game, game.Status, homeScore, awayScore) then snapshot else null
 
 module private PlayoffSeriesPersistence =
     let refreshFields (sport: string) =
