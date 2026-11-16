@@ -4,10 +4,12 @@ using System.Text.Json.Nodes;
 using System.Threading.Channels;
 using AngleSharp.Dom;
 using AngleSharp.Html.Parser;
+using backend.Data;
 using backend.GraphQL.Types;
 using backend.Models;
 using backend.Services;
 using Backend.Rendering;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.FSharp.Core;
@@ -371,6 +373,56 @@ public sealed class MlbScoreboardDetailTests : IClassFixture<SharedPostgreSql>, 
         using var page = await PageAsync(Doubleheader);
         foreach (var id in new[] { "mlb-situation", "mlb-line-score", "detail-clock" })
             Assert.Equal(page.QuerySelector("#" + id)!.OuterHtml, fragments.QuerySelector("#" + id)!.OuterHtml);
+    }
+
+    [Fact]
+    public async Task A_final_game_ignores_a_fresh_in_progress_frame_on_the_page_and_in_its_updates()
+    {
+        var game = MlbGame(Doubleheader);
+        await host.SeedAsync(game, [Odds(Doubleheader, "2027-07-10T23:29:00Z", 0.4)]);
+        At("2027-07-10T23:30:00Z");
+        Accepted(await AcceptAsync(Frame("active-complete", "opening")));
+        using (var scope = host.Services.CreateScope())
+            await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Games.Where(g => g.Id == Doubleheader).ExecuteUpdateAsync(s => s
+                .SetProperty(g => g.Status, "final")
+                .SetProperty(g => g.AwayScore, 5)
+                .SetProperty(g => g.HomeScore, 6));
+        At("2027-07-10T23:30:10Z");
+
+        using var page = await PageAsync(Doubleheader);
+
+        AssertSettledFinal(page);
+        Assert.Equal("5", page.QuerySelector("#detail-away-score")!.TextContent.Trim());
+        Assert.Equal("6", page.QuerySelector("#detail-home-score")!.TextContent.Trim());
+        Assert.DoesNotContain("%", page.QuerySelector("#detail-probbar")!.TextContent);
+
+        await using var stream = new SsePeer(host.Client, $"/sse/game/{Doubleheader}");
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var reading = stream.ReadForAsync("detail-away-score");
+        await broadcaster.ReadyAsync([$"game:{Doubleheader}"], deadline.Token);
+        var update = Update(Doubleheader, Sport.MLB, game.HomeTeam, game.AwayTeam, game.HomeTeamAbbreviation, game.AwayTeamAbbreviation, home: 6, away: 5);
+        update.Status = GameStatus.FINAL;
+        await broadcaster.PublishAsync(update, deadline.Token);
+        using var fragments = await reading;
+
+        AssertSettledFinal(fragments);
+        Assert.Equal("5", fragments.QuerySelector("#detail-away-score")!.TextContent.Trim());
+        Assert.Equal("6", fragments.QuerySelector("#detail-home-score")!.TextContent.Trim());
+    }
+
+    private static void AssertSettledFinal(IDocument document)
+    {
+        var clock = Clock(document);
+        Assert.Equal("Final", clock);
+        Assert.DoesNotContain("Top", clock);
+        Assert.DoesNotContain("Bottom", clock);
+        var situation = Situation(document);
+        Assert.Null(situation.QuerySelector(".situation-facts"));
+        Assert.Equal("", situation.TextContent.Trim());
+        foreach (var person in new[] { "Synthetic Batter", "Synthetic Pitcher", "Synthetic Runner" })
+            Assert.DoesNotContain(person, document.Body!.TextContent);
+        Assert.Equal("Final", document.QuerySelector("#detail-status")!.TextContent.Trim());
+        Assert.Null(document.QuerySelector("#mlb-line-score"));
     }
 
     [Fact]

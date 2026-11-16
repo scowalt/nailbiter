@@ -558,3 +558,37 @@ let ``postponed and canceled scoreboards show no quote despite fresh odds`` () =
     for status, phase in [ GameStatus.CANCELED, MlbScoreboardPhase.Canceled; GameStatus.IN_PROGRESS, MlbScoreboardPhase.Canceled; GameStatus.SCHEDULED, MlbScoreboardPhase.Postponed ] do
         let patch = fragments status (Some 0.6) (view phase (Some fiveInnings) None)
         Assert.Equal("", text patch "#detail-probbar")
+
+let private assertSettled (doc: IDocument) (label: string) =
+    let clock = text doc "#detail-clock"
+    Assert.Equal(label, clock)
+    Assert.DoesNotContain("Top", clock)
+    Assert.DoesNotContain("Bottom", clock)
+    Assert.Null(doc.QuerySelector("#mlb-situation .situation-facts"))
+    Assert.Equal("", text doc "#mlb-situation")
+    Assert.Equal(label, fst (badge doc))
+    Assert.Null(doc.QuerySelector("#mlb-line-score"))
+    Assert.DoesNotContain("%", text doc "#detail-probbar")
+    Assert.Equal("1", text doc "#detail-away-score")
+    Assert.Equal("2", text doc "#detail-home-score")
+
+[<Theory>]
+[<InlineData("final", "Final")>]
+[<InlineData("canceled", "Canceled")>]
+[<InlineData("postponed", "Postponed")>]
+let ``a settled stored status overrides an in progress frame on the page`` status label =
+    let doc = pageWith (game status) [ snapshot 0.6 0.5 ] (HighlightsDetailState(HighlightsDetailStatus.Hidden)) (live richContext)
+    assertSettled doc label
+
+[<Theory>]
+[<InlineData("final", "Final")>]
+[<InlineData("canceled", "Canceled")>]
+let ``a settled update status overrides an in progress frame in the patch`` status label =
+    assertSettled (fragments (GameStatusExtensions.FromDbValue(status).Value) (Some 0.6) (live richContext)) label
+
+[<Fact>]
+let ``a final frame that agrees with the stored status keeps its extra innings`` () =
+    let eleven = board 11 (team 4 (runs [ 0; 2; 0; 1; 1; 0; 0; 0; 0; 0; 0 ])) (team 3 (runs [ 1; 0; 2; 0; 0; 0; 0; 0; 0; 0; 0 ]))
+    let scoreboard = view MlbScoreboardPhase.Final (Some eleven) None
+    Assert.Equal("Final · 11 innings", text (page (game "final") scoreboard) "#detail-clock")
+    Assert.Equal("Final · 11 innings", text (fragments GameStatus.FINAL None scoreboard) "#detail-clock")
