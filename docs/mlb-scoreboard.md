@@ -1,6 +1,6 @@
 # MLB scoreboard
 
-An MLB game keeps one scoreboard observation: the latest accepted report of its score, status detail, line score and at-bat situation. Pages read a resolved view of that observation. Nothing in production writes observations yet. Ingestion (#14), rendering (#15) and live updates (#16) build on this contract.
+An MLB game keeps one scoreboard observation: the latest accepted report of its score, status detail, line score and at-bat situation. Pages read a resolved view of that observation. ESPN ingestion is the only production writer; see [Ingestion from ESPN](#ingestion-from-espn). Rendering (#15) and live updates (#16) build on this contract.
 
 The domain code is in `apps/backend.fsharp/Services/MlbScoreboard.fs`. Read the glossary entries for scoreboard observation, active context, source revision high-water mark and recorded observation first.
 
@@ -71,6 +71,59 @@ A valid report must also be in order with what is stored.
 
 A report with the same revision as the high-water mark and a newer `observedAt` is accepted. A report without a revision keeps the stored high-water mark, so a later report with an older revision is still rejected. Both clocks are compared with columns, so they still apply when the stored report no longer validates, for example after a team id correction. Only the provider check reads the stored report, and it is skipped when that report does not validate.
 
+## Ingestion from ESPN
+
+The ESPN odds cycle for MLB (`EspnOddsService.ScrapeAndStoreOddsAsync "mlb"`) already fetches the general ESPN scoreboard for each date. It makes no other request for the scoreboard. `MlbEspnScoreboard.report` turns each ESPN event into an `MlbScoreboardReport`, and `MlbScoreboardIngestion.AcceptAsync` hands it to the store. Code is in `apps/backend.fsharp/Services/MlbEspnScoreboard.fs`.
+
+- The report uses the event id as the game and competition id, and the competitor ids as team ids. An event id that appears twice on one board is skipped.
+- `observedAt` is the cycle's clock time. `sourceRevisionAt` is the response `Date` header.
+- `detail` is `status.type.detail`, then `status.detail`. The competition status is read first, then the event status.
+- Hits, errors and inning runs that are present must be whole numbers, and inning entries must be in period order. Otherwise the whole event is rejected.
+- The report never includes the count, bases or matchup. The general scoreboard does not supply them reliably, so ingestion does not guess the live situation.
+
+For MLB, the cycle writes `home_score`, `away_score`, `period` and `status_detail` only through the store. It still writes `status`, teams, schedule and odds as before. Odds snapshots made in the same cycle copy the accepted score and inning. Other sports are unchanged.
+
+### Status
+
+The cycle maps ESPN's status to the coarse `games.status` and to the report's `state`.
+
+| ESPN status | `games.status` | Report `state` |
+| --- | --- | --- |
+| `STATUS_SCHEDULED`, `pre` | `scheduled` | `scheduled` |
+| `STATUS_IN_PROGRESS`, `in` | `in_progress` | `in_progress` |
+| `STATUS_RAIN_DELAY` or `STATUS_DELAYED` | `in_progress`, or `scheduled` when ESPN's state is `pre` | `delayed` |
+| `STATUS_SUSPENDED` | `in_progress`, or `scheduled` when ESPN's state is `pre` | `suspended` |
+| `STATUS_POSTPONED` | `postponed` | `postponed` |
+| `STATUS_CANCELED` | `canceled` | `canceled` |
+| `STATUS_FINAL`, `post`, `completed: true`, no interruption text | `final` | `final` |
+
+- A delayed or suspended game keeps `in_progress`, so it stays in the live lists. The report state and `status_detail` tell it apart from play.
+- A postponed game is stored as `postponed`, not `final` or `canceled`. A postponement is not a result, and the makeup can come back as the same ESPN event. When ESPN later reports that event as scheduled or in progress, the cycle moves the game out of `postponed`. `postponed` is outside the GraphQL `GameStatus` enum, so the cycle publishes no live update for it. Pages label it Postponed and show no score for it.
+- `final` needs affirmative evidence. The description, detail and short detail must not mention a postponement, suspension, cancellation, delay or abandonment. A final status with such text keeps the game's existing status and the report is rejected.
+- The competition and event status must agree on name, state and `completed`, and each must have a `type`. Otherwise the cycle keeps the existing status (`unknown` for a new game) and rejects the report. One status level alone is enough.
+- Any other ESPN status maps `pre` to `scheduled` and `in` to `in_progress`, keeps the existing status otherwise, and its report is rejected.
+
+### Where acceptance runs
+
+`AcceptAsync` opens its own connection and takes the pro-hype fence, the advisory lock and the row lock. A caller that holds any of these in an open transaction would wait on itself. The cycle therefore accepts reports after it has saved the games, the playoff series and the completion evidence, outside every transaction it opens. Do not call `MlbScoreboardIngestion.AcceptAsync` or `MlbScoreboardStore.AcceptAsync` inside a transaction.
+
+Each acceptance has a deadline of `MlbScoreboardIngestion.Deadline` (5 seconds), linked to the cycle's token. When the deadline passes, the game keeps its stored observation, the cycle logs an Error and goes on to the next game. Cancelling the cycle itself still cancels the cycle.
+
+### Failures
+
+- A failed or unreadable scoreboard response writes nothing, so every game keeps its last accepted score, line score, detail and observation time. The existing ESPN warnings report the failure.
+- A rejected event, from `report` or from the store, keeps the stored observation. It is logged at Warning as `Rejected the ESPN MLB scoreboard frame for {GameId}: {Fault}`, once per game, frame content and fault for the life of the process. A Warning sends no Sentry event.
+- An odds-only change does not touch the stored observation, so its observation time and phase do not change. An unchanged frame from a later cycle is accepted with the new observation time, because it is a new observation.
+
+Sentry events per hour, inferred from the 30-second live cycle:
+
+| Fault | Before | After |
+| --- | --- | --- |
+| Malformed or rejected provider frame | 0 | 0 |
+| Missing (404) or malformed scoreboard body | 0 | 0 |
+| Stored frame that no longer validates | 0 | 1 per game and observation per process |
+| Acceptance deadline | 0 | 1 per game per cycle it stops, so at most 120 per stuck game per hour |
+
 ## Reading a game
 
 Call `MlbScoreboardStore.ReadAsync(gameId, cancellationToken)`. It reads the game untracked in its own scope and returns `None` for a game that is not a visible MLB game. Otherwise it returns an `MlbScoreboardView`:
@@ -97,4 +150,4 @@ The line score has as many innings as the longer line, with no nine-inning limit
 
 ## Tests
 
-`apps/backend.tests/MlbScoreboardTests.cs` writes and reads through the real host and PostgreSQL. Its reports come from the synthetic fixtures in `apps/backend.tests/Fixtures/MlbScoreboard`. `MigrationReplayTests` checks that migration 045 replays and that its columns round-trip through the `Game` model.
+`apps/backend.tests/MlbScoreboardTests.cs` writes and reads through the real host and PostgreSQL. Its reports come from the synthetic fixtures in `apps/backend.tests/Fixtures/MlbScoreboard`. `MlbScoreboardIngestionTests.cs` runs the ESPN cycle against synthetic HTTP and checks the API, pages and SSE. `MlbScoreboardSentryTests.cs` counts the events that reach the Sentry transport. `MlbPostponedVisibilityTests.cs` checks every route for a postponed game. `MigrationReplayTests` checks that migration 045 replays and that its columns round-trip through the `Game` model.
