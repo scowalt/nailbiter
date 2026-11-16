@@ -403,11 +403,167 @@ def broadcasts():
     emit(F + 'Broadcasts/mlb-board.json', {'synthetic': True, 'expectedLabels': expected, 'board': envelope('mlb', 'scoreboard?dates=20261001&limit=1000', board(events))})
 
 
+MLB_TEAM_IDS = {team: str(9101 + i) for i, team in enumerate(TEAMS['mlb'])}
+MLB_STATUSES = {
+    'scheduled': ('STATUS_SCHEDULED', 'pre', False, 'Scheduled'),
+    'in': ('STATUS_IN_PROGRESS', 'in', False, 'In Progress'),
+    'final': ('STATUS_FINAL', 'post', True, 'Final'),
+    'postponed': ('STATUS_POSTPONED', 'post', False, 'Postponed'),
+    'canceled': ('STATUS_CANCELED', 'post', False, 'Canceled'),
+    'delayed': ('STATUS_RAIN_DELAY', 'in', False, 'Rain Delay'),
+    'suspended': ('STATUS_SUSPENDED', 'post', False, 'Suspended'),
+}
+MLB_CONTESTS = {
+    '991300101': {'case': 'final-unplayed-bottom-ninth', 'start': '2027-07-10T17:05:00Z', 'home': 'BOS', 'away': 'NYY'},
+    '991300102': {'case': 'final-extra-innings', 'start': '2027-07-10T18:20:00Z', 'home': 'CHC', 'away': 'MIL', 'listed': ['away', 'home']},
+    '991300103': {'case': 'doubleheader-game-1', 'start': '2027-07-10T17:05:00Z', 'home': 'PHI', 'away': 'ATL', 'doubleheader': {'game': 1, 'pairedWith': '991300104'}},
+    '991300104': {'case': 'doubleheader-game-2', 'start': '2027-07-10T21:35:00Z', 'home': 'PHI', 'away': 'ATL', 'doubleheader': {'game': 2, 'pairedWith': '991300103'}},
+    '991300105': {'case': 'postponed', 'start': '2027-07-11T02:10:00Z', 'home': 'SEA', 'away': 'TEX'},
+    '991300106': {'case': 'makeup', 'start': '2027-07-11T20:10:00Z', 'home': 'SEA', 'away': 'TEX', 'makeupOf': '991300105'},
+    '991300107': {'case': 'canceled', 'start': '2027-07-11T02:10:00Z', 'home': 'LAD', 'away': 'SD'},
+    '991300108': {'case': 'rain-delay', 'start': '2027-07-10T21:10:00Z', 'home': 'MIN', 'away': 'DET'},
+    '991300109': {'case': 'suspended-then-resumed', 'start': '2027-07-10T17:07:00Z', 'home': 'TOR', 'away': 'BAL'},
+}
+
+
+def line(innings, runs, hits, errors):
+    return {'innings': innings, 'runs': runs, 'hits': hits, 'errors': errors}
+
+
+def mlb_frame(status, period, detail, away, home):
+    return {'status': status, 'period': period, 'detail': detail, 'away': away, 'home': home}
+
+
+def utc(value):
+    return value.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def mlb_team(abbreviation):
+    return {'id': MLB_TEAM_IDS[abbreviation], 'abbreviation': abbreviation, 'displayName': f'Synthetic {abbreviation}'}
+
+
+def mlb_competitor(role, team, side):
+    competitor = {'id': team['id'], 'homeAway': role, 'score': str(side['runs']),
+                  'team': {**team, 'name': team['abbreviation']}}
+    if side['hits'] is not None:
+        competitor['hits'] = side['hits']
+    if side['errors'] is not None:
+        competitor['errors'] = side['errors']
+    if side['innings'] is not None:
+        competitor['linescores'] = [{'value': float(runs), 'displayValue': str(runs), 'period': i + 1} for i, runs in enumerate(side['innings'])]
+    return competitor
+
+
+def mlb_event(identity, state):
+    contest = MLB_CONTESTS[identity]
+    name, phase, completed, description = MLB_STATUSES[state['status']]
+    status = {'clock': 0.0, 'displayClock': '0:00', 'period': state['period'],
+              'type': {'name': name, 'state': phase, 'completed': completed, 'description': description,
+                       'detail': state['detail'], 'shortDetail': state['detail']}}
+    teams = {role: mlb_team(contest[role]) for role in ['home', 'away']}
+    competitors = [mlb_competitor(role, teams[role], state[role]) for role in contest.get('listed', ['home', 'away'])]
+    competition = {'id': identity, 'date': contest['start'], 'status': status, 'competitors': competitors}
+    return {'id': identity, 'name': f'Synthetic {contest["away"]} at Synthetic {contest["home"]}', 'shortName': f'{contest["away"]} @ {contest["home"]}',
+            'date': contest['start'], 'season': {'year': 2027, 'type': 2, 'slug': 'regular-season'}, 'status': status, 'competitions': [competition]}
+
+
+def mlb_expected(state):
+    name, phase, completed, _ = MLB_STATUSES[state['status']]
+    return {'status': state['status'], 'name': name, 'state': phase, 'completed': completed, 'detail': state['detail'],
+            'period': state['period'], 'away': state['away'], 'home': state['home']}
+
+
+def mlb_scoreboard():
+    not_started = line(None, 0, None, None)
+    opening = {
+        '991300101': mlb_frame('final', 9, 'Final', line([0, 1, 0, 0, 2, 0, 0, 0, 0], 3, 7, 1), line([1, 0, 2, 0, 0, 1, 0, 0], 4, 9, 0)),
+        '991300102': mlb_frame('final', 11, 'Final/11', line([0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 2], 4, 10, 0), line([0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0], 2, 6, 2)),
+        '991300103': mlb_frame('final', 9, 'Final', line([2, 0, 0, 0, 0, 0, 0, 0, 0], 2, 5, 0), line([0, 0, 0, 1, 0, 0, 0, 0, 2], 3, 8, 1)),
+        '991300104': mlb_frame('in', 5, 'Top 5th', line([0, 2, 0, 0, 1], 3, 6, 0), line([1, 0, 0, 0], 1, 3, 1)),
+        '991300105': mlb_frame('postponed', 0, 'Postponed', not_started, not_started),
+        '991300106': mlb_frame('scheduled', 0, '7/11 - 4:10 PM EDT', not_started, not_started),
+        '991300107': mlb_frame('canceled', 0, 'Canceled', not_started, not_started),
+        '991300108': mlb_frame('delayed', 6, 'Rain Delay', line([0, 0, 0, 1, 0, 0], 1, 4, 0), line([0, 2, 0, 0, 0], 2, 5, 0)),
+        '991300109': mlb_frame('suspended', 7, 'Suspended', line([1, 0, 0, 0, 0, 2, 0], 3, 6, 0), line([0, 0, 1, 0, 0, 0], 1, 4, 1)),
+    }
+    advanced = mlb_frame('in', 6, 'Bottom 6th', line([0, 2, 0, 0, 1, 0], 3, 7, 0), line([1, 0, 0, 0, 0, 1], 2, 5, 1))
+    partial = mlb_frame('in', 6, 'Bottom 6th', line([0, 2, 0, 0, 1, 0], 3, None, 0), line(None, 2, None, None))
+    ahead = mlb_frame('in', 7, 'Top 7th', line([0, 2, 0, 0, 1, 0, 0], 3, 7, 0), line([1, 0, 0, 0, 0, 1], 2, 5, 1))
+    completed = {
+        '991300104': mlb_frame('final', 9, 'Final', line([0, 2, 0, 0, 1, 0, 0, 0, 0], 3, 8, 0), line([1, 0, 0, 0, 0, 1, 0, 0, 0], 2, 6, 1)),
+        '991300106': mlb_frame('final', 9, 'Final', line([0, 0, 0, 1, 0, 0, 0, 0, 0], 1, 4, 0), line([0, 0, 0, 0, 0, 0, 0, 0, 0], 0, 3, 0)),
+        '991300108': mlb_frame('final', 9, 'Final', line([0, 0, 0, 1, 0, 0, 0, 0, 0], 1, 5, 0), line([0, 2, 0, 0, 0, 0, 0, 0], 2, 6, 0)),
+        '991300109': mlb_frame('final', 9, 'Final', line([1, 0, 0, 0, 0, 2, 0, 0, 0], 3, 7, 0), line([0, 0, 1, 0, 0, 0, 0, 1, 0], 2, 6, 1)),
+    }
+    first_day = [identity for identity in MLB_CONTESTS if identity != '991300106']
+    start, next_day = instant('2027-07-10T23:30:00Z'), instant('2027-07-11T23:30:00Z')
+
+    def seconds(n):
+        return start + timedelta(seconds=n)
+
+    plan = [
+        ('opening', start, start, {}, {'20270710': first_day, '20270711': ['991300106']}),
+        ('advance', seconds(1200), seconds(1200), {'991300104': advanced}, None),
+        ('partial', seconds(2400), seconds(2400), {'991300104': partial}, None),
+        ('out-of-order', seconds(3600), seconds(600), {}, None),
+        ('future', seconds(4800), seconds(5400), {'991300104': ahead}, None),
+        ('resumption', next_day, next_day, completed,
+         {'20270710': [identity for identity in first_day if identity != '991300109'], '20270711': ['991300106', '991300109']}),
+    ]
+    observations, placement = [], None
+    for observation_id, served, responded, changes, dates in plan:
+        placement = dates or placement
+        states = {**opening, **changes}
+        boards = [{'date': date, 'url': f'https://site.web.api.espn.com/apis/site/v2/sports/{PATHS["mlb"]}/scoreboard?dates={date}',
+                   'body': board([mlb_event(contest, states[contest]) for contest in board_contests]),
+                   'expected': {contest: mlb_expected(states[contest]) for contest in board_contests}}
+                  for date, board_contests in placement.items()]
+        observations.append({'id': observation_id, 'servedAt': utc(served), 'responseDate': utc(responded), 'boards': boards})
+    contests = {identity: {**contest, 'competitionId': identity, 'listed': contest.get('listed', ['home', 'away']),
+                           'home': mlb_team(contest['home']), 'away': mlb_team(contest['away'])}
+                for identity, contest in MLB_CONTESTS.items()}
+    emit(F + 'MlbScoreboard/espn-basic.json', {
+        'synthetic': True,
+        'provenance': 'Independently constructed by scripts/test-fixtures/generate.py from authored contests, line scores and statuses; no provider responses, captures or real game IDs used.',
+        'evidenceLimit': 'Validates implemented ESPN-basic contracts only, not current provider conformance, field availability, authorization or live latency.',
+        'observationTimes': 'servedAt is the fake clock when a board is served; responseDate is the source time a later fake handler can send as the HTTP Date header. The current scoreboard fetch reads neither.',
+        'contests': contests, 'observations': observations})
+
+    def base(runner):
+        return {'occupied': runner is not False, 'runner': runner or None}
+
+    def rich(identity, game, received, observed, revision, inning, half, count, bases, matchup):
+        return {'id': identity, 'gameId': game, 'receivedAt': utc(seconds(received)), 'observedAt': utc(seconds(observed)),
+                'sourceRevisionAt': None if revision is None else utc(seconds(revision)), 'inning': inning, 'half': half,
+                'count': None if count is None else dict(zip(['balls', 'strikes', 'outs'], count)),
+                'bases': None if bases is None else dict(zip(['first', 'second', 'third'], map(base, bases))),
+                'matchup': None if matchup is None else dict(zip(['batter', 'pitcher'], matchup))}
+
+    empty = (False, False, False)
+    emit(F + 'MlbScoreboard/rich-frames.json', {
+        'synthetic': True,
+        'normalized': True,
+        'provenance': 'Independently constructed normalized Nailbiter rendering inputs; not an ESPN situation schema and not provider data.',
+        'evidenceLimit': 'Checked for shape only; nothing renders or ingests these frames yet, and they do not show that any provider or production ingestion supplies these fields.',
+        'frames': [
+            rich('active-complete', '991300104', 0, 0, -5, 5, 'top', (2, 1, 1), ('Synthetic Runner A', False, 'Synthetic Runner B'), ('Synthetic Batter 7', 'Synthetic Pitcher 3')),
+            rich('zero-count-empty-bases', '991300104', 1200, 1200, 1195, 6, 'bottom', (0, 0, 0), empty, ('Synthetic Batter 2', 'Synthetic Pitcher 5')),
+            rich('partial-optional', '991300104', 1800, 1800, None, 6, 'bottom', (1, 0, 2), None, ('Synthetic Batter 12', None)),
+            rich('runner-unknown', '991300104', 2100, 2100, None, 6, 'bottom', (0, 1, 2), (None, False, False), None),
+            rich('rich-unavailable', '991300104', 2400, 2400, None, 6, None, None, None, None),
+            rich('out-of-order', '991300104', 3600, 3600, 600, 5, 'top', (1, 1, 0), empty, ('Synthetic Batter 9', 'Synthetic Pitcher 3')),
+            rich('future', '991300104', 4800, 5400, 5390, 7, 'top', (0, 1, 0), empty, ('Synthetic Batter 4', 'Synthetic Pitcher 8')),
+            rich('retained-after-final', '991300101', 0, -60, -61, 9, 'top', (1, 2, 3), empty, ('Synthetic Batter 6', 'Synthetic Pitcher 1')),
+            rich('retained-while-delayed', '991300108', 0, -30, None, 6, 'top', (0, 0, 0), empty, ('Synthetic Batter 1', 'Synthetic Pitcher 2')),
+            rich('retained-while-suspended', '991300109', 0, -90, -95, 7, 'top', (1, 1, 0), (False, 'Synthetic Runner C', False), ('Synthetic Batter 3', 'Synthetic Pitcher 6')),
+        ]})
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--check', action='store_true')
     args = parser.parse_args()
-    for generate in [qualification_fixtures, rankings, nhl_seeding_contests, nba_seeding_contests, nhl_guru_rankings, moneypuck_model, pro_schedules, mlb_preview, nfl_preview, nhl_stakes, mlb_reconciliation, chart_histories, nfl_leverage, broadcasts]:
+    for generate in [qualification_fixtures, rankings, nhl_seeding_contests, nba_seeding_contests, nhl_guru_rankings, moneypuck_model, pro_schedules, mlb_preview, nfl_preview, nhl_stakes, mlb_reconciliation, chart_histories, nfl_leverage, broadcasts, mlb_scoreboard]:
         generate()
     manifest = {path: hashlib.sha256(text.encode()).hexdigest() for path, text in sorted(OUTPUTS.items())}
     emit('tests/fixtures/manifest.json', {'provenance': 'Independently constructed by scripts/test-fixtures/generate.py; no provider responses used as inputs.', 'sha256': manifest})
