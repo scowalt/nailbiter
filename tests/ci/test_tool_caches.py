@@ -69,10 +69,8 @@ class ToolCacheTests(unittest.TestCase):
             self.assertEqual([source for source, _, _, _ in steps_using('aquasecurity/trivy-action', workflows)], ['other.yaml:build[1]'])
 
 
-class PinnedTrivyInstallTests(unittest.TestCase):
+class InstallScriptTests(unittest.TestCase):
     def setUp(self):
-        uses = list(steps_using('aquasecurity/trivy-action'))
-        self.assertGreaterEqual(len(uses), 1)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
@@ -80,11 +78,6 @@ class PinnedTrivyInstallTests(unittest.TestCase):
         self.bin.mkdir()
         (self.bin / 'curl').write_text(FAKE_CURL)
         (self.bin / 'curl').chmod(0o755)
-        self.scans = uses
-
-    def install_script(self, source, steps, index):
-        self.assertEqual([step.get('run') for step in steps[:index] if 'trivy' in step.get('run', '')], [INSTALL_TRIVY], source)
-        return (ROOT / INSTALL_TRIVY.split()[1]).read_text()
 
     def run_install(self, script, download):
         runner_temp = self.root / 'runner-temp'
@@ -100,6 +93,18 @@ class PinnedTrivyInstallTests(unittest.TestCase):
                                      'GITHUB_PATH': str(github_path), 'FIXTURE_DOWNLOAD': str(fixture), 'FIXTURE_LOG': str(self.root / 'curl.log')})
         added = [Path(line) for line in github_path.read_text().splitlines()]
         return result, added
+
+
+class PinnedTrivyInstallTests(InstallScriptTests):
+    def setUp(self):
+        uses = list(steps_using('aquasecurity/trivy-action'))
+        self.assertGreaterEqual(len(uses), 1)
+        super().setUp()
+        self.scans = uses
+
+    def install_script(self, source, steps, index):
+        self.assertEqual([step.get('run') for step in steps[:index] if 'trivy' in step.get('run', '')], [INSTALL_TRIVY], source)
+        return (ROOT / INSTALL_TRIVY.split()[1]).read_text()
 
     def test_each_scan_runs_after_one_step_that_installs_a_sha256_pinned_trivy(self):
         for source, steps, index, _ in self.scans:
