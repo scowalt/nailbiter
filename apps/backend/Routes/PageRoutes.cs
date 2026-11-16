@@ -46,18 +46,16 @@ public static class PageRoutes
     private static async Task<(Dictionary<string, double?> Scores, Dictionary<string, DerivedHypeCredit> Credits)> GetGameHypeAsync(
         List<Game> games, HypeScoreService scorer, IProHypeLifecycle lifecycle, CancellationToken ct)
     {
-        var scores = new Dictionary<string, double?>();
+        var scheduled = games.Where(game => game.Status == "scheduled").ToArray();
+        var scores = (await scorer.CalculateHypeScoresAsync(scheduled.Where(game => !ProHypePolicy.Supports(game.Sport)), ct))
+            .ToDictionary(entry => entry.Key, entry => (double?)entry.Value);
+        var resolutions = await lifecycle.ResolveAsync(scheduled.Where(game => ProHypePolicy.Supports(game.Sport)).Select(game => game.Id).ToArray(), ct);
         var credits = new Dictionary<string, DerivedHypeCredit>();
         for (var index = 0; index < games.Count; index++)
         {
             var game = games[index];
-            if (game.Status != "scheduled") continue;
-            if (!ProHypePolicy.Supports(game.Sport))
-            {
-                scores[game.Id] = await scorer.CalculateHypeScoreAsync(game, ct);
-                continue;
-            }
-            var resolution = await lifecycle.ResolveAsync(game.Id, ct);
+            if (game.Status != "scheduled" || !ProHypePolicy.Supports(game.Sport)) continue;
+            var resolution = resolutions[game.Id];
             if (resolution.Game is null) { games.RemoveAt(index--); continue; }
             game = games[index] = resolution.Game;
             scores[game.Id] = resolution.Total;

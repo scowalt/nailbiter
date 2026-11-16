@@ -16,6 +16,12 @@ public sealed record ProHypeResolution(double? Total, [property: JsonIgnore] Hyp
 public interface IProHypeLifecycle
 {
     Task<ProHypeResolution> ResolveAsync(string gameId, CancellationToken ct = default);
+    async Task<IReadOnlyDictionary<string, ProHypeResolution>> ResolveAsync(IReadOnlyCollection<string> gameIds, CancellationToken ct = default)
+    {
+        var resolutions = new Dictionary<string, ProHypeResolution>();
+        foreach (var gameId in gameIds.Distinct()) resolutions[gameId] = await ResolveAsync(gameId, ct);
+        return resolutions;
+    }
     Task CaptureAsync(CancellationToken ct = default);
 }
 
@@ -63,6 +69,9 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
     public async Task<ProHypeResolution> ResolveAsync(string gameId, CancellationToken ct = default) =>
         (await ResolveAsync([gameId], null, ct))[gameId];
 
+    public async Task<IReadOnlyDictionary<string, ProHypeResolution>> ResolveAsync(IReadOnlyCollection<string> gameIds, CancellationToken ct = default) =>
+        await ResolveAsync(gameIds, null, ct);
+
     private async Task<ProHypeResolution> ResolveAsync(string gameId, DateTime? captureHorizon, CancellationToken ct) =>
         (await ResolveAsync([gameId], captureHorizon, ct))[gameId];
 
@@ -70,6 +79,7 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
     {
         var evaluatedAt = clock.GetUtcNow().UtcDateTime;
         var ids = gameIds.Distinct().ToArray();
+        if (ids.Length == 0) return [];
         await using var db = new ExcitementDbContext(databaseOptions);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         await db.LockProHypeFenceAsync(ProHypeFenceAccess.ReadEvidence, ct);
