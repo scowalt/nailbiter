@@ -10,9 +10,12 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 REQUIREMENT = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*==[0-9][A-Za-z0-9.+!-]*$')
 HASH = re.compile(r'^--hash=sha256:[0-9a-f]{64}$')
-INSTALLERS = {'uvx', 'pipx'}
+INSTALLERS = {'uvx', 'pipx', 'pip-sync', 'piptools'}
 PIP = re.compile(r'pip[0-9.]*')
 SEPARATORS = {'&&', '||', ';', '|'}
+RUN_OPTIONS_WITH_VALUES = {'--python', '-p'}
+SCRIPT_FLAGS = {'--script', '-s', '--gui-script'}
+INLINE_METADATA = re.compile(r'^# /// script\s*$', re.MULTILINE)
 MIN_HASHED_FILES = 3
 
 
@@ -47,22 +50,54 @@ def hashed_file_problems(path):
     return problems
 
 
+def program(token):
+    return token.rsplit('/', 1)[-1]
+
+
+def uv_run_problems(args):
+    problems = []
+    options, target = [], None
+    remaining = iter(args)
+    for arg in remaining:
+        if arg == '-' or not arg.startswith('-'):
+            target = arg
+            break
+        options.append(arg)
+        if arg in RUN_OPTIONS_WITH_VALUES:
+            next(remaining, None)
+    if '--no-project' not in options:
+        problems.append('uv run needs --no-project before the command it runs, or it installs the nearest pyproject.toml project instead of a hashed requirements file')
+    if any(re.fullmatch(r'--with([-=]\S*)?|-w\S*', arg) for arg in args):
+        problems.append('uv run --with resolves packages without checking hashes; use uv pip install --require-hashes')
+    if target == '-' or '://' in (target or ''):
+        problems.append(f'uv run {target} runs a script whose PEP 723 dependencies this check cannot read')
+    elif target and (SCRIPT_FLAGS & set(options) or target.endswith(('.py', '.pyw'))):
+        script = ROOT / target
+        if not script.is_file():
+            problems.append(f'uv run names script {target!r}, which this check cannot read for PEP 723 dependencies')
+        elif INLINE_METADATA.search(script.read_text(errors='replace')):
+            problems.append(f'uv run resolves the PEP 723 dependencies in {target!r} without checking hashes')
+    return problems
+
+
 def install_problems(tokens):
     problems = []
     for start, token in enumerate(tokens):
-        if token in INSTALLERS:
+        if program(token) in INSTALLERS:
             problems.append(f'{token} installs packages without a hashed requirements file')
-        if token == 'uv':
+        if token.startswith('UV_VENV_SEED='):
+            problems.append('UV_VENV_SEED installs pip into the virtual environment without a hash')
+        if program(token) == 'uv':
             command = list(itertools.takewhile(lambda arg: arg not in SEPARATORS, tokens[start + 1:]))
             if command[:1] == ['run']:
-                if '--no-project' not in command:
-                    problems.append('uv run without --no-project installs the nearest pyproject.toml project instead of a hashed requirements file')
-                if any(re.fullmatch(r'--with([-=]\S*)?|-w\S*', arg) for arg in command):
-                    problems.append('uv run --with resolves packages without checking hashes; use uv pip install --require-hashes')
-            elif command[:1] != ['venv'] and command[:2] != ['pip', 'install']:
+                problems.extend(uv_run_problems(command[1:]))
+            elif command[:1] == ['venv']:
+                if '--seed' in command:
+                    problems.append('uv venv --seed installs pip into the virtual environment without a hash')
+            elif command[:2] != ['pip', 'install']:
                 problems.append(f'uv {" ".join(command[:2])} is not one of uv venv, uv pip install or uv run --no-project')
-        if PIP.fullmatch(token) and tokens[start + 1:start + 2] == ['install']:
-            if tokens[start - 1:start] != ['uv']:
+        if PIP.fullmatch(program(token)) and tokens[start + 1:start + 2] == ['install']:
+            if start == 0 or program(tokens[start - 1]) != 'uv':
                 problems.append('use uv pip install, not pip install')
                 continue
             args = tokens[start + 2:]
@@ -88,7 +123,7 @@ def install_problems(tokens):
 
 
 def line_install_problems(line):
-    if not re.search(r'\b(pip[0-9.]*|uvx|pipx|uv)\b', line):
+    if not re.search(r'\b(pip[0-9.]*|piptools|uvx|pipx|uv|UV_VENV_SEED)\b', line):
         return []
     return install_problems(shlex.split(line, comments=True))
 

@@ -141,7 +141,26 @@ CI installs Python packages only from requirements files that pin every package,
 | `tests/ci` | `scripts/ci/tests-ci-requirements.txt` | `pyyaml` |
 | `apps/analysis` tests | `scripts/ci/analysis-requirements.txt` | `pandas`, `sqlalchemy`, `pydantic` |
 
-Each step creates a virtual environment under `$RUNNER_TEMP` and runs `uv pip install --require-hashes --no-build -r <file>`. uv then stops on a package that the file does not pin with `==`, on a download whose sha256 the file does not list, and on a source distribution that needs a build. CI does not use `uv run --with`: uv 0.11.32 installs from a `--with-requirements` file without checking its hashes. `tests/ci/test_python_requirements.py` fails on any `uv run --with`, `uvx`, `uv tool`, `pipx` or plain `pip install` in the workflow or `scripts/ci`, and on any requirements line that is not an exact pin followed only by sha256 hashes. Nothing updates these files automatically.
+Each step creates a virtual environment under `$RUNNER_TEMP` and runs `uv pip install --require-hashes --no-build -r <file>`. uv then stops on a package that the file does not pin with `==`, on a download whose sha256 the file does not list, and on a source distribution that needs a build. CI does not use `uv run --with`: uv 0.11.32 installs from a `--with-requirements` file without checking its hashes. `tests/ci/test_python_requirements.py` reads each command line in the workflow's `run` steps and in `scripts/ci`. It fails on any of these, under any path such as `/usr/bin/pip` or `"$RUNNER_TEMP/v/bin/pip"`:
+
+- `uv run --with`, `uvx`, `uv tool`, `pipx`, `pip-sync` or `python -m piptools`;
+- a plain `pip install`;
+- `uv venv --seed` or `UV_VENV_SEED=`, which install pip without a hash;
+- a `uv run` whose `--no-project` is missing or comes after the command, where uv passes it to that command and still installs the project;
+- a `uv run` of a script with a PEP 723 `# /// script` block, of a script it cannot read, of stdin (`-`) or of a URL. uv resolves inline dependencies without a hash check when the target ends in `.py` or `.pyw`, or when `--script`, `-s` or `--gui-script` is given. It does not read them for `uv run python script.py`.
+
+The test also fails on any requirements line that is not an exact pin followed only by sha256 hashes. It rejects a `uv run` option it does not know to take a value, such as `--directory x`, because it cannot then find the command.
+
+The test reads one command line at a time and splits it like a shell, without running a shell parser. These spellings still pass, and none occurs in CI today:
+
+- `bash -c "uv sync"`, `sh -c '…'` and `eval "…"`, because the command is inside a quoted string;
+- `(uv sync)`, `x=$(uv sync)` and `uv run …;uv sync` with no space around `;`, because the splitter keeps the punctuation in the word;
+- `$UV sync`, `${{ env.UV }} sync` and `PIP=pip; $PIP install`, because the program name is not known until the shell runs;
+- `UV_VENV_SEED` or another `UV_` setting that comes from an `env:` mapping, from `$GITHUB_ENV` written in an earlier step, or from a `uv.toml`, because the test reads commands and not the environment that uv starts with.
+
+Catching these would need a shell parser and the step's environment. A reviewer has to check them by hand. `python -m venv` and `python -m ensurepip` also pass. They install the pip wheel that ships inside the pinned Python, without a download.
+
+Nothing updates these files automatically.
 
 To change a version:
 
