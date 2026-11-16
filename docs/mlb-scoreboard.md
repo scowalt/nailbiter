@@ -63,11 +63,11 @@ A valid report must also be in order with what is stored.
 | Rule | Rejection |
 | --- | --- |
 | `observedAt` is not later than the server clock | `FutureObservation` |
-| `observedAt` is later than the stored observation's | `RegressingObservation` |
-| The provider is the same as the stored observation's | `ProviderChanged` |
+| `observedAt` is later than `scoreboard_updated_at` | `RegressingObservation` |
+| The provider is the same as the stored report's | `ProviderChanged` |
 | `sourceRevisionAt`, when present, is not older than the high-water mark | `RegressingRevision` |
 
-A report with the same revision as the high-water mark and a newer `observedAt` is accepted. A report without a revision keeps the stored high-water mark, so a later report with an older revision is still rejected. A stored report that no longer validates, for example after a team id correction, does not take part in these comparisons.
+A report with the same revision as the high-water mark and a newer `observedAt` is accepted. A report without a revision keeps the stored high-water mark, so a later report with an older revision is still rejected. Both clocks are compared with columns, so they still apply when the stored report no longer validates, for example after a team id correction. Only the provider check reads the stored report, and it is skipped when that report does not validate.
 
 ## Reading a game
 

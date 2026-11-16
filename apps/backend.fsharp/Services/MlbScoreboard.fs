@@ -303,7 +303,8 @@ module MlbScoreboard =
             let! frame = validate game report
             do! require (frame.ObservedAt <= now) MlbScoreboardRejection.FutureObservation
             let previous = stored game
-            do! require (previous |> Option.forall (fun p -> frame.ObservedAt > p.ObservedAt)) MlbScoreboardRejection.RegressingObservation
+            do! require (ofNullable game.ScoreboardUpdatedAt |> Option.forall (fun accepted -> frame.ObservedAt > accepted))
+                    MlbScoreboardRejection.RegressingObservation
             do! require (previous |> Option.forall (fun p -> frame.Provider = p.Provider)) MlbScoreboardRejection.ProviderChanged
             let highWater = ofNullable game.ScoreboardSourceRevisionAt
             do! require (Option.map2 (>=) frame.SourceRevisionAt highWater |> Option.defaultValue true) MlbScoreboardRejection.RegressingRevision
