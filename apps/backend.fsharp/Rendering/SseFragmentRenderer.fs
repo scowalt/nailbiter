@@ -238,3 +238,40 @@ module SseFragmentRenderer =
         fragments
         |> List.map XmlNodeRenderer.renderNode
         |> String.concat ""
+
+    let renderMlbDetailFragments (update: GameUpdate) (scoreboard: backend.Services.MlbScoreboardView) =
+        let isLive = update.Status = GameStatus.IN_PROGRESS
+        let isFinal = update.Status = GameStatus.FINAL
+
+        let excitementScore = if update.ExcitementScore.HasValue then Nullable update.ExcitementScore.Value else Nullable()
+        let board = scoreboard.Board
+        let homeScore = match board with Some b -> Some b.Home.Runs | None -> Option.ofNullable update.HomeScore
+        let awayScore = match board with Some b -> Some b.Away.Runs | None -> Option.ofNullable update.AwayScore
+
+        let period = Option.ofNullable update.Period
+        let gameClock = update.GameClock |> Option.ofObj |> Option.defaultValue ""
+        let sportStr = update.Sport.ToString()
+
+        let colors = TeamColors.forUpdate update
+        let homeAbbr = if String.IsNullOrEmpty update.HomeTeamAbbreviation then update.HomeTeam else update.HomeTeamAbbreviation
+        let awayAbbr = if String.IsNullOrEmpty update.AwayTeamAbbreviation then update.AwayTeam else update.AwayTeamAbbreviation
+        let fragments = [
+            renderDetailExcitement excitementScore isLive isFinal
+            match MlbScoreboardRenderer.probability (update.Status.ToDbValue()) scoreboard (Option.ofNullable update.HomeWinProbability) with
+            | MlbScoreboardRenderer.Probability.Current p -> renderDetailProbBar p homeAbbr awayAbbr colors false
+            | MlbScoreboardRenderer.Probability.Unavailable ->
+                Elem.div [ Attr.id "detail-probbar"; cls "detail-unavailable-note" ] [ Text.raw "Live probability unavailable" ]
+            | MlbScoreboardRenderer.Probability.Hidden -> Elem.div [ Attr.id "detail-probbar" ] []
+            renderDetailAwayScore awayScore
+            renderDetailHomeScore homeScore
+            match MlbScoreboardRenderer.clock (update.Status = GameStatus.SCHEDULED) scoreboard with
+            | MlbScoreboardRenderer.Clock.Generic -> renderDetailClock period gameClock sportStr isLive
+            | clock -> MlbScoreboardRenderer.renderClock clock []
+            MlbScoreboardRenderer.renderStatusBadge (MlbScoreboardRenderer.statusBadge (update.Status.ToDbValue()) scoreboard)
+            MlbScoreboardRenderer.renderSituation (MlbScoreboardRenderer.situation isLive scoreboard)
+            yield! MlbScoreboardRenderer.renderLineScore (awayAbbr, update.AwayTeam) (homeAbbr, update.HomeTeam) board
+        ]
+
+        fragments
+        |> List.map XmlNodeRenderer.renderNode
+        |> String.concat ""

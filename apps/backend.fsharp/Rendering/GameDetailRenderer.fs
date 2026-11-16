@@ -102,7 +102,7 @@ module GameDetailRenderer =
                 ]
             ]
 
-    let RenderWithHighlightsAtTime
+    let private renderDetail
         (now: DateTime)
         (game: Game)
         (snapshots: Collections.Generic.List<OddsSnapshot>)
@@ -111,7 +111,8 @@ module GameDetailRenderer =
         (hypeScore: Nullable<float>)
         (homeTeamRank: TeamRankInfo option)
         (awayTeamRank: TeamRankInfo option)
-        (highlights: HighlightsDetailState) =
+        (highlights: HighlightsDetailState)
+        (scoreboard: MlbScoreboardView option) =
         let sport = SportExtensions.FromDbValue(game.Sport)
         let status = GameStatusExtensions.FromDbValue(game.Status)
         let isLive = game.Status = "in_progress"
@@ -149,6 +150,8 @@ module GameDetailRenderer =
                     |> Seq.map (fun s -> s.HomeWinProbability)
                 ExcitementScore.Calculate game.Sport probabilities
 
+        let board = scoreboard |> Option.bind (fun view -> view.Board)
+
         let statusLabel = if status.HasValue then FormatHelpers.getStatusLabel status.Value else ""
         let statusClass = if status.HasValue then FormatHelpers.getStatusClass status.Value else ""
 
@@ -164,9 +167,12 @@ module GameDetailRenderer =
                         | s when s.HasValue ->
                             Elem.img [ Attr.src (Logos.getLeagueLogoUrl s.Value); Attr.alt (s.Value.ToString()); cls "detail-league-logo" ]
                         | _ -> ()
-                        Elem.span [ cls $"detail-status-badge {statusClass}"; Attr.id "detail-status" ] [
-                            Text.raw statusLabel
-                        ]
+                        match scoreboard with
+                        | Some view -> MlbScoreboardRenderer.renderStatusBadge (MlbScoreboardRenderer.statusBadge game.Status view)
+                        | None ->
+                            Elem.span [ cls $"detail-status-badge {statusClass}"; Attr.id "detail-status" ] [
+                                Text.raw statusLabel
+                            ]
                     ]
                     Elem.div [ Attr.id "detail-excitement" ] [
                         if game.Sport = "cfb" && (isLive || isFinal) && not excitementScore.HasValue then
@@ -183,8 +189,10 @@ module GameDetailRenderer =
                     ]
                 ]
                 Elem.div [ cls "panel"; Attr.id "detail-scoreboard" ] [
+                    if scoreboard.IsSome then Elem.h2 [ cls "visually-hidden" ] [ Text.raw "Score" ]
                     Elem.div [ cls "scoreboard" ] [
                         Elem.div [ cls "scoreboard-team" ] [
+                            if scoreboard.IsSome then Elem.span [ cls "scoreboard-side" ] [ Text.raw "Away" ]
                             match awayLogoUrl with
                             | Some url -> Elem.img [ Attr.src url; Attr.alt game.AwayTeamAbbreviation; cls "scoreboard-logo" ]
                             | None -> ()
@@ -194,8 +202,11 @@ module GameDetailRenderer =
                             ]
                             Elem.span [ cls "meta-text" ] [ Text.enc game.AwayTeam ]
                             Elem.span [ cls "detail-score"; Attr.id "detail-away-score" ] [
-                                if game.AwayScore.HasValue then
-                                    Text.raw $"{game.AwayScore.Value}"
+                                match board with
+                                | Some b -> Text.raw $"{b.Away.Runs}"
+                                | None ->
+                                    if game.AwayScore.HasValue then
+                                        Text.raw $"{game.AwayScore.Value}"
                             ]
                         ]
                         Elem.div [ cls "scoreboard-center" ] [
@@ -205,12 +216,15 @@ module GameDetailRenderer =
                                     FormatHelpers.scheduledTimeNode game.ScheduledStart
                                     yield! FormatHelpers.broadcastNodes game
                                 ]
+                                match scoreboard with
+                                | Some view -> MlbScoreboardRenderer.renderClock (MlbScoreboardRenderer.clock true view) []
+                                | None -> ()
                             else
                                 if isLive then
                                     match FormatHelpers.broadcastNodes game with
                                     | [] -> ()
                                     | nodes -> Elem.span [ cls "meta-text" ] (List.tail nodes)
-                                Elem.div [ Attr.id "detail-clock" ] [
+                                let genericClock = [
                                     if game.Sport = "cfb" && isLive then
                                         Elem.span [ cls "detail-clock-cfb" ] [ Text.enc (FormatHelpers.formatGameClock game.Period game.GameClock game.Sport) ]
                                     elif isLive && latestOdds.IsSome then
@@ -225,8 +239,12 @@ module GameDetailRenderer =
                                     else
                                         Elem.span [ cls "meta-text" ] [ Text.raw "@" ]
                                 ]
+                                match scoreboard with
+                                | Some view -> MlbScoreboardRenderer.renderClock (MlbScoreboardRenderer.clock false view) genericClock
+                                | None -> Elem.div [ Attr.id "detail-clock" ] genericClock
                         ]
                         Elem.div [ cls "scoreboard-team" ] [
+                            if scoreboard.IsSome then Elem.span [ cls "scoreboard-side" ] [ Text.raw "Home" ]
                             match homeLogoUrl with
                             | Some url -> Elem.img [ Attr.src url; Attr.alt game.HomeTeamAbbreviation; cls "scoreboard-logo" ]
                             | None -> ()
@@ -236,19 +254,37 @@ module GameDetailRenderer =
                             ]
                             Elem.span [ cls "meta-text" ] [ Text.enc game.HomeTeam ]
                             Elem.span [ cls "detail-score"; Attr.id "detail-home-score" ] [
-                                if game.HomeScore.HasValue then
-                                    Text.raw $"{game.HomeScore.Value}"
+                                match board with
+                                | Some b -> Text.raw $"{b.Home.Runs}"
+                                | None ->
+                                    if game.HomeScore.HasValue then
+                                        Text.raw $"{game.HomeScore.Value}"
                             ]
                         ]
                     ]
                     yield! FormatHelpers.collegeContext game
+                    match scoreboard with
+                    | Some view -> MlbScoreboardRenderer.renderSituation (MlbScoreboardRenderer.situation isLive view)
+                    | None -> ()
                     Elem.div [ Attr.id "detail-probbar" ] [
-                        if game.Sport = "cfb" && latestOdds.IsNone && isLive then
-                            Elem.span [ cls "meta-text" ] [ Text.raw "Live probability unavailable" ]
-                        if latestOdds.IsSome && not isFinal then
-                            Elem.div [ cls "detail-probability" ] [
-                                ProbabilityBar.render false game.HomeTeamAbbreviation game.AwayTeamAbbreviation homeWinProb (1.0 - homeWinProb) colors
-                            ]
+                        match scoreboard with
+                        | Some view ->
+                            let homeProbability = latestOdds |> Option.map (fun odds -> odds.HomeWinProbability)
+                            match MlbScoreboardRenderer.probability game.Status view homeProbability with
+                            | MlbScoreboardRenderer.Probability.Current p ->
+                                Elem.div [ cls "detail-probability" ] [
+                                    ProbabilityBar.render false game.HomeTeamAbbreviation game.AwayTeamAbbreviation p (1.0 - p) colors
+                                ]
+                            | MlbScoreboardRenderer.Probability.Unavailable ->
+                                Elem.span [ cls "meta-text" ] [ Text.raw "Live probability unavailable" ]
+                            | MlbScoreboardRenderer.Probability.Hidden -> ()
+                        | None ->
+                            if game.Sport = "cfb" && latestOdds.IsNone && isLive then
+                                Elem.span [ cls "meta-text" ] [ Text.raw "Live probability unavailable" ]
+                            if latestOdds.IsSome && not isFinal then
+                                Elem.div [ cls "detail-probability" ] [
+                                    ProbabilityBar.render false game.HomeTeamAbbreviation game.AwayTeamAbbreviation homeWinProb (1.0 - homeWinProb) colors
+                                ]
                     ]
                 ]
                 if snapshots.Count >= 2 then
@@ -283,6 +319,9 @@ module GameDetailRenderer =
                             cls "odds-chart"
                         ] []
                     ]
+                match scoreboard with
+                | Some view -> yield! MlbScoreboardRenderer.renderLineScore (game.AwayTeamAbbreviation, game.AwayTeam) (game.HomeTeamAbbreviation, game.HomeTeam) view.Board
+                | None -> ()
                 yield! renderHighlights highlights
                 if isScheduled && pregameOdds.IsSome then
                     let po = pregameOdds.Value
@@ -462,6 +501,12 @@ module GameDetailRenderer =
                     QualificationCredit.renderQuality "quality-credit" hypeScore.HasValue
             ]
         ]
+
+    let RenderWithHighlightsAtTime now game snapshots pregameOdds hypeComponents hypeScore homeTeamRank awayTeamRank highlights =
+        renderDetail now game snapshots pregameOdds hypeComponents hypeScore homeTeamRank awayTeamRank highlights None
+
+    let RenderMlbWithHighlightsAtTime now game snapshots pregameOdds hypeComponents hypeScore homeTeamRank awayTeamRank highlights (scoreboard: MlbScoreboardView) =
+        renderDetail now game snapshots pregameOdds hypeComponents hypeScore homeTeamRank awayTeamRank highlights (Some scoreboard)
 
     let RenderAtTime now game snapshots pregameOdds hypeComponents hypeScore homeTeamRank awayTeamRank =
         RenderWithHighlightsAtTime now game snapshots pregameOdds hypeComponents hypeScore homeTeamRank awayTeamRank (HighlightsDetailState(HighlightsDetailStatus.Hidden))
