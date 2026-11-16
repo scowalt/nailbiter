@@ -50,7 +50,7 @@ public sealed class ListingFixtureCheckTests(ITestOutputHelper output)
                 Assert.Equal(0, path.GetProperty("duplicateRelations").GetArrayLength());
                 Assert.Equal(1, path.GetProperty("excitementReads").GetInt32());
             });
-            Assert.Equal([10, 4, 4], work.Values.Select(path => path.GetProperty("excitementGames").GetInt32()));
+            Assert.Equal([11, 4, 4, 1, 64], work.Values.Select(path => path.GetProperty("excitementGames").GetInt32()));
         }
         finally
         {

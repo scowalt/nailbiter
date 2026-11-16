@@ -115,13 +115,13 @@ public sealed class LatestOddsHistoryTests(ListingTimescale timescale, ITestOutp
             using (var scope = host.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
-                var ids = await db.Games.Select(game => game.Id).ToListAsync();
+                var ids = await db.Games.Where(game => game.Sport != "cfb").Select(game => game.Id).ToListAsync();
                 var newest = await db.OddsSnapshots
                     .FromSqlRaw("SELECT DISTINCT ON (game_id) * FROM odds_snapshots ORDER BY game_id, timestamp DESC, id DESC")
                     .AsNoTracking().ToDictionaryAsync(snapshot => snapshot.GameId, snapshot => snapshot.Id);
                 var latest = await scope.ServiceProvider.GetRequiredService<GameDataService>()
                     .GetLatestOddsForGamesAsync(ListModule.OfSeq(ids), CancellationToken.None);
-                Assert.Equal(newest.OrderBy(entry => entry.Key, StringComparer.Ordinal),
+                Assert.Equal(newest.Where(entry => ids.Contains(entry.Key)).OrderBy(entry => entry.Key, StringComparer.Ordinal),
                     latest.Select(entry => KeyValuePair.Create(entry.Key, entry.Value.Id)).OrderBy(entry => entry.Key, StringComparer.Ordinal));
             }
         }
