@@ -89,6 +89,8 @@ Call `MlbScoreboardStore.ReadAsync(gameId, cancellationToken)`. It reads the gam
 | `Stale` | State `in_progress` with any other age |
 | `Delayed`, `Suspended`, `Postponed`, `Canceled`, `Final` | The matching state |
 
+A stored report that cannot be parsed or no longer validates is our own fault, because every report was validated when it was accepted. The read still fails closed to `Unavailable`. It also logs at Error, with the template `MLB scoreboard stored frame for {GameId} observed at {ObservedAt} is unusable: {Fault}`. `Fault` is `Unreadable` or the validation rejection, such as `WrongTeam Home`. The store logs once per game and `scoreboard_updated_at` for the life of the process, so repeated page and SSE reads of one bad row send one event.
+
 Only the `Live` phase has an active context. Interrupted and ended games keep their scores, line score and detail.
 
 The line score has as many innings as the longer line, with no nine-inning limit. When a final game's home line is one inning shorter than the away line and the home team leads, the board adds a not-played cell for the bottom half that was not batted. An in-progress game with a short home line does not get this cell.

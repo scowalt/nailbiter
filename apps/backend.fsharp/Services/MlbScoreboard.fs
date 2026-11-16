@@ -1,6 +1,7 @@
 namespace backend.Services
 
 open System
+open System.Collections.Concurrent
 open System.Linq
 open System.Text.Json
 open System.Threading
@@ -10,6 +11,7 @@ open backend.Models
 open Backend.FSharp
 open Microsoft.EntityFrameworkCore
 open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Logging
 
 [<CLIMutable>]
 type MlbCountReport = { Balls: Nullable<int>; Strikes: Nullable<int>; Outs: Nullable<int> }
@@ -99,6 +101,11 @@ type MlbScoreboardRejection =
     | RegressingObservation
     | RegressingRevision
     | ProviderChanged
+
+[<RequireQualifiedAccess>]
+type MlbStoredFrameFault =
+    | Unreadable
+    | Invalid of MlbScoreboardRejection
 
 type MlbScoreboardFrame =
     private
@@ -291,20 +298,22 @@ module MlbScoreboard =
                   Bases = bases; Matchup = matchup; AwayLine = away; HomeLine = home }
         }
 
-    let private stored (game: Game) =
+    let private stored (game: Game) : Result<MlbScoreboardFrame option, MlbStoredFrameFault> =
         match text game.MlbScoreboardJson with
-        | None -> None
+        | None -> Ok None
         | Some json ->
-            try
-                JsonSerializer.Deserialize<MlbScoreboardReport>(json, JsonSerializerOptions.Web)
-                |> ofObj |> Option.bind (validate game >> Result.toOption)
-            with :? JsonException -> None
+            let report =
+                try JsonSerializer.Deserialize<MlbScoreboardReport>(json, JsonSerializerOptions.Web) |> ofObj
+                with :? JsonException -> None
+            match report with
+            | None -> Error MlbStoredFrameFault.Unreadable
+            | Some report -> validate game report |> Result.map Some |> Result.mapError MlbStoredFrameFault.Invalid
 
     let accept (now: DateTime) (game: Game) (report: MlbScoreboardReport) : Result<MlbScoreboardFrame, MlbScoreboardRejection> =
         result {
             let! frame = validate game report
             do! require (frame.ObservedAt <= now) MlbScoreboardRejection.FutureObservation
-            let previous = stored game
+            let previous = stored game |> Result.defaultValue None
             do! require (ofNullable game.ScoreboardUpdatedAt |> Option.forall (fun accepted -> frame.ObservedAt > accepted))
                     MlbScoreboardRejection.RegressingObservation
             do! require (previous |> Option.forall (fun p -> frame.Provider = p.Provider)) MlbScoreboardRejection.ProviderChanged
@@ -355,11 +364,13 @@ module MlbScoreboard =
         | MlbGameState.Canceled -> MlbScoreboardPhase.Canceled
         | MlbGameState.Final -> MlbScoreboardPhase.Final
 
-    let resolve (now: DateTime) (game: Game) : MlbScoreboardView =
+    let resolve (now: DateTime) (game: Game) : MlbScoreboardView * MlbStoredFrameFault option =
         let completed = MlbCompletionEvidence.IsActuallyCompleted game
+        let unavailable = { Phase = MlbScoreboardPhase.Unavailable; Board = None; Active = None; Completed = completed }
         match stored game with
-        | None -> { Phase = MlbScoreboardPhase.Unavailable; Board = None; Active = None; Completed = completed }
-        | Some frame ->
+        | Error fault -> unavailable, Some fault
+        | Ok None -> unavailable, None
+        | Ok(Some frame) ->
             let phase = phase now game frame
             { Phase = phase
               Board = Some(board frame)
@@ -367,9 +378,22 @@ module MlbScoreboard =
                 if phase = MlbScoreboardPhase.Live then
                     Some { Half = frame.Half; Count = frame.Count; Bases = frame.Bases; Matchup = frame.Matchup }
                 else None
-              Completed = completed }
+              Completed = completed },
+            None
 
-type MlbScoreboardStore(scopes: IServiceScopeFactory, timeProvider: TimeProvider) =
+type MlbScoreboardStore(scopes: IServiceScopeFactory, timeProvider: TimeProvider, logger: ILogger<MlbScoreboardStore>) =
+    let reported = ConcurrentDictionary<struct (string * Nullable<DateTime>), unit>()
+
+    let reportOnce (game: Game) fault =
+        if reported.TryAdd(struct (game.Id, game.ScoreboardUpdatedAt), ()) then
+            let fault =
+                match fault with
+                | MlbStoredFrameFault.Unreadable -> "Unreadable"
+                | MlbStoredFrameFault.Invalid rejection -> string rejection
+            logger.LogError(
+                "MLB scoreboard stored frame for {GameId} observed at {ObservedAt} is unusable: {Fault}",
+                box game.Id, box game.ScoreboardUpdatedAt, box fault)
+
     member _.AcceptAsync(report: MlbScoreboardReport, cancellationToken: CancellationToken)
         : Task<Result<MlbScoreboardFrame, MlbScoreboardRejection>> =
         task {
@@ -407,5 +431,10 @@ type MlbScoreboardStore(scopes: IServiceScopeFactory, timeProvider: TimeProvider
             let! game =
                 db.Games.AsNoTracking().Where(GameVisibilityPolicy.Visible)
                     .FirstOrDefaultAsync((fun g -> g.Id = gameId && g.Sport = "mlb"), cancellationToken)
-            return game |> ofObj |> Option.map (MlbScoreboard.resolve (timeProvider.GetUtcNow().UtcDateTime))
+            match ofObj game with
+            | None -> return None
+            | Some game ->
+                let view, fault = MlbScoreboard.resolve (timeProvider.GetUtcNow().UtcDateTime) game
+                fault |> Option.iter (reportOnce game)
+                return Some view
         }
