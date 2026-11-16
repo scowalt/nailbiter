@@ -51,7 +51,12 @@ internal sealed class ReadyBroadcaster : ISseBroadcaster
 {
     private readonly ISseBroadcaster inner = new SseBroadcaster();
     private readonly ConcurrentDictionary<string, TaskCompletionSource> subscriptions = new();
-    public Task PublishAsync(GameUpdate update, CancellationToken ct) => inner.PublishAsync(update, ct);
+    public ConcurrentQueue<GameUpdate> Published { get; } = new();
+    public Task PublishAsync(GameUpdate update, CancellationToken ct)
+    {
+        Published.Enqueue(update);
+        return inner.PublishAsync(update, ct);
+    }
     public ChannelReader<GameUpdate> Subscribe(string topic)
     {
         var reader = inner.Subscribe(topic);

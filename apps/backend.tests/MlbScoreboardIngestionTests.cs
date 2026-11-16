@@ -230,6 +230,56 @@ public sealed class MlbScoreboardIngestionTests : IClassFixture<SharedPostgreSql
     }
 
     [Fact]
+    public async Task A_rejected_in_progress_board_leaves_a_final_game_final()
+    {
+        await Observe("opening");
+        await Observe("advance");
+        await Observe("resumption");
+        provider.Corrupt("991300104", e =>
+        {
+            Restate(e, "STATUS_IN_PROGRESS", "in", "Bottom 9th", (string)e["date"]!, period: 9);
+            Side(e, "home").Remove("score");
+        });
+
+        host.Clock.Advance(TimeSpan.FromSeconds(30));
+        await Run();
+
+        Assert.Equal(new Listed("final", 2, 3, 9), (await Api())["991300104"]);
+        var view = await View("991300104");
+        Assert.Equal((MlbScoreboardPhase.Final, "Final"), (view.Phase, view.Board.Value.Detail));
+    }
+
+    [Fact]
+    public async Task A_rejected_final_board_leaves_a_live_game_in_progress()
+    {
+        await Observe("opening");
+        await Observe("advance");
+        provider.Corrupt("991300104", Corruptions["malformed-line"]);
+
+        await Observe("resumption");
+
+        Assert.Equal(new Listed("in_progress", 2, 3, 6), (await Api())["991300104"]);
+        Assert.Equal("Bottom 6th", (await View("991300104")).Board.Value.Detail);
+    }
+
+    [Fact]
+    public async Task A_game_that_becomes_postponed_publishes_no_game_update()
+    {
+        provider.Corrupt("991300105", e => Restate(e, "STATUS_IN_PROGRESS", "in", "Top 1st", (string)e["date"]!, period: 1));
+        await Observe("opening");
+        Assert.Contains(broadcaster.Published, u => u.GameId == "991300105" && u.Status == GameStatus.IN_PROGRESS);
+        provider.Corrupt("991300105", _ => { });
+        broadcaster.Published.Clear();
+
+        host.Clock.Advance(TimeSpan.FromSeconds(30));
+        await Run();
+
+        Assert.Equal("postponed", (await Api())["991300105"].Status);
+        Assert.Contains(broadcaster.Published, u => u.GameId == "991300104");
+        Assert.DoesNotContain(broadcaster.Published, u => u.GameId == "991300105");
+    }
+
+    [Fact]
     public async Task Acceptance_held_up_by_another_writer_gives_up_at_its_deadline_and_the_cycle_continues()
     {
         await Observe("opening");
