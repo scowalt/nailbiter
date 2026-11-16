@@ -106,6 +106,19 @@ To change mise:
 4. Run `tests/ci`. `test_mise_version.py` fails if a step does not have both inputs, if the steps disagree, or if a step runs on a runner that is not x64 Linux.
 5. In the pull request's `Checks` log, check that `Running mise --version` prints the new version.
 
+### CI Bun and Trivy
+
+The `release` job's `oven-sh/setup-bun` step sets `no-cache: true`. On a cache hit the action runs the restored `bun --revision` with the job's `GITHUB_TOKEN` in its environment, accepts the binary if the version string matches, and leaves it on `PATH` for `bunx wrangler deploy`. The action has no hash input, so with the cache off it downloads the release zip from GitHub over HTTPS each run.
+
+The `image` job installs Trivy itself and passes `skip-setup-trivy: true` and `cache: false` to `aquasecurity/trivy-action`. The `Install pinned Trivy` step downloads `trivy_<version>_Linux-64bit.tar.gz` from the GitHub release and checks it against the sha256 in the step before it extracts `trivy` and adds it to `PATH`. With `cache: false` the action restores neither the Trivy binary nor its vulnerability database, so Trivy downloads the database from `mirror.gcr.io` each run. It did so on cache hits too, because the restored copy was out of date. `tests/ci/test_tool_caches.py` requires these inputs and runs the install step against a matching and a tampered download.
+
+To change Trivy:
+
+1. Pick a release from `https://github.com/aquasecurity/trivy/releases` that is not a prerelease and was published at least 7 days ago.
+2. Download `trivy_<version>_Linux-64bit.tar.gz` and its `.sigstore.json` bundle. Verify it with `cosign verify-blob --bundle trivy_<version>_Linux-64bit.tar.gz.sigstore.json --certificate-identity https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v<version> --certificate-oidc-issuer https://token.actions.githubusercontent.com trivy_<version>_Linux-64bit.tar.gz`.
+3. Set the version in the URL and the tarball's sha256 in the `Install pinned Trivy` step.
+4. Run `tests/ci`. In the pull request's `Build and scan backend image` log, check that `Install pinned Trivy` prints `trivy.tar.gz: OK`.
+
 ### CI .NET SDK
 
 Every CI job that runs `dotnet` on the runner (`checks`, `backend-tests` and `listing-checker`) installs the SDK with `scripts/ci/install-dotnet-sdk.sh`, not through mise. The workflow sets `MISE_DISABLE_TOOLS` so that `jdx/mise-action` does not install the `mise-plugins/mise-dotnet-core` plugin, which would clone the plugin at its default branch and run an unpinned `dotnet-install.sh` with no hash check. Local development still uses the plugin through `.mise.toml`. The `image` job builds inside Docker from `mcr.microsoft.com/dotnet/sdk`, referenced by tag, which this script does not cover.

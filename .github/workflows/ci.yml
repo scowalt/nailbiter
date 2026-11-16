@@ -210,9 +210,13 @@ jobs:
         run: |
           sh scripts/ci/verify-checkout.sh
           sh scripts/ci/build-image.sh
+      - name: Install pinned Trivy
+        run: sh scripts/ci/install-trivy.sh
       - name: Scan the exact image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
         with:
+          skip-setup-trivy: true
+          cache: false
           image-ref: nailbiter-backend:scan
           format: table
           severity: CRITICAL,HIGH
@@ -263,6 +267,7 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version: 1.4.2
+          no-cache: true
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
           name: backend-${{ github.sha }}
