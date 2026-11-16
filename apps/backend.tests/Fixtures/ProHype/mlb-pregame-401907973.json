@@ -25,7 +25,9 @@
             "type": {
               "name": "STATUS_SCHEDULED",
               "state": "pre",
-              "completed": false
+              "completed": false,
+              "detail": "10/1 - 8:00 PM EDT",
+              "shortDetail": "10/1 - 8:00 PM EDT"
             },
             "period": 1,
             "displayClock": "0:00"
@@ -38,7 +40,9 @@
                 "type": {
                   "name": "STATUS_SCHEDULED",
                   "state": "pre",
-                  "completed": false
+                  "completed": false,
+                  "detail": "10/1 - 8:00 PM EDT",
+                  "shortDetail": "10/1 - 8:00 PM EDT"
                 },
                 "period": 1,
                 "displayClock": "0:00"
@@ -288,7 +292,9 @@
               "type": {
                 "name": "STATUS_SCHEDULED",
                 "state": "pre",
-                "completed": false
+                "completed": false,
+                "detail": "10/1 - 8:00 PM EDT",
+                "shortDetail": "10/1 - 8:00 PM EDT"
               },
               "period": 1,
               "displayClock": "0:00"
@@ -301,7 +307,9 @@
                   "type": {
                     "name": "STATUS_SCHEDULED",
                     "state": "pre",
-                    "completed": false
+                    "completed": false,
+                    "detail": "10/1 - 8:00 PM EDT",
+                    "shortDetail": "10/1 - 8:00 PM EDT"
                   },
                   "period": 1,
                   "displayClock": "0:00"
@@ -550,7 +558,9 @@
               "type": {
                 "name": "STATUS_SCHEDULED",
                 "state": "pre",
-                "completed": false
+                "completed": false,
+                "detail": "10/1 - 8:00 PM EDT",
+                "shortDetail": "10/1 - 8:00 PM EDT"
               },
               "period": 1,
               "displayClock": "0:00"
@@ -563,7 +573,9 @@
                   "type": {
                     "name": "STATUS_SCHEDULED",
                     "state": "pre",
-                    "completed": false
+                    "completed": false,
+                    "detail": "10/1 - 8:00 PM EDT",
+                    "shortDetail": "10/1 - 8:00 PM EDT"
                   },
                   "period": 1,
                   "displayClock": "0:00"
