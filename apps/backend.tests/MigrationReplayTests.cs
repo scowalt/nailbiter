@@ -91,6 +91,22 @@ public sealed class MigrationReplayTests
         await db.SaveChangesAsync();
     }
 
+    [Fact]
+    public async Task Replaying_over_a_games_status_already_at_30_passes_when_a_view_depends_on_it()
+    {
+        await using var container = await StartAsync();
+        foreach (var deploy in new[] { 1, 2 })
+            await DeployAsync(container, deploy, Migrations);
+        await using var db = Context(container);
+        Assert.Equal("character varying(30)", await StatusTypeAsync(db));
+        await db.Database.ExecuteSqlRawAsync("CREATE VIEW status_reader AS SELECT id, status FROM games");
+
+        await DeployAsync(container, 3, Migrations);
+
+        Assert.Equal("character varying(30)", await StatusTypeAsync(db));
+        Assert.NotNull(await ScalarAsync(db, "SELECT to_regclass('status_reader')::text AS \"Value\""));
+    }
+
     [Theory]
     [InlineData("varchar(40)", "character varying(40)")]
     [InlineData("text", "text")]
