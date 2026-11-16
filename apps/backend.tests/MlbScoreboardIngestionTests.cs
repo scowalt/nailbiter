@@ -317,6 +317,26 @@ public sealed class MlbScoreboardIngestionTests : IClassFixture<SharedPostgreSql
     }
 
     [Fact]
+    public async Task A_withdrawn_game_forgets_the_frames_it_was_warned_about()
+    {
+        await Observe("opening");
+        provider.Corrupt("991300106", Corruptions["missing-score"]);
+        host.Clock.Advance(TimeSpan.FromSeconds(30));
+        await Run();
+        provider.Withdraw("991300106");
+        host.Clock.Advance(TimeSpan.FromSeconds(30));
+        await Run();
+        Assert.Single(Warnings("991300106"));
+
+        provider.Restore("991300106");
+        host.Clock.Advance(TimeSpan.FromSeconds(30));
+        await Run();
+
+        Assert.Equal(2, Warnings("991300106").Count());
+        Assert.Equal(new Listed("canceled", null, null, null), (await Api())["991300106"]);
+    }
+
+    [Fact]
     public async Task A_postponed_event_returned_as_scheduled_or_in_progress_leaves_postponed()
     {
         await Observe("opening");
