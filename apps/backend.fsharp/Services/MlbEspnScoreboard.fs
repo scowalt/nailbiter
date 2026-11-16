@@ -196,11 +196,11 @@ module MlbEspnScoreboard =
 
 type MlbScoreboardIngestion(store: MlbScoreboardStore, logger: ILogger<MlbScoreboardIngestion>) =
     static let deadline = TimeSpan.FromSeconds 5.0
-    let warned = ConcurrentDictionary<struct (string * string * string), unit>()
+    let warned = ConcurrentDictionary<string, ConcurrentDictionary<struct (string * string), unit>>()
 
     let warnOnce (gameId: string) (frame: string) (fault: string) =
         let digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes frame))
-        if warned.TryAdd(struct (gameId, digest, fault), ()) then
+        if warned.GetOrAdd(gameId, fun _ -> ConcurrentDictionary()).TryAdd(struct (digest, fault), ()) then
             logger.LogWarning("Rejected the ESPN MLB scoreboard frame for {GameId}: {Fault}", gameId, fault)
 
     static member Deadline = deadline
@@ -216,8 +216,11 @@ type MlbScoreboardIngestion(store: MlbScoreboardStore, logger: ILogger<MlbScoreb
                 use limit = CancellationTokenSource.CreateLinkedTokenSource(ct)
                 limit.CancelAfter deadline
                 try
-                    match! store.AcceptAsync(report, MlbEspnScoreboard.gameStatus null event, limit.Token) with
-                    | Ok _ -> return true
+                    let status = MlbEspnScoreboard.gameStatus null event
+                    match! store.AcceptAsync(report, status, limit.Token) with
+                    | Ok _ ->
+                        if status = "final" || status = "canceled" then warned.TryRemove(gameId) |> ignore
+                        return true
                     | Error rejection ->
                         let frame = JsonSerializer.Serialize({ report with ObservedAt = Nullable(); SourceRevisionAt = Nullable() })
                         warnOnce gameId frame (string rejection)

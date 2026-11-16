@@ -113,7 +113,7 @@ Each acceptance has a deadline of `MlbScoreboardIngestion.Deadline` (5 seconds),
 ### Failures
 
 - A failed or unreadable scoreboard response writes nothing, so every game keeps its last accepted score, line score, detail and observation time. The existing ESPN warnings report the failure.
-- A rejected event, from `report` or from the store, keeps the stored observation. It is logged at Warning as `Rejected the ESPN MLB scoreboard frame for {GameId}: {Fault}`, once per game, frame content and fault for the life of the process. A Warning sends no Sentry event.
+- A rejected event, from `report` or from the store, keeps the stored observation. It is logged at Warning as `Rejected the ESPN MLB scoreboard frame for {GameId}: {Fault}`, once per game, frame content and fault. The record of warned frames for a game is dropped when the store accepts the game's final or canceled frame, so it holds only games that have not ended. A live game whose rejected frame changes every cycle logs one Warning per cycle. A Warning sends no Sentry event.
 - An odds-only change does not touch the stored observation, so its observation time and phase do not change. An unchanged frame from a later cycle is accepted with the new observation time, because it is a new observation.
 
 Sentry events per hour, inferred from the 30-second live cycle:
