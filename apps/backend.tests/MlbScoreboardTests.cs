@@ -427,12 +427,9 @@ public sealed class MlbScoreboardTests(SharedPostgreSql server) : IClassFixture<
         basketball.MlbScoreboardJson = "{}";
         await host.SeedAsync(basketball, []);
 
-        using (var scope = host.Services.CreateScope())
-        {
-            var data = scope.ServiceProvider.GetRequiredService<GameDataService>();
-            Assert.Null(await data.GetMlbScoreboardAsync("991300199", CancellationToken.None));
-            Assert.Null(await data.GetMlbScoreboardAsync("991300190", CancellationToken.None));
-        }
+        var store = host.Services.GetRequiredService<MlbScoreboardStore>();
+        Assert.Null(await store.ReadAsync("991300199", CancellationToken.None));
+        Assert.Null(await store.ReadAsync("991300190", CancellationToken.None));
         Assert.Equal(MlbScoreboardPhase.Unavailable, (await ReadAsync("991300104")).Phase);
 
         At("2027-07-10T23:30:00Z");
@@ -562,8 +559,7 @@ public sealed class MlbScoreboardTests(SharedPostgreSql server) : IClassFixture<
 
     private async Task<MlbScoreboardView> ReadAsync(string gameId)
     {
-        using var scope = host.Services.CreateScope();
-        var view = await scope.ServiceProvider.GetRequiredService<GameDataService>().GetMlbScoreboardAsync(gameId, CancellationToken.None);
+        var view = await host.Services.GetRequiredService<MlbScoreboardStore>().ReadAsync(gameId, CancellationToken.None);
         Assert.NotNull(view);
         return view.Value;
     }

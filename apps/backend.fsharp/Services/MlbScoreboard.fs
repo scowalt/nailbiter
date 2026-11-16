@@ -1,6 +1,7 @@
 namespace backend.Services
 
 open System
+open System.Linq
 open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
@@ -397,4 +398,14 @@ type MlbScoreboardStore(scopes: IServiceScopeFactory, timeProvider: TimeProvider
                     do! transaction.CommitAsync(cancellationToken)
                 | Error _ -> ()
                 return accepted
+        }
+
+    member _.ReadAsync(gameId: string, cancellationToken: CancellationToken) : Task<MlbScoreboardView option> =
+        task {
+            use scope = scopes.CreateScope()
+            let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
+            let! game =
+                db.Games.AsNoTracking().Where(GameVisibilityPolicy.Visible)
+                    .FirstOrDefaultAsync((fun g -> g.Id = gameId && g.Sport = "mlb"), cancellationToken)
+            return game |> ofObj |> Option.map (MlbScoreboard.resolve (timeProvider.GetUtcNow().UtcDateTime))
         }

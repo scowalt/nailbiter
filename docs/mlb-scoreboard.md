@@ -73,7 +73,7 @@ A report with the same revision as the high-water mark and a newer `observedAt` 
 
 ## Reading a game
 
-Call `GameDataService.GetMlbScoreboardAsync(gameId, cancellationToken)`. It returns `None` for a game that is not a visible MLB game. Otherwise it returns an `MlbScoreboardView`:
+Call `MlbScoreboardStore.ReadAsync(gameId, cancellationToken)`. It reads the game untracked in its own scope and returns `None` for a game that is not a visible MLB game. Otherwise it returns an `MlbScoreboardView`:
 
 - `Phase`: one of the phases below.
 - `Board`: the scores, hits, errors, line score, detail, inning and observation time, or `None` when the phase is `Unavailable`.
