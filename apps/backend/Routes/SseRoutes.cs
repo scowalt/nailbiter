@@ -41,7 +41,7 @@ public static class SseRoutes
         IDatastarService datastar,
         CancellationToken ct)
     {
-        await StreamTopicWithFragments(broadcaster, "live", isDetailPage: false, datastar, ct);
+        await StreamTopicWithFragments(broadcaster, "live", datastar, (update, _) => Task.FromResult(RenderFragments(update, isDetailPage: false, isHomePage: true)), ct);
     }
 
     private static async Task HandleSportStream(
@@ -52,7 +52,7 @@ public static class SseRoutes
     {
         var sportEnum = SportExtensions.FromDbValue(sport);
         var normalizedSport = sportEnum.HasValue ? sportEnum.Value.ToDbValue() : sport.ToLowerInvariant();
-        await StreamTopicWithFragments(broadcaster, $"live:{normalizedSport}", isDetailPage: false, datastar, ct);
+        await StreamTopicWithFragments(broadcaster, $"live:{normalizedSport}", datastar, (update, _) => Task.FromResult(RenderFragments(update, isDetailPage: false, isHomePage: false)), ct);
     }
 
     private static async Task HandleGameStream(
@@ -61,21 +61,28 @@ public static class SseRoutes
         GameDataService games,
         ISseBroadcaster broadcaster,
         IDatastarService datastar,
+        MlbScoreboardStore scoreboards,
         CancellationToken ct)
     {
-        if (FSharpOption<backend.Models.Game>.get_IsNone(await games.GetGameAsync(id, ct)))
+        var game = await games.GetGameAsync(id, ct);
+        if (FSharpOption<backend.Models.Game>.get_IsNone(game))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
-        await StreamTopicWithFragments(broadcaster, $"game:{id}", isDetailPage: true, datastar, ct);
+        Func<GameUpdate, CancellationToken, Task<string>> render = game.Value.Sport == "mlb"
+            ? async (update, token) => await scoreboards.ReadAsync(id, token) is { } view
+                ? SseFragmentRenderer.renderMlbDetailFragments(update, view.Value)
+                : SseFragmentRenderer.renderDetailFragments(update)
+            : (update, _) => Task.FromResult(RenderFragments(update, isDetailPage: true, isHomePage: false));
+        await StreamTopicWithFragments(broadcaster, $"game:{id}", datastar, render, ct);
     }
 
     private static async Task StreamTopicWithFragments(
         ISseBroadcaster broadcaster,
         string topic,
-        bool isDetailPage,
         IDatastarService datastar,
+        Func<GameUpdate, CancellationToken, Task<string>> render,
         CancellationToken ct)
     {
         await datastar.StartServerEventStreamAsync(cancellationToken: ct);
@@ -86,7 +93,7 @@ public static class SseRoutes
         {
             await foreach (var update in reader.ReadAllAsync(ct))
             {
-                var html = RenderFragments(update, isDetailPage, topic == "live");
+                var html = await render(update, ct);
                 if (!string.IsNullOrEmpty(html))
                     await datastar.PatchElementsAsync(html, cancellationToken: ct);
             }

@@ -311,7 +311,7 @@ public static class PageRoutes
         return Results.Content("<!DOCTYPE html>" + html, "text/html");
     }
 
-    private static async Task<IResult> HandleGameDetailPage(string id, GameDataService svc, HypeScoreService hypeSvc, IProHypeLifecycle lifecycle, HighlightsApplicationService highlightsSvc, TimeProvider time, CancellationToken ct)
+    private static async Task<IResult> HandleGameDetailPage(string id, GameDataService svc, HypeScoreService hypeSvc, IProHypeLifecycle lifecycle, HighlightsApplicationService highlightsSvc, MlbScoreboardStore scoreboards, TimeProvider time, CancellationToken ct)
     {
         var gameOpt = await svc.GetGameAsync(id, ct);
         if (FSharpOption<Game>.get_IsNone(gameOpt)) return Results.NotFound();
@@ -358,7 +358,11 @@ public static class PageRoutes
         }
 
         var highlights = await highlightsSvc.GetDetailAsync(id, ct);
-        var content = GameDetailRenderer.RenderWithHighlightsAtTime(time.GetUtcNow().UtcDateTime, game, snapshots, pregameOddsOpt, hypeComponents, hypeScore, homeTeamRank, awayTeamRank, highlights);
+        var now = time.GetUtcNow().UtcDateTime;
+        var scoreboard = game.Sport == "mlb" ? await scoreboards.ReadAsync(id, ct) : null;
+        var content = scoreboard is { } view
+            ? GameDetailRenderer.RenderMlbWithHighlightsAtTime(now, game, snapshots, pregameOddsOpt, hypeComponents, hypeScore, homeTeamRank, awayTeamRank, highlights, view.Value)
+            : GameDetailRenderer.RenderWithHighlightsAtTime(now, game, snapshots, pregameOddsOpt, hypeComponents, hypeScore, homeTeamRank, awayTeamRank, highlights);
         var title = $"{game.AwayTeamAbbreviation} @ {game.HomeTeamAbbreviation} | Nailbiter";
 
         var html = Layout.renderPage(

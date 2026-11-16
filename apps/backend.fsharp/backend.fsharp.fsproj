@@ -22,6 +22,7 @@
     <Compile Include="Services/PlayoffRatingPolicy.fs" />
     <Compile Include="Rendering/PlayoffBracketRenderer.fs" />
     <Compile Include="Rendering/ProbabilityBar.fs" />
+    <Compile Include="Rendering/MlbScoreboardRenderer.fs" />
     <Compile Include="Rendering/SseFragmentRenderer.fs" />
     <Compile Include="Rendering/WorldCupRenderer.fs" />
     <Compile Include="Rendering/HomePageRenderer.fs" />
