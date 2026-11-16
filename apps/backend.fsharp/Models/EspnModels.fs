@@ -232,7 +232,8 @@ type EspnScoreboardResponse =
       [<JsonPropertyName("week")>] Week: EspnWeek
       [<JsonPropertyName("season")>] Season: EspnSeason
       [<JsonPropertyName("leagues")>] Leagues: ResizeArray<EspnLeague>
-      [<JsonIgnore>] RawJson: JsonElement }
+      [<JsonIgnore>] RawJson: JsonElement
+      [<JsonIgnore>] ResponseDate: Nullable<DateTimeOffset> }
 
 module EspnSeasonMetadata =
     let seasonType (eventSeason: EspnEventSeason) (scoreboard: EspnScoreboardResponse) =

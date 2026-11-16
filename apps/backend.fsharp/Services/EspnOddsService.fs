@@ -127,12 +127,14 @@ type EspnOddsService
 
             let readScoreboard () =
                 task {
-                    let! body = httpClient.GetStringAsync(url, ct)
-                    return struct (body, JsonDocument.Parse(body))
+                    use! reply = httpClient.GetAsync(url, ct)
+                    reply.EnsureSuccessStatusCode() |> ignore
+                    let! body = reply.Content.ReadAsStringAsync(ct)
+                    return struct (body, reply.Headers.Date, JsonDocument.Parse(body))
                 }
 
             try
-                let! struct (response, parsed) =
+                let! struct (response, responseDate, parsed) =
                     task {
                         try return! readScoreboard ()
                         with :? JsonException as ex ->
@@ -162,10 +164,11 @@ type EspnOddsService
                           Week = readField "week" (fun json -> JsonSerializer.Deserialize<EspnWeek>(json: string))
                           Season = readField "season" (fun json -> JsonSerializer.Deserialize<EspnSeason>(json: string))
                           Leagues = readField "leagues" (fun json -> JsonSerializer.Deserialize<ResizeArray<EspnLeague>>(json: string))
-                          RawJson = root.Clone() }
+                          RawJson = root.Clone()
+                          ResponseDate = Nullable() }
                 if isNull (box scoreboard) || isNull scoreboard.Events then
                     raise (JsonException("ESPN scoreboard has no events array"))
-                return { scoreboard with RawJson = document.RootElement.Clone() }
+                return { scoreboard with RawJson = document.RootElement.Clone(); ResponseDate = responseDate }
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | :? HttpRequestException as ex when not (ProviderFailure.Is ex) ->
