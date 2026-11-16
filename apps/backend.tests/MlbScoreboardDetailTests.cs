@@ -233,7 +233,7 @@ public sealed class MlbScoreboardDetailTests : IClassFixture<SharedPostgreSql>, 
     [InlineData("991300102", null, "final", "Final · 11 innings", "Final", "status-final", 11)]
     [InlineData("991300108", "retained-while-delayed", "in_progress", "Delayed · 6th inning", "Delayed", "status-scheduled", 6)]
     [InlineData("991300109", "retained-while-suspended", "in_progress", "Suspended · 7th inning", "Suspended", "status-scheduled", 7)]
-    [InlineData("991300105", null, "scheduled", "Postponed", "Postponed", "status-scheduled", 0)]
+    [InlineData("991300105", null, "postponed", "Postponed", "Postponed", "status-scheduled", 0)]
     [InlineData("991300107", null, "canceled", "Canceled", "Canceled", "status-final", 0)]
     public async Task Interrupted_and_ended_games_show_a_distinct_clock_label_a_matching_badge_and_no_situation_facts(
         string gameId, string? frameId, string status, string clock, string badge, string badgeClass, int innings)
@@ -262,6 +262,28 @@ public sealed class MlbScoreboardDetailTests : IClassFixture<SharedPostgreSql>, 
             Assert.Null(page.QuerySelector("#mlb-line-score"));
         else
             AssertLineScoreShell(page, innings);
+    }
+
+    [Theory]
+    [InlineData("991300105", true, "postponed", "Postponed")]
+    [InlineData("991300105", false, "postponed", "Postponed")]
+    [InlineData("991300107", true, "canceled", "Canceled")]
+    public async Task A_postponed_or_canceled_game_shows_no_current_quote_despite_a_fresh_snapshot(
+        string gameId, bool withFrame, string status, string badge)
+    {
+        await host.SeedAsync(MlbGame(gameId, status), [Odds(gameId, "2027-07-10T23:29:30Z", 0.4)]);
+        At("2027-07-10T23:30:00Z");
+        if (withFrame)
+            Accepted(await AcceptAsync(Report(gameId, "opening", Instant("2027-07-10T23:30:00Z"))));
+        At("2027-07-10T23:30:10Z");
+
+        using var page = await PageAsync(gameId);
+
+        Assert.Equal(badge, page.QuerySelector("#detail-status")!.TextContent.Trim());
+        var probbar = page.QuerySelector("#detail-probbar");
+        Assert.Null(probbar?.QuerySelector(".detail-probability"));
+        Assert.DoesNotContain("%", probbar?.TextContent ?? "");
+        Assert.Null(page.QuerySelector(".situation-facts"));
     }
 
     [Fact]
