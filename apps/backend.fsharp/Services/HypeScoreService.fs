@@ -189,6 +189,14 @@ type HypeScoreService
                     |> String.concat " "
         c
 
+    static let collegeEvaluation (game: Game) (rows: seq<TeamRating>) (pregame: PregameOdds) now =
+        let season = PlayoffRatingPolicy.gameSeason game
+        let asOf = min now game.ScheduledStart
+        let qualification team =
+            rows |> Seq.filter (fun r -> r.Season = season && r.TeamAbbreviation = team)
+            |> PlayoffRatingPolicy.playoffProbability "cfb" season asOf |> Option.toNullable
+        collegeComponents game (qualification game.HomeTeamAbbreviation) (qualification game.AwayTeamAbbreviation) pregame now
+
     static let proEvaluation (game: Game) (ratings: seq<TeamRating>) (pregame: PregameOdds) completed now (options: PlayoffRatingsOptions) (selectionCache: PlayoffRatingPolicy.PlayoffSelectionCache) (logger: ILogger<HypeScoreService>) =
         let rows = ratings |> Seq.toArray
         let qualification team =
@@ -333,14 +341,10 @@ type HypeScoreService
             elif game.Sport = "cfb" then
                 let season = PlayoffRatingPolicy.gameSeason game
                 let now = timeProvider.GetUtcNow().UtcDateTime
-                let asOf = min now game.ScheduledStart
                 let! rows = db.TeamRatings.Where(fun r -> r.Sport = "cfb" && r.Season = season
                                                         && (r.Source = "kalshi" || r.Source = PlayoffRatingPolicy.collegeNoMarketSource)).ToListAsync(ct)
-                let qualification team =
-                    rows |> Seq.filter (fun r -> r.TeamAbbreviation = team)
-                    |> PlayoffRatingPolicy.playoffProbability "cfb" season asOf |> Option.toNullable
                 let! pregame = db.PregameOdds.FirstOrDefaultAsync((fun o -> o.GameId = game.Id), ct)
-                return collegeComponents game (qualification game.HomeTeamAbbreviation) (qualification game.AwayTeamAbbreviation) pregame now
+                return collegeEvaluation game rows pregame now
             else
 
             let isNfl = game.Sport = "nfl"
