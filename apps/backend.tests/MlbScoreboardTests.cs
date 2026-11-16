@@ -64,6 +64,21 @@ public sealed class MlbScoreboardTests : IClassFixture<SharedPostgreSql>, IAsync
         Assert.Equal(FSharpOption<int>.Some(1), board.Home.Errors);
     }
 
+    [Theory]
+    [InlineData("final")]
+    [InlineData("scheduled")]
+    [InlineData("postponed")]
+    public async Task A_frame_is_rejected_with_a_status_its_state_contradicts_and_writes_nothing(string status)
+    {
+        await host.SeedAsync(MlbGame("991300104"), []);
+        At("2027-07-10T23:50:30Z");
+
+        Rejected(MlbScoreboardRejection.NewImpossible("status"), await AcceptAsync(Frame("zero-count-empty-bases", "advance"), status));
+
+        var row = await RowAsync("991300104");
+        Assert.Equal(("in_progress", (DateTime?)null, (string?)null), (row.Status, row.ScoreboardUpdatedAt, row.Json));
+    }
+
     [Fact]
     public async Task Extra_innings_keep_every_inning_in_the_line_score()
     {
@@ -582,8 +597,13 @@ public sealed class MlbScoreboardTests : IClassFixture<SharedPostgreSql>, IAsync
 
     private async Task<FSharpResult<MlbScoreboardFrame, MlbScoreboardRejection>> AcceptAsync(JsonObject report)
     {
-        return await host.Services.GetRequiredService<MlbScoreboardStore>().AcceptAsync(Parse(report), CancellationToken.None);
+        return await AcceptAsync(report, StatusFor(report));
     }
+
+    internal static string StatusFor(JsonObject report) => (string)report["state"]! is "delayed" or "suspended" ? "in_progress" : (string)report["state"]!;
+
+    private async Task<FSharpResult<MlbScoreboardFrame, MlbScoreboardRejection>> AcceptAsync(JsonObject report, string status) =>
+        await host.Services.GetRequiredService<MlbScoreboardStore>().AcceptAsync(Parse(report), status, CancellationToken.None);
 
     private static MlbScoreboardReport Parse(JsonObject report) =>
         JsonSerializer.Deserialize<MlbScoreboardReport>(report.ToJsonString(), JsonSerializerOptions.Web)!;

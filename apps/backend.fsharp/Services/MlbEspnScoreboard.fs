@@ -216,7 +216,7 @@ type MlbScoreboardIngestion(store: MlbScoreboardStore, logger: ILogger<MlbScoreb
                 use limit = CancellationTokenSource.CreateLinkedTokenSource(ct)
                 limit.CancelAfter deadline
                 try
-                    match! store.AcceptAsync(report, limit.Token) with
+                    match! store.AcceptAsync(report, MlbEspnScoreboard.gameStatus null event, limit.Token) with
                     | Ok _ -> return true
                     | Error rejection ->
                         let frame = JsonSerializer.Serialize({ report with ObservedAt = Nullable(); SourceRevisionAt = Nullable() })

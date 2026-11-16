@@ -322,7 +322,18 @@ module MlbScoreboard =
             return frame
         }
 
-    let internal write (game: Game) (frame: MlbScoreboardFrame) =
+    let admits (frame: MlbScoreboardFrame) (status: string) =
+        match frame.State, status with
+        | MlbGameState.Scheduled, "scheduled"
+        | MlbGameState.InProgress, "in_progress"
+        | (MlbGameState.Delayed | MlbGameState.Suspended), ("scheduled" | "in_progress")
+        | MlbGameState.Postponed, "postponed"
+        | MlbGameState.Canceled, "canceled"
+        | MlbGameState.Final, "final" -> true
+        | _ -> false
+
+    let internal write (game: Game) (frame: MlbScoreboardFrame) (status: string) =
+        game.Status <- status
         game.MlbScoreboardJson <- JsonSerializer.Serialize(frame.Report, JsonSerializerOptions.Web)
         game.ScoreboardSourceRevisionAt <-
             match [ frame.SourceRevisionAt; ofNullable game.ScoreboardSourceRevisionAt ] |> List.choose id with
@@ -394,7 +405,7 @@ type MlbScoreboardStore(scopes: IServiceScopeFactory, timeProvider: TimeProvider
                 "MLB scoreboard stored frame for {GameId} observed at {ObservedAt} is unusable: {Fault}",
                 box game.Id, box (ofNullable game.ScoreboardUpdatedAt |> Option.map _.ToString("O") |> Option.toObj), box fault)
 
-    member _.AcceptAsync(report: MlbScoreboardReport, cancellationToken: CancellationToken)
+    member _.AcceptAsync(report: MlbScoreboardReport, status: string, cancellationToken: CancellationToken)
         : Task<Result<MlbScoreboardFrame, MlbScoreboardRejection>> =
         task {
             let gameId = report |> ofObj |> Option.map _.GameId |> Option.defaultValue null
@@ -414,10 +425,13 @@ type MlbScoreboardStore(scopes: IServiceScopeFactory, timeProvider: TimeProvider
             match ofObj game with
             | None -> return Error MlbScoreboardRejection.WrongGame
             | Some game ->
-                let accepted = MlbScoreboard.accept (timeProvider.GetUtcNow().UtcDateTime) game report
+                let accepted =
+                    MlbScoreboard.accept (timeProvider.GetUtcNow().UtcDateTime) game report
+                    |> Result.bind (fun frame ->
+                        if MlbScoreboard.admits frame status then Ok frame else Error(MlbScoreboardRejection.Impossible "status"))
                 match accepted with
                 | Ok frame ->
-                    MlbScoreboard.write game frame
+                    MlbScoreboard.write game frame status
                     let! _ = db.SaveChangesAsync(cancellationToken)
                     do! transaction.CommitAsync(cancellationToken)
                 | Error _ -> ()

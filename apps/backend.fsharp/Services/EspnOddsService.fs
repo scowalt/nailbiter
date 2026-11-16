@@ -380,7 +380,7 @@ type EspnOddsService
 
                     db.Games.Add(newGame) |> ignore
                 else
-                    game.Status <- statusFor game.Status
+                    if sportLower <> "mlb" then game.Status <- statusFor game.Status
                     game.IsOvertime <- isWorldCupOvertime
 
                     if sportLower <> "mlb" then
@@ -665,10 +665,6 @@ type EspnOddsService
 
             let! rejectedSeriesIds = PlayoffSeriesCollector.SaveAsync(db, seriesObservations, suppliedSeriesIds, ct)
             publishGameIds.ExceptWith(rejectedSeriesIds)
-            for struct (evidence, allowOrdinaryDiscovery) in completionObservations do
-                if not (rejectedSeriesIds.Contains(evidence.EventId)) then
-                    let! _ = evidence.RecordAsync(db, allowOrdinaryDiscovery, ct)
-                    ()
             match mlbIngestion with
             | None -> ()
             | Some mlbIngestion ->
@@ -676,6 +672,10 @@ type EspnOddsService
                     if not (rejectedSeriesIds.Contains(gameId)) then
                         let! _ = mlbIngestion.AcceptAsync(gameId, rawEvent, now, scoreboard.ResponseDate, ct)
                         ()
+            for struct (evidence, allowOrdinaryDiscovery) in completionObservations do
+                if not (rejectedSeriesIds.Contains(evidence.EventId)) then
+                    let! _ = evidence.RecordAsync(db, allowOrdinaryDiscovery, ct)
+                    ()
             if sportLower = "mlb" then
                 for gameId in Seq.append publishGameIds (snapshots |> Seq.map _.GameId) |> Seq.distinct |> Seq.toList do
                     let! game = db.Games.FindAsync([| gameId :> obj |], ct)

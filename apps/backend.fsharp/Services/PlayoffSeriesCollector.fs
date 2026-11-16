@@ -154,13 +154,14 @@ module private PlayoffSeriesEvidence =
             | true, value -> Nullable value
             | _ -> Nullable()
         let homeScore, awayScore = if game.Sport = "mlb" then score home, score away else game.HomeScore, game.AwayScore
-        if snapshot.IsUsableFor(game, game.Status, homeScore, awayScore) then snapshot else null
+        let status = if game.Sport = "mlb" then MlbEspnScoreboard.gameStatus game.Status item else game.Status
+        if snapshot.IsUsableFor(game, status, homeScore, awayScore) then snapshot else null
 
 module private PlayoffSeriesPersistence =
     let refreshFields (sport: string) =
         [| "Sport"; "HomeTeam"; "AwayTeam"; "HomeTeamAbbreviation"; "AwayTeamAbbreviation"; "HomeTeamId"; "AwayTeamId"
            "ScheduledStart"; "Status"; "IsOvertime"; "HomeScore"; "AwayScore"; "SeasonYear"; "SeasonType"; "WeekNumber"; "WeekLabel" |]
-        |> Array.filter (fun name -> sport <> "mlb" || (name <> "HomeScore" && name <> "AwayScore"))
+        |> Array.filter (fun name -> sport <> "mlb" || (name <> "Status" && name <> "HomeScore" && name <> "AwayScore"))
 
 [<AbstractClass; Sealed>]
 type PlayoffSeriesCollector private () =

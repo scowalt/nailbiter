@@ -13,11 +13,11 @@ Migration `045_MlbScoreboard.sql` adds two nullable columns to `games`. The migr
 | `mlb_scoreboard_json` | The last accepted `MlbScoreboardReport`, in camelCase JSON |
 | `scoreboard_source_revision_at` | The source revision high-water mark |
 
-An accepted observation also sets `home_score`, `away_score`, `status_detail`, `period` (the inning) and `scoreboard_updated_at` (the observation time). It never changes `status`, odds, `market_observed_at`, completion evidence or highlights columns. Scoreboard freshness and odds freshness are independent: a new odds snapshot does not make a scoreboard live again, and a scoreboard does not renew odds.
+An accepted observation also sets `status`, `home_score`, `away_score`, `status_detail`, `period` (the inning) and `scoreboard_updated_at` (the observation time), in the same save. It never changes odds, `market_observed_at`, completion evidence or highlights columns. Scoreboard freshness and odds freshness are independent: a new odds snapshot does not make a scoreboard live again, and a scoreboard does not renew odds.
 
 ## Writing an observation
 
-Inject the singleton `MlbScoreboardStore` and call `AcceptAsync(report, cancellationToken)`. It returns `Ok frame` or `Error rejection`. A rejection writes nothing.
+Inject the singleton `MlbScoreboardStore` and call `AcceptAsync(report, status, cancellationToken)`, where `status` is the `games.status` the report sets. It returns `Ok frame` or `Error rejection`. A rejection writes nothing, including the status.
 
 The store creates its own service scope and `ExcitementDbContext` for each call, and it does not accept a caller's context. A caller's tracked `Game` therefore cannot stand in for the locked row, and the caller's pending changes are neither saved nor discarded by an accepted report.
 
@@ -40,6 +40,7 @@ The same validation runs when a report is accepted and each time a stored report
 | `detail` is not blank | `MissingDetail` |
 | `sourceRevisionAt` is not after `observedAt` | `RevisionAfterObservation` |
 | Values are possible in baseball | `Impossible field` |
+| On acceptance, `status` agrees with `state` (see [Status](#status)) | `Impossible "status"` |
 
 The `Impossible` checks are as follows:
 
@@ -81,11 +82,11 @@ The ESPN odds cycle for MLB (`EspnOddsService.ScrapeAndStoreOddsAsync "mlb"`) al
 - Hits, errors and inning runs that are present must be whole numbers, and inning entries must be in period order. Otherwise the whole event is rejected.
 - The report never includes the count, bases or matchup. The general scoreboard does not supply them reliably, so ingestion does not guess the live situation.
 
-For MLB, the cycle writes `home_score`, `away_score`, `period` and `status_detail` only through the store. It still writes `status`, teams, schedule and odds as before. Odds snapshots made in the same cycle copy the accepted score and inning. Other sports are unchanged.
+For MLB, the cycle writes `status`, `home_score`, `away_score`, `period` and `status_detail` of an existing game only through the store. A game the cycle inserts gets its first status from the table below. The cycle still writes teams, schedule and odds as before, and still cancels a scheduled game that has left the board. Odds snapshots made in the same cycle copy the accepted score and inning. Other sports are unchanged.
 
 ### Status
 
-The cycle maps ESPN's status to the coarse `games.status` and to the report's `state`.
+Ingestion maps ESPN's status to the coarse `games.status` and to the report's `state`, and the store writes both in one transaction. A status therefore never changes without its frame: a rejected or late frame leaves both as they were, so a page cannot show a live status over a final frame or the reverse.
 
 | ESPN status | `games.status` | Report `state` |
 | --- | --- | --- |
@@ -98,14 +99,14 @@ The cycle maps ESPN's status to the coarse `games.status` and to the report's `s
 | `STATUS_FINAL`, `post`, `completed: true`, no interruption text | `final` | `final` |
 
 - A delayed or suspended game keeps `in_progress`, so it stays in the live lists. The report state and `status_detail` tell it apart from play.
-- A postponed game is stored as `postponed`, not `final` or `canceled`. A postponement is not a result, and the makeup can come back as the same ESPN event. When ESPN later reports that event as scheduled or in progress, the cycle moves the game out of `postponed`. `postponed` is outside the GraphQL `GameStatus` enum, so the cycle publishes no live update for it. Pages label it Postponed and show no score for it.
-- `final` needs affirmative evidence. The description, detail and short detail must not mention a postponement, suspension, cancellation, delay or abandonment. A final status with such text keeps the game's existing status and the report is rejected.
-- The competition and event status must agree on name, state and `completed`, and each must have a `type`. Otherwise the cycle keeps the existing status (`unknown` for a new game) and rejects the report. One status level alone is enough.
-- Any other ESPN status maps `pre` to `scheduled` and `in` to `in_progress`, keeps the existing status otherwise, and its report is rejected.
+- A postponed game is stored as `postponed`, not `final` or `canceled`. A postponement is not a result, and the makeup can come back as the same ESPN event. When ESPN later reports that event as scheduled or in progress, the accepted frame moves the game out of `postponed`. `postponed` is outside the GraphQL `GameStatus` enum, so the cycle publishes no live update for it. Pages label it Postponed and show no score for it.
+- `final` needs affirmative evidence. The description, detail and short detail must not mention a postponement, suspension, cancellation, delay or abandonment. A final status with such text is rejected and keeps the game's existing status.
+- The competition and event status must agree on name, state and `completed`, and each must have a `type`. Otherwise the report is rejected and the game keeps its existing status (`unknown` for a new game). One status level alone is enough.
+- Any other ESPN status is rejected and keeps the existing status. A new game with one gets `scheduled` for `pre`, `in_progress` for `in` and `unknown` otherwise.
 
 ### Where acceptance runs
 
-`AcceptAsync` opens its own connection and takes the pro-hype fence, the advisory lock and the row lock. A caller that holds any of these in an open transaction would wait on itself. The cycle therefore accepts reports after it has saved the games, the playoff series and the completion evidence, outside every transaction it opens. Do not call `MlbScoreboardIngestion.AcceptAsync` or `MlbScoreboardStore.AcceptAsync` inside a transaction.
+`AcceptAsync` opens its own connection and takes the pro-hype fence, the advisory lock and the row lock. A caller that holds any of these in an open transaction would wait on itself. The cycle therefore accepts reports after it has saved the games and the playoff series, outside every transaction it opens. It records completion evidence after acceptance, so evidence that confirms a completion sees the `final` status the same cycle accepted. Do not call `MlbScoreboardIngestion.AcceptAsync` or `MlbScoreboardStore.AcceptAsync` inside a transaction.
 
 Each acceptance has a deadline of `MlbScoreboardIngestion.Deadline` (5 seconds), linked to the cycle's token. When the deadline passes, the game keeps its stored observation, the cycle logs an Error and goes on to the next game. Cancelling the cycle itself still cancels the cycle.
 

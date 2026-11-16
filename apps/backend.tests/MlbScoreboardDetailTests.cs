@@ -746,7 +746,8 @@ public sealed class MlbScoreboardDetailTests : IClassFixture<SharedPostgreSql>, 
 
     private async Task<FSharpResult<MlbScoreboardFrame, MlbScoreboardRejection>> AcceptAsync(JsonObject report) =>
         await host.Services.GetRequiredService<MlbScoreboardStore>().AcceptAsync(
-            JsonSerializer.Deserialize<MlbScoreboardReport>(report.ToJsonString(), JsonSerializerOptions.Web)!, CancellationToken.None);
+            JsonSerializer.Deserialize<MlbScoreboardReport>(report.ToJsonString(), JsonSerializerOptions.Web)!,
+            MlbScoreboardTests.StatusFor(report), CancellationToken.None);
 
     private static void Accepted(FSharpResult<MlbScoreboardFrame, MlbScoreboardRejection> result) =>
         Assert.True(result.IsOk, result.IsOk ? "accepted" : result.ErrorValue.ToString());
