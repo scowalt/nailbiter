@@ -449,7 +449,9 @@ type EspnOddsService
                         if isNull (box status) || isNull (box status.Type) then
                             EspnCompletionStatus(null, null, Nullable<bool>(), null, null, null)
                         else
-                            EspnCompletionStatus(status.Type.Name, status.Type.State, status.Type.Completed, status.Type.Description, status.Detail, status.ShortDetail)
+                            let nested (inner: string) (outer: string) = if isNull inner then outer else inner
+                            EspnCompletionStatus(status.Type.Name, status.Type.State, status.Type.Completed, status.Type.Description,
+                                nested status.Type.Detail status.Detail, nested status.Type.ShortDetail status.ShortDetail)
                     let evidence =
                         MlbCompletionEvidence(
                             espnEvent.Id,

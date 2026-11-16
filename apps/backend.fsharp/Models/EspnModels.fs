@@ -100,7 +100,9 @@ type EspnStatusType =
       [<JsonPropertyName("name")>] Name: string
       [<JsonPropertyName("state")>] State: string
       [<JsonPropertyName("completed")>] Completed: Nullable<bool>
-      [<JsonPropertyName("description")>] Description: string }
+      [<JsonPropertyName("description")>] Description: string
+      [<JsonPropertyName("detail")>] Detail: string
+      [<JsonPropertyName("shortDetail")>] ShortDetail: string }
 
 type EspnStatus =
     { [<JsonPropertyName("clock")>] Clock: float
