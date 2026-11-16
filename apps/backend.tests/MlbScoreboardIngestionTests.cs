@@ -408,6 +408,34 @@ public sealed class MlbScoreboardIngestionTests : IClassFixture<SharedPostgreSql
     }
 
     [Fact]
+    public async Task A_board_revised_before_a_withdrawal_does_not_bring_the_game_back()
+    {
+        await Observe("opening");
+        provider.Withdraw("991300106");
+        await Observe("advance");
+        Assert.Equal(new Listed("canceled", null, null, null), (await Api())["991300106"]);
+
+        provider.Restore("991300106");
+        await Observe("out-of-order");
+
+        Assert.Equal(new Listed("canceled", null, null, null), (await Api())["991300106"]);
+        Assert.Null((await View("991300106")).Board);
+    }
+
+    [Fact]
+    public async Task An_out_of_order_board_without_a_game_does_not_cancel_it()
+    {
+        await Observe("opening");
+        await Observe("advance");
+        provider.Withdraw("991300106");
+
+        await Observe("out-of-order");
+
+        Assert.Equal(new Listed("scheduled", 0, 0, null), (await Api())["991300106"]);
+        Assert.Equal(MlbScoreboardPhase.Pregame, (await View("991300106")).Phase);
+    }
+
+    [Fact]
     public async Task Acceptance_held_up_by_another_writer_gives_up_at_its_deadline_and_the_cycle_continues()
     {
         await Observe("opening");
