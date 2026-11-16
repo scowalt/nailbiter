@@ -113,6 +113,7 @@ module GameDetailRenderer =
         (awayTeamRank: TeamRankInfo option)
         (highlights: HighlightsDetailState)
         (scoreboard: MlbScoreboardView option) =
+        let scoreboard = scoreboard |> Option.map (MlbScoreboardRenderer.reconcile game.Status)
         let sport = SportExtensions.FromDbValue(game.Sport)
         let status = GameStatusExtensions.FromDbValue(game.Status)
         let isLive = game.Status = "in_progress"

@@ -240,6 +240,7 @@ module SseFragmentRenderer =
         |> String.concat ""
 
     let renderMlbDetailFragments (update: GameUpdate) (scoreboard: backend.Services.MlbScoreboardView) =
+        let scoreboard = MlbScoreboardRenderer.reconcile (update.Status.ToDbValue()) scoreboard
         let isLive = update.Status = GameStatus.IN_PROGRESS
         let isFinal = update.Status = GameStatus.FINAL
 

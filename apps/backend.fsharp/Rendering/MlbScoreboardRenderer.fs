@@ -32,6 +32,18 @@ module MlbScoreboardRenderer =
         | Unavailable
         | Hidden
 
+    let reconcile (storedStatus: string) (view: MlbScoreboardView) : MlbScoreboardView =
+        let settled =
+            match storedStatus with
+            | "final" -> Some MlbScoreboardPhase.Final
+            | "canceled" -> Some MlbScoreboardPhase.Canceled
+            | "postponed" -> Some MlbScoreboardPhase.Postponed
+            | _ -> None
+        match settled with
+        | Some phase when view.Phase <> phase && view.Phase <> MlbScoreboardPhase.Unavailable ->
+            { view with Phase = phase; Board = None; Active = None }
+        | _ -> view
+
     let situation (gameInProgress: bool) (view: MlbScoreboardView) =
         match view.Phase with
         | MlbScoreboardPhase.Live ->
