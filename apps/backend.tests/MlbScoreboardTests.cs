@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using backend.Data;
@@ -5,12 +6,13 @@ using backend.Models;
 using backend.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.FSharp.Core;
 using Xunit;
 
 namespace backend.tests;
 
-public sealed class MlbScoreboardTests(SharedPostgreSql server) : IClassFixture<SharedPostgreSql>, IAsyncLifetime
+public sealed class MlbScoreboardTests : IClassFixture<SharedPostgreSql>, IAsyncLifetime
 {
     private static readonly DateTimeOffset Start = new(2027, 7, 10, 23, 0, 0, TimeSpan.Zero);
     private static readonly JsonObject Espn = Load("espn-basic.json");
@@ -27,7 +29,11 @@ public sealed class MlbScoreboardTests(SharedPostgreSql server) : IClassFixture<
         ["STATUS_SUSPENDED"] = "suspended",
     };
 
-    private readonly HostedGameFixture host = new(Start, server: server);
+    private readonly LogRecorder logs = new();
+    private readonly HostedGameFixture host;
+
+    public MlbScoreboardTests(SharedPostgreSql server) =>
+        host = new(Start, services => services.AddSingleton<ILoggerProvider>(logs), server);
 
     public Task InitializeAsync() => host.InitializeAsync();
     public Task DisposeAsync() => host.DisposeAsync();
@@ -441,6 +447,31 @@ public sealed class MlbScoreboardTests(SharedPostgreSql server) : IClassFixture<
         Assert.Equal(MlbScoreboardPhase.Unavailable, (await ReadAsync("991300104")).Phase);
     }
 
+    [Fact]
+    public async Task An_unusable_stored_frame_is_reported_at_error_once_per_game_and_observation()
+    {
+        await host.SeedAsync(MlbGame("991300104"), []);
+        At("2027-07-10T23:30:00Z");
+        Accepted(await AcceptAsync(Frame("active-complete", "opening")));
+        Assert.Equal(MlbScoreboardPhase.Live, (await ReadAsync("991300104")).Phase);
+        Assert.Empty(logs.From<MlbScoreboardStore>());
+
+        await UpdateAsync(s => s.SetProperty(g => g.HomeTeamId, "9105"));
+        Assert.Equal(MlbScoreboardPhase.Unavailable, (await ReadAsync("991300104")).Phase);
+        Assert.Equal(MlbScoreboardPhase.Unavailable, (await ReadAsync("991300104")).Phase);
+        await UpdateAsync(s => s.SetProperty(g => g.HomeTeamId, "9121").SetProperty(g => g.MlbScoreboardJson, "{\"gameId\":"));
+        Assert.Equal(MlbScoreboardPhase.Unavailable, (await ReadAsync("991300104")).Phase);
+        await UpdateAsync(s => s.SetProperty(g => g.ScoreboardUpdatedAt, Utc("2027-07-10T23:31:00Z")));
+        Assert.Equal(MlbScoreboardPhase.Unavailable, (await ReadAsync("991300104")).Phase);
+        Assert.Equal(MlbScoreboardPhase.Unavailable, (await ReadAsync("991300104")).Phase);
+
+        const string template = "MLB scoreboard stored frame for {GameId} observed at {ObservedAt} is unusable: {Fault}";
+        Assert.Equal([
+            new Logged(LogLevel.Error, template, "991300104", Utc("2027-07-10T23:30:00Z"), "WrongTeam Home"),
+            new Logged(LogLevel.Error, template, "991300104", Utc("2027-07-10T23:31:00Z"), "Unreadable"),
+        ], logs.From<MlbScoreboardStore>());
+    }
+
     private sealed record Row(string Status, int? HomeScore, int? AwayScore, string? Detail, int? Period, DateTime? ScoreboardUpdatedAt,
         DateTime? Revision, DateTime? MarketObservedAt)
     {
@@ -584,5 +615,32 @@ public sealed class MlbScoreboardTests(SharedPostgreSql server) : IClassFixture<
     {
         using var scope = host.Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Games.Where(g => g.Id == "991300104").ExecuteUpdateAsync(setters);
+    }
+
+    private sealed record Logged(LogLevel Level, string? Template, object? GameId, object? ObservedAt, object? Fault);
+
+    private sealed class LogRecorder : ILoggerProvider
+    {
+        private readonly ConcurrentQueue<(string Category, Logged Entry)> entries = new();
+
+        public Logged[] From<T>() => [.. entries.Where(e => e.Category == typeof(T).FullName).Select(e => e.Entry)];
+
+        public ILogger CreateLogger(string categoryName) => new Logger(categoryName, entries);
+
+        public void Dispose() { }
+
+        private sealed class Logger(string category, ConcurrentQueue<(string, Logged)> entries) : ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                var values = (state as IEnumerable<KeyValuePair<string, object?>>)?.ToDictionary(v => v.Key, v => v.Value) ?? [];
+                entries.Enqueue((category, new Logged(logLevel, values.GetValueOrDefault("{OriginalFormat}") as string,
+                    values.GetValueOrDefault("GameId"), values.GetValueOrDefault("ObservedAt"), values.GetValueOrDefault("Fault"))));
+            }
+        }
     }
 }
