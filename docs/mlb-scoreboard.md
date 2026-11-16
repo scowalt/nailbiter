@@ -82,7 +82,7 @@ The ESPN odds cycle for MLB (`EspnOddsService.ScrapeAndStoreOddsAsync "mlb"`) al
 - Hits, errors and inning runs that are present must be whole numbers, and inning entries must be in period order. Otherwise the whole event is rejected.
 - The report never includes the count, bases or matchup. The general scoreboard does not supply them reliably, so ingestion does not guess the live situation.
 
-For MLB, the cycle writes `status`, `home_score`, `away_score`, `period` and `status_detail` of an existing game only through the store. A game the cycle inserts gets its first status from the table below. The cycle still writes teams, schedule and odds as before, and still cancels a scheduled game that has left the board. Odds snapshots made in the same cycle copy the accepted score and inning. Other sports are unchanged.
+For MLB, the cycle writes `status`, `home_score`, `away_score`, `period` and `status_detail` of an existing game only through the store. A game the cycle inserts gets its first status from the table below. The cycle still writes teams, schedule and odds as before. Its sweep still cancels a scheduled game that has left its date's board, but only an MLB game with no accepted frame, which has no frame to contradict. A game with a frame keeps its status and frame until the board returns it: the sweep has no ESPN observation to write as a frame, and ESPN reports a postponement or cancellation as an event status, which goes through the store. Odds snapshots made in the same cycle copy the accepted score and inning. Other sports are unchanged.
 
 ### Status
 

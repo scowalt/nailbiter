@@ -646,6 +646,7 @@ type EspnOddsService
                         .Where(fun g ->
                             g.Sport = sportLower
                             && g.Status = "scheduled"
+                            && (sportLower <> "mlb" || g.MlbScoreboardJson = null)
                             && g.ScheduledStart >= dayStart
                             && g.ScheduledStart < dayEnd
                             && not (espnIdList.Contains(g.Id)))
