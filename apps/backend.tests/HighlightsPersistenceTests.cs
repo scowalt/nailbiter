@@ -108,6 +108,8 @@ public sealed class HighlightsPersistenceTests : IAsyncLifetime
     [InlineData("contradictory-competition")]
     [InlineData("contradictory-description")]
     [InlineData("contradictory-detail")]
+    [InlineData("contradictory-nested-detail")]
+    [InlineData("contradictory-nested-short-detail")]
     public async Task Stored_final_never_substitutes_for_actual_completion(string variant)
     {
         var ev = board["events"]![0]!;
@@ -126,6 +128,8 @@ public sealed class HighlightsPersistenceTests : IAsyncLifetime
             case "contradictory-competition": competition["status"]!["type"]!["completed"] = false; break;
             case "contradictory-description": status["description"] = "Postponed"; break;
             case "contradictory-detail": competition["status"]!["detail"] = "Suspended"; break;
+            case "contradictory-nested-detail": competition["status"]!["type"]!["detail"] = "Suspended"; break;
+            case "contradictory-nested-short-detail": status["shortDetail"] = "Final - Delayed"; break;
         }
         if (variant is "scheduled" or "live")
             ev["date"] = "2099-10-05T23:00:00Z";
