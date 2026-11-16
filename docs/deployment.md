@@ -104,6 +104,30 @@ To change the SDK, for example to .NET 11:
 2. Replace the line in `scripts/ci/dotnet-sdk.sha512` with the `hash` of the `linux-x64` `.tar.gz` SDK file for that version from Microsoft's `https://builds.dotnet.microsoft.com/dotnet/release-metadata/<major>.<minor>/releases.json`, followed by two spaces and the archive name.
 3. Run `tests/ci`. `test_dotnet_sdk.py` fails if the three files disagree.
 
+### CI Python packages
+
+CI installs Python packages only from requirements files that pin every package, transitive dependencies included, to one version and list its sha256 hashes:
+
+| Suite | Requirements file | Direct packages |
+|---|---|---|
+| Comment policy | `.comment-policy/requirements.txt` | the five `tree-sitter` packages at the versions in the file |
+| `tests/ci` | `scripts/ci/tests-ci-requirements.txt` | `pyyaml` |
+| `apps/analysis` tests | `scripts/ci/analysis-requirements.txt` | `pandas`, `sqlalchemy`, `pydantic` |
+
+Each step creates a virtual environment under `$RUNNER_TEMP` and runs `uv pip install --require-hashes --no-build -r <file>`. uv then stops on a package that the file does not pin with `==`, on a download whose sha256 the file does not list, and on a source distribution that needs a build. CI does not use `uv run --with`: uv 0.11.32 installs from a `--with-requirements` file without checking its hashes. `tests/ci/test_python_requirements.py` fails on any `uv run --with`, `uvx`, `uv tool`, `pipx` or plain `pip install` in the workflow or `scripts/ci`, and on any requirements line that is not an exact pin followed only by sha256 hashes. Nothing updates these files automatically.
+
+To change a version:
+
+1. Choose a cutoff date at least 7 days before today. Only releases uploaded to PyPI before the cutoff are eligible.
+2. Regenerate the file from its direct packages. For the analysis suite:
+
+   ```sh
+   printf 'pandas\nsqlalchemy\npydantic\n' | uv pip compile - --generate-hashes --no-header --no-annotate --python-version 3.14 --python-platform x86_64-unknown-linux-gnu --exclude-newer <cutoff> -o scripts/ci/analysis-requirements.txt
+   ```
+
+   For the comment policy, edit the versions in `.comment-policy/requirements.txt` and pass that file instead of `-`.
+3. Run the suite that uses the file, and `tests/ci`.
+
 ## Migration record and future handoff safeguards
 
 The 2026-11-03 handoff followed the sequence below. It is a reference for future controller/repository migrations, not an outstanding activation checklist. Any new operational handoff still needs explicit scope and fresh evidence.

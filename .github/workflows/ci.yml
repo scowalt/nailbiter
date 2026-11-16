@@ -39,8 +39,10 @@ jobs:
           python scripts/test-fixtures/generate.py --check
       - name: Source policy and secret scan
         run: |
-          uv run --no-project --with-requirements .comment-policy/requirements.txt python .comment-policy/check.py
-          uv run --no-project --with-requirements .comment-policy/requirements.txt python -m unittest discover -s .comment-policy -v
+          uv venv "$RUNNER_TEMP/comment-policy"
+          uv pip install --python "$RUNNER_TEMP/comment-policy" --require-hashes --no-build -r .comment-policy/requirements.txt
+          "$RUNNER_TEMP/comment-policy/bin/python" .comment-policy/check.py
+          "$RUNNER_TEMP/comment-policy/bin/python" -m unittest discover -s .comment-policy -v
           gitleaks git --config .gitleaks.toml --redact=100 --log-opts=--all
       - name: Install the pinned .NET SDK
         run: sh scripts/ci/install-dotnet-sdk.sh
@@ -56,12 +58,16 @@ jobs:
       - name: Deployment and fixture contracts
         run: |
           python -m unittest discover -s tests/deployment -p 'test_*.py' -v
-          uv run --no-project --with pyyaml==6.0.3 python -m unittest discover -s tests/ci -p 'test_*.py' -v
+          uv venv "$RUNNER_TEMP/tests-ci"
+          uv pip install --python "$RUNNER_TEMP/tests-ci" --require-hashes --no-build -r scripts/ci/tests-ci-requirements.txt
+          "$RUNNER_TEMP/tests-ci/bin/python" -m unittest discover -s tests/ci -p 'test_*.py' -v
           python -m unittest discover -s tests/fixtures -p 'test_*.py' -v
       - name: Analysis and isolated database recovery
         run: |
+          uv venv "$RUNNER_TEMP/analysis"
+          uv pip install --python "$RUNNER_TEMP/analysis" --require-hashes --no-build -r scripts/ci/analysis-requirements.txt
           cd apps/analysis
-          PYTHONPATH=src uv run --no-project --with 'pandas>=2.0' --with 'sqlalchemy>=2.0' --with 'pydantic>=2.0' python -m unittest discover -s tests -v
+          PYTHONPATH=src "$RUNNER_TEMP/analysis/bin/python" -m unittest discover -s tests -v
           cd ../..
           RUN_RECOVERY_DB_TESTS=1 python -m unittest discover -s scripts/backfills -p 'test_*.py' -v
       - name: Build web components independently
