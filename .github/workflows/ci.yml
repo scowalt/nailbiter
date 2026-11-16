@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 env:
-  MISE_DISABLE_TOOLS: asdf:mise-plugins/mise-dotnet-core
+  MISE_DISABLE_TOOLS: asdf:mise-plugins/mise-dotnet-core,bun
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -50,6 +50,8 @@ jobs:
         run: sh scripts/ci/install-dotnet-sdk.sh
       - name: Check that dotnet is the pinned SDK
         run: sh scripts/ci/check-dotnet-sdk.sh
+      - name: Install pinned bun
+        run: sh scripts/ci/install-bun.sh
       - name: Lint and browser regressions
         run: |
           bun install --frozen-lockfile --ignore-scripts
@@ -264,10 +266,8 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-        with:
-          bun-version: 1.4.2
-          no-cache: true
+      - name: Install pinned bun
+        run: sh scripts/ci/install-bun.sh
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
           name: backend-${{ github.sha }}
