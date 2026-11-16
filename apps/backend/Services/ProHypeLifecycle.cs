@@ -7,6 +7,7 @@ using backend.Scoring;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace backend.Services;
 
@@ -113,14 +114,14 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
                 $"team:{game.Sport}:{game.SeasonYear}:{ProHypePolicy.TeamKey(game.Sport, game.AwayTeamAbbreviation)}"];
             return (Game: game, State: state, Saved: saved, Subjects: subjects);
         }).ToArray();
-        var since = pending.Min(p => p.State.EvidenceRevision);
-        var anySaved = pending.Any(p => p.Saved is not null);
-        var subjects = pending.SelectMany(p => p.Subjects).Distinct().ToArray();
-        var changes = await db.ProHypeEvidenceChanges.AsNoTracking().Where(c => c.Revision > since
-            && c.Revision <= revision.Revision && (anySaved || c.Kind == "games")
-            && (subjects.Contains(c.BeforeSubject) || subjects.Contains(c.AfterSubject)
-                || (c.BeforeSubject == null && c.AfterSubject == null)))
-            .OrderBy(c => c.Revision).ToArrayAsync(ct);
+        var bounds = pending.SelectMany(p => (p.Saved is null ? ["game:" + p.Game.Id] : p.Subjects)
+            .Select(subject => (Subject: subject, Since: p.State.EvidenceRevision, AllKinds: p.Saved is not null))).ToArray();
+        var changes = await db.ProHypeEvidenceChanges.FromSqlRaw(EvidenceChangesSql,
+                new NpgsqlParameter<string[]>("subjects", bounds.Select(b => b.Subject).ToArray()),
+                new NpgsqlParameter<long[]>("since", bounds.Select(b => b.Since).ToArray()),
+                new NpgsqlParameter<bool[]>("all_kinds", bounds.Select(b => b.AllKinds).ToArray()),
+                new NpgsqlParameter<long>("revision", revision.Revision))
+            .AsNoTracking().OrderBy(c => c.Revision).ToArrayAsync(ct);
         var starts = new List<(Game Game, double? Total, HypeComponents? Components)>();
         foreach (var (game, state, savedState, gameSubjects) in pending)
         {
@@ -139,6 +140,24 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
         await transaction.CommitAsync(ct);
         return results;
     }
+
+    private const string EvidenceChangesSql = """
+        SELECT * FROM pro_hype_evidence_changes WHERE revision = ANY (ARRAY(
+            SELECT c.revision FROM unnest(@subjects, @since, @all_kinds) AS b(subject, since, all_kinds)
+            CROSS JOIN LATERAL (
+                SELECT revision, kind FROM pro_hype_evidence_changes
+                WHERE before_subject = b.subject AND revision > b.since AND revision <= @revision
+                UNION ALL
+                SELECT revision, kind FROM pro_hype_evidence_changes
+                WHERE after_subject = b.subject AND revision > b.since AND revision <= @revision) AS c
+            WHERE b.all_kinds OR c.kind = 'games'
+            UNION
+            SELECT n.revision FROM pro_hype_evidence_changes AS n
+            WHERE n.before_subject IS NULL AND n.after_subject IS NULL AND n.revision <= @revision
+                AND n.revision > (SELECT min(s) FROM unnest(@since) AS u(s))
+                AND EXISTS (SELECT 1 FROM unnest(@since, @all_kinds) AS g(since, all_kinds)
+                    WHERE n.revision > g.since AND (g.all_kinds OR n.kind = 'games'))))
+        """;
 
     private (ProHypeResolution Resolution, (double? Total, HypeComponents? Components)? Start) Decide(Game game, ProHypeSnapshot state,
         Saved? saved, ProHypeEvidenceChange[] changes, TeamRating[] ratings, PregameOdds? odds, string[] completed, long revision,
