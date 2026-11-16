@@ -16,6 +16,7 @@ public sealed class MigrationReplayTests
     private static readonly string MigrationsDirectory = Path.Combine(AppContext.BaseDirectory, "Migrations");
     private static readonly string[] Migrations =
         Directory.GetFiles(MigrationsDirectory, "*.sql").Select(path => Path.GetFileName(path)).Order(StringComparer.Ordinal).ToArray();
+    private static readonly string[] BeforeWidening = Migrations.Where(name => string.CompareOrdinal(name, "044") < 0).ToArray();
 
     [Fact]
     public async Task Replaying_every_migration_retires_latest_odds_and_keeps_the_newest_odds_listing_read()
@@ -48,6 +49,65 @@ public sealed class MigrationReplayTests
         Assert.Null(await ScalarAsync(db, "SELECT to_regclass('latest_odds')::text AS \"Value\""));
     }
 
+    [Fact]
+    public async Task Replaying_every_migration_twice_on_a_fresh_database_widens_games_status_and_keeps_probability_changes()
+    {
+        await using var container = await StartAsync();
+        foreach (var deploy in new[] { 1, 2 })
+            await DeployAsync(container, deploy, Migrations);
+
+        await using var db = Context(container);
+        Assert.Equal("character varying(30)", await StatusTypeAsync(db));
+        Assert.Equal("game_id,timestamp,home_win_probability,away_win_probability,home_prob_change,period,game_clock,draw_win_probability",
+            await ScalarAsync(db, "SELECT string_agg(attname, ',' ORDER BY attnum) AS \"Value\" FROM pg_attribute WHERE attrelid = to_regclass('probability_changes')"));
+        Assert.Null(await ScalarAsync(db, "SELECT to_regclass('latest_odds')::text AS \"Value\""));
+        db.Games.Add(Game("long-status", new string('s', 30)));
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task Replaying_over_compressed_odds_chunks_widens_games_status_from_20_and_keeps_every_snapshot_compressed()
+    {
+        await using var container = await StartAsync();
+        foreach (var deploy in new[] { 1, 2 })
+            await DeployAsync(container, deploy, BeforeWidening);
+        await using var db = Context(container);
+        db.Games.AddRange(Game("old"), Game("recent"));
+        db.OddsSnapshots.AddRange(Enumerable.Range(0, 96).Select(hour => Quote(hour % 2 == 0 ? "old" : "recent", Now.AddHours(-hour), .5)));
+        await db.SaveChangesAsync();
+        await ScalarAsync(db, "SELECT count(compress_chunk(chunk))::text AS \"Value\" FROM show_chunks('odds_snapshots') chunk");
+        var compressed = "SELECT count(*)::text AS \"Value\" FROM timescaledb_information.chunks WHERE hypertable_name = 'odds_snapshots' AND is_compressed";
+        Assert.Equal("character varying(20)", await StatusTypeAsync(db));
+        Assert.Equal("4", await ScalarAsync(db, compressed));
+
+        foreach (var deploy in new[] { 3, 4 })
+            await DeployAsync(container, deploy, Migrations);
+
+        Assert.Equal("character varying(30)", await StatusTypeAsync(db));
+        Assert.Equal("4", await ScalarAsync(db, compressed));
+        Assert.Equal("96", await ScalarAsync(db, "SELECT count(*)::text AS \"Value\" FROM odds_snapshots"));
+        Assert.NotNull(await ScalarAsync(db, "SELECT to_regclass('probability_changes')::text AS \"Value\""));
+        db.Games.Add(Game("long-status", new string('s', 30)));
+        await db.SaveChangesAsync();
+    }
+
+    [Theory]
+    [InlineData("varchar(40)", "character varying(40)")]
+    [InlineData("text", "text")]
+    public async Task Replaying_keeps_a_games_status_already_wider_than_30(string wider, string expected)
+    {
+        await using var container = await StartAsync();
+        foreach (var deploy in new[] { 1, 2 })
+            await DeployAsync(container, deploy, BeforeWidening);
+        await using var db = Context(container);
+        await db.Database.ExecuteSqlRawAsync($"ALTER TABLE games ALTER COLUMN status TYPE {wider}");
+
+        foreach (var deploy in new[] { 3, 4 })
+            await DeployAsync(container, deploy, Migrations);
+
+        Assert.Equal(expected, await StatusTypeAsync(db));
+    }
+
     private static async Task<PostgreSqlContainer> StartAsync()
     {
         var container = IsolatedPostgreSql.CreateBuilder(ListingWorkload.Image()).WithCommand(ListingWorkload.ServerSettings).Build();
@@ -74,9 +134,12 @@ public sealed class MigrationReplayTests
 
     private static Task<string?> ScalarAsync(ExcitementDbContext db, string sql) => db.Database.SqlQueryRaw<string?>(sql).SingleOrDefaultAsync();
 
-    private static Game Game(string id) => new()
+    private static Task<string?> StatusTypeAsync(ExcitementDbContext db) =>
+        ScalarAsync(db, "SELECT format_type(atttypid, atttypmod) AS \"Value\" FROM pg_attribute WHERE attrelid = 'games'::regclass AND attname = 'status'");
+
+    private static Game Game(string id, string status = "in_progress") => new()
     {
-        Id = id, Sport = "nhl", Status = "in_progress", SeasonYear = 2027, SeasonType = 2, ScheduledStart = Now.AddHours(-1),
+        Id = id, Sport = "nhl", Status = status, SeasonYear = 2027, SeasonType = 2, ScheduledStart = Now.AddHours(-1),
         HomeTeam = "Home", AwayTeam = "Away", HomeTeamAbbreviation = "HOM", AwayTeamAbbreviation = "AWY"
     };
 
