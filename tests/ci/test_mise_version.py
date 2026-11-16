@@ -43,6 +43,9 @@ class MiseVersionTests(unittest.TestCase):
         runners = {source: job.get('runs-on') for source, job, _ in self.uses}
         self.assertEqual({source: runner for source, runner in runners.items() if not X64_LINUX_RUNNER.match(str(runner))}, {})
 
+    def test_no_mise_action_use_restores_its_tool_cache(self):
+        self.assertEqual({source: inputs.get('cache') for source, _, inputs in self.uses if inputs.get('cache') is not False}, {})
+
 
 class MiseActionMatchTests(unittest.TestCase):
     def test_matches_the_action_in_any_letter_case_and_any_workflow_file(self):

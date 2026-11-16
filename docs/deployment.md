@@ -94,7 +94,9 @@ Marketing is built during validation and deployed from that same run's checked a
 
 ### CI mise
 
-Both `jdx/mise-action` steps in `.github/workflows/ci.yml` (`checks` and `backend-tests`) set `version` and `sha256`. Without `version`, the action installs the newest mise release each time the mise cache misses, and a cache hit keeps whatever binary that cache saved. With `version` set, the action downloads that release from GitHub, and the cache key includes the version. The action compares `sha256` with the `mise` binary on every run, also on a cache hit, and fails the step if they differ. When `sha256` is set, the action skips its own check against the release's signed `SHASUMS256.txt`, so step 2 does that check.
+Both `jdx/mise-action` steps in `.github/workflows/ci.yml` (`checks` and `backend-tests`) set `version`, `sha256` and `cache: false`. Each job downloads that mise release from GitHub, and the action compares `sha256` with the `mise` binary before it runs it, failing the step if they differ. When `sha256` is set, the action skips its own check against the release's signed `SHASUMS256.txt`, so step 2 does that check.
+
+The action's cache is off because nothing checks what it restores. The cache holds the whole mise data directory: the `mise` binary and the installed bun, Python, uv and gitleaks. On a cache hit the action runs the cached `mise` to read its version before it compares `sha256`, and mise treats the installed tools as already installed without checking them. A `mise.lock` would not help: mise checks lockfile checksums against downloads, not against installed tools. Installing the four tools takes about 3 seconds per job, so `tests/ci/test_mise_version.py` requires `cache: false` on every use.
 
 To change mise:
 
@@ -106,7 +108,7 @@ To change mise:
 
 ### CI .NET SDK
 
-Every CI job that runs `dotnet` on the runner (`checks`, `backend-tests` and `listing-checker`) installs the SDK with `scripts/ci/install-dotnet-sdk.sh`, not through mise. The workflow sets `MISE_DISABLE_TOOLS` so that `jdx/mise-action` does not install the `mise-plugins/mise-dotnet-core` plugin, which would clone the plugin at its default branch and run an unpinned `dotnet-install.sh` with no hash check. The mise steps use `cache_key_prefix: mise-v2`, because a `mise-v1` cache saved before this change still holds the plugin and an unchecked SDK, and mise runs the cached plugin's scripts. Local development still uses the plugin through `.mise.toml`. The `image` job builds inside Docker from `mcr.microsoft.com/dotnet/sdk`, referenced by tag, which this script does not cover.
+Every CI job that runs `dotnet` on the runner (`checks`, `backend-tests` and `listing-checker`) installs the SDK with `scripts/ci/install-dotnet-sdk.sh`, not through mise. The workflow sets `MISE_DISABLE_TOOLS` so that `jdx/mise-action` does not install the `mise-plugins/mise-dotnet-core` plugin, which would clone the plugin at its default branch and run an unpinned `dotnet-install.sh` with no hash check. Local development still uses the plugin through `.mise.toml`. The `image` job builds inside Docker from `mcr.microsoft.com/dotnet/sdk`, referenced by tag, which this script does not cover.
 
 The script downloads `dotnet-sdk-<version>-linux-x64.tar.gz` from `builds.dotnet.microsoft.com` over HTTPS only, with TLS 1.2 or later. If the tarball does not match its line in `scripts/ci/dotnet-sdk.sha512`, the step fails with a `.NET SDK checksum mismatch` annotation and extracts nothing. If that file has no line for the `global.json` version, the step fails before it downloads anything. The next step, `scripts/ci/check-dotnet-sdk.sh`, fails unless `command -v dotnet` is the pinned install under `$RUNNER_TEMP/dotnet` and `dotnet --version` equals the `global.json` version, and it logs both values.
 
