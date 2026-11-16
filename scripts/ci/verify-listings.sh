@@ -34,11 +34,11 @@ finish() {
 }
 
 if [[ ! "$checker_sha256" =~ ^[0-9a-f]{64}$ ]] ||
-  [[ "$(tr -d '\n' < .ci/listing-checker.commit 2>/dev/null)" != "$revision" ]] ||
-  ! printf '%s  .ci/listing-checker.tar\n' "$checker_sha256" | sha256sum --check --status 2>/dev/null; then
+  [[ "$(tr -d '\n' < .ci/artifacts/listing-checker/listing-checker.commit 2>/dev/null)" != "$revision" ]] ||
+  ! printf '%s  .ci/artifacts/listing-checker/listing-checker.tar\n' "$checker_sha256" | sha256sum --check --status 2>/dev/null; then
   finish 2 "The listing-checker artifact does not match commit $revision or the hash its job reported. No request was sent."
 fi
-tar -C .ci -xf .ci/listing-checker.tar
+tar -C .ci -xf .ci/artifacts/listing-checker/listing-checker.tar
 
 set +e
 .ci/listing-checker/listing-check url --base-url "$origin" --allow-remote-host \

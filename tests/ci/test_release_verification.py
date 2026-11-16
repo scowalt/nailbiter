@@ -61,7 +61,7 @@ class ReleaseVerificationScriptTests(unittest.TestCase):
         self.bin.mkdir()
         self.log = self.root / 'commands.jsonl'
         self.summary = self.root / 'summary.md'
-        (self.root / '.ci').mkdir()
+        (self.root / '.ci/artifacts/listing-checker').mkdir(parents=True)
         (self.root / '.ci/backend-image.txt').write_text(DIGEST + '\n')
         (self.root / 'apps/backend').mkdir(parents=True)
         (self.root / 'apps/backend/global.json').write_bytes((ROOT / 'apps/backend/global.json').read_bytes())
@@ -77,12 +77,12 @@ class ReleaseVerificationScriptTests(unittest.TestCase):
         staging.mkdir(parents=True)
         (staging / 'listing-check').write_text(FAKE_CHECKER)
         (staging / 'listing-check').chmod(0o755)
-        subprocess.run(['tar', '-C', str(staging.parent), '-cf', '.ci/listing-checker.tar', 'listing-checker'], cwd=self.root, check=True)
+        subprocess.run(['tar', '-C', str(staging.parent), '-cf', '.ci/artifacts/listing-checker/listing-checker.tar', 'listing-checker'], cwd=self.root, check=True)
         self.env['LISTING_CHECKER_SHA256'] = self.checker_digest()
-        (self.root / '.ci/listing-checker.commit').write_text(commit + '\n')
+        (self.root / '.ci/artifacts/listing-checker/listing-checker.commit').write_text(commit + '\n')
 
-    def checker_digest(self):
-        digest = subprocess.run(['sha256sum', '.ci/listing-checker.tar'], cwd=self.root, check=True, capture_output=True, text=True)
+    def checker_digest(self, archive='.ci/artifacts/listing-checker/listing-checker.tar'):
+        digest = subprocess.run(['sha256sum', archive], cwd=self.root, check=True, capture_output=True, text=True)
         return digest.stdout.split()[0]
 
     def executable(self, name, text):
@@ -118,9 +118,6 @@ class ReleaseVerificationScriptTests(unittest.TestCase):
                 self.assertNotIn('save', [command[0] for command in self.commands()])
 
     def test_checker_is_published_self_contained_and_bound_to_the_commit(self):
-        for path in ['.ci/listing-checker.tar', '.ci/listing-checker.commit']:
-            (self.root / path).unlink()
-
         result = self.run_script('package-listing-check.sh')
 
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -131,7 +128,7 @@ class ReleaseVerificationScriptTests(unittest.TestCase):
         self.assertIn('--self-contained', publish)
         self.assertIn('-p:PublishSingleFile=true', publish)
         self.assertEqual((self.root / '.ci/listing-checker.commit').read_text(), SHA + '\n')
-        self.assertEqual((self.root / 'output.txt').read_text(), f'sha256={self.checker_digest()}\n')
+        self.assertEqual((self.root / 'output.txt').read_text(), f"sha256={self.checker_digest('.ci/listing-checker.tar')}\n")
         self.assertEqual(sorted(path.name for path in (self.root / '.ci').glob('listing-checker.*')),
                          ['listing-checker.commit', 'listing-checker.tar'])
         listing = subprocess.run(['tar', '-tf', '.ci/listing-checker.tar'], cwd=self.root, check=True, capture_output=True, text=True)
@@ -204,12 +201,12 @@ class ReleaseVerificationScriptTests(unittest.TestCase):
                 self.package_checker(commit='c' * 40 if tamper == 'commit' else SHA)
                 env = {}
                 if tamper.startswith('bytes'):
-                    with open(self.root / '.ci/listing-checker.tar', 'ab') as archive:
+                    with open(self.root / '.ci/artifacts/listing-checker/listing-checker.tar', 'ab') as archive:
                         archive.write(b'x')
                 if tamper == 'bytes with a matching hash file':
-                    (self.root / '.ci/listing-checker.sha256').write_text(f'{self.checker_digest()}  .ci/listing-checker.tar\n')
+                    (self.root / '.ci/artifacts/listing-checker/listing-checker.sha256').write_text(f'{self.checker_digest()}  .ci/artifacts/listing-checker/listing-checker.tar\n')
                 if tamper == 'missing':
-                    (self.root / '.ci/listing-checker.tar').unlink()
+                    (self.root / '.ci/artifacts/listing-checker/listing-checker.tar').unlink()
                 if tamper == 'no job hash':
                     env = {'LISTING_CHECKER_SHA256': ''}
                 if tamper == 'malformed job hash':
@@ -255,7 +252,7 @@ class ReleaseVerificationWorkflowTests(unittest.TestCase):
         self.assertNotIn('dotnet ', json.dumps(self.steps))
         checker = self.step(lambda step: step.get('uses', '').startswith('actions/download-artifact@')
                             and step['with']['name'] == 'listing-checker-${{ github.sha }}')
-        self.assertEqual(self.steps[checker]['with']['path'], '.ci')
+        self.assertEqual(self.steps[checker]['with']['path'], '.ci/artifacts/listing-checker')
         backend = self.step(lambda step: step.get('id') == 'backend')
         self.assertLess(checker, backend)
         self.assertEqual(self.steps[backend]['run'], 'bash scripts/ci/send-release.sh')

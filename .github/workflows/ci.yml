@@ -266,15 +266,15 @@ jobs:
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
           name: backend-${{ github.sha }}
-          path: .ci
+          path: .ci/artifacts/backend
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
           name: marketing-${{ github.sha }}
-          path: .ci
+          path: .ci/artifacts/marketing
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
         with:
           name: listing-checker-${{ github.sha }}
-          path: .ci
+          path: .ci/artifacts/listing-checker
       - name: Verify trusted main and publish the scanned image
         env:
           GH_TOKEN: ${{ github.token }}
@@ -298,10 +298,10 @@ jobs:
           MARKETING_SHA256: ${{ needs.validate.outputs.marketing-sha256 }}
         run: |
           sh scripts/ci/require-release.sh
-          test "$(tr -d '\n' < .ci/marketing.commit)" = "$GITHUB_SHA"
+          test "$(tr -d '\n' < .ci/artifacts/marketing/marketing.commit)" = "$GITHUB_SHA"
           : "${MARKETING_SHA256:?The marketing-sha256 output is required from the checks job}"
-          printf '%s  .ci/marketing.tar\n' "$MARKETING_SHA256" | sha256sum --check
-          tar -C apps/www -xf .ci/marketing.tar
+          printf '%s  .ci/artifacts/marketing/marketing.tar\n' "$MARKETING_SHA256" | sha256sum --check
+          tar -C apps/www -xf .ci/artifacts/marketing/marketing.tar
           bun install --cwd apps/www --frozen-lockfile --ignore-scripts
           cd apps/www
           bunx wrangler deploy
