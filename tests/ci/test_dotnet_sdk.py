@@ -72,6 +72,27 @@ class DotnetSdkWorkflowTests(unittest.TestCase):
         self.assertEqual(tomllib.loads((ROOT / '.mise.toml').read_text())['tools'][mise_dotnet_tool()], SDK)
 
 
+class DotnetImageTests(unittest.TestCase):
+    def base_images(self):
+        lines = (ROOT / 'apps/backend/Dockerfile').read_text().splitlines()
+        return [line.split()[1] for line in lines if line.split()[:1] == ['FROM']]
+
+    def test_every_base_image_is_pinned_by_digest(self):
+        images = self.base_images()
+        self.assertEqual(len(images), 2)
+        for image in images:
+            self.assertRegex(image, r'^mcr\.microsoft\.com/dotnet/[a-z]+:[0-9][0-9.]*@sha256:[0-9a-f]{64}$')
+
+    def test_the_build_image_tag_is_the_global_json_sdk(self):
+        sdk = next(image for image in self.base_images() if image.startswith('mcr.microsoft.com/dotnet/sdk:'))
+        self.assertEqual(sdk.split(':')[1].split('@')[0], SDK)
+
+    def test_the_runtime_image_tag_is_a_patch_release_of_the_sdk_major_and_minor(self):
+        runtime = next(image for image in self.base_images() if image.startswith('mcr.microsoft.com/dotnet/aspnet:'))
+        major_minor = '.'.join(SDK.split('.')[:2])
+        self.assertRegex(runtime.split(':')[1].split('@')[0], rf'^{re.escape(major_minor)}\.[0-9]+$')
+
+
 class DotnetSdkInstallTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
