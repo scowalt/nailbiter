@@ -1,6 +1,7 @@
 namespace Backend.Rendering
 
 open Falco.Markup
+open backend.GraphQL.Types
 open backend.Services
 
 module MlbScoreboardRenderer =
@@ -95,6 +96,25 @@ module MlbScoreboardRenderer =
         | Some p -> Probability.Current p
         | None when gameInProgress -> Probability.Unavailable
         | None -> Probability.Hidden
+
+    let statusBadge (storedStatus: string) (view: MlbScoreboardView) =
+        match view.Phase with
+        | MlbScoreboardPhase.Delayed -> "Delayed", "status-scheduled"
+        | MlbScoreboardPhase.Suspended -> "Suspended", "status-scheduled"
+        | MlbScoreboardPhase.Postponed -> "Postponed", "status-scheduled"
+        | MlbScoreboardPhase.Canceled -> "Canceled", "status-final"
+        | MlbScoreboardPhase.Live
+        | MlbScoreboardPhase.Stale
+        | MlbScoreboardPhase.Recorded
+        | MlbScoreboardPhase.Unavailable
+        | MlbScoreboardPhase.Pregame
+        | MlbScoreboardPhase.Final ->
+            let status = GameStatusExtensions.FromDbValue storedStatus
+            if status.HasValue then FormatHelpers.getStatusLabel status.Value, FormatHelpers.getStatusClass status.Value
+            else "", ""
+
+    let renderStatusBadge (label: string, statusClass: string) =
+        Elem.span [ cls $"detail-status-badge {statusClass}"; Attr.id "detail-status" ] [ Text.raw label ]
 
     let renderClock (clock: Clock) (generic: XmlNode list) =
         Elem.div [ Attr.id "detail-clock" ] [

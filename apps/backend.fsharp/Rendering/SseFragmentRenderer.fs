@@ -267,7 +267,7 @@ module SseFragmentRenderer =
             match MlbScoreboardRenderer.clock (update.Status = GameStatus.SCHEDULED) scoreboard with
             | MlbScoreboardRenderer.Clock.Generic -> renderDetailClock period gameClock sportStr isLive
             | clock -> MlbScoreboardRenderer.renderClock clock []
-            renderDetailStatus update.Status
+            MlbScoreboardRenderer.renderStatusBadge (MlbScoreboardRenderer.statusBadge (update.Status.ToDbValue()) scoreboard)
             MlbScoreboardRenderer.renderSituation (MlbScoreboardRenderer.situation isLive scoreboard)
             yield! MlbScoreboardRenderer.renderLineScore (awayAbbr, update.AwayTeam) (homeAbbr, update.HomeTeam) board
         ]

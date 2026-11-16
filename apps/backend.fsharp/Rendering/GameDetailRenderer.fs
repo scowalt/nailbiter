@@ -167,9 +167,12 @@ module GameDetailRenderer =
                         | s when s.HasValue ->
                             Elem.img [ Attr.src (Logos.getLeagueLogoUrl s.Value); Attr.alt (s.Value.ToString()); cls "detail-league-logo" ]
                         | _ -> ()
-                        Elem.span [ cls $"detail-status-badge {statusClass}"; Attr.id "detail-status" ] [
-                            Text.raw statusLabel
-                        ]
+                        match scoreboard with
+                        | Some view -> MlbScoreboardRenderer.renderStatusBadge (MlbScoreboardRenderer.statusBadge game.Status view)
+                        | None ->
+                            Elem.span [ cls $"detail-status-badge {statusClass}"; Attr.id "detail-status" ] [
+                                Text.raw statusLabel
+                            ]
                     ]
                     Elem.div [ Attr.id "detail-excitement" ] [
                         if game.Sport = "cfb" && (isLive || isFinal) && not excitementScore.HasValue then

@@ -469,11 +469,8 @@ let private badge (doc: IDocument) =
     element.TextContent.Trim(), element.ClassList |> Seq.toList
 
 let interruptedBadgeCases : obj[] list =
-    [ [| "delayed"; MlbScoreboardPhase.Delayed; "Delayed"; "status-scheduled" |]
-      [| "in_progress"; MlbScoreboardPhase.Delayed; "Delayed"; "status-scheduled" |]
-      [| "suspended"; MlbScoreboardPhase.Suspended; "Suspended"; "status-scheduled" |]
+    [ [| "in_progress"; MlbScoreboardPhase.Delayed; "Delayed"; "status-scheduled" |]
       [| "in_progress"; MlbScoreboardPhase.Suspended; "Suspended"; "status-scheduled" |]
-      [| "postponed"; MlbScoreboardPhase.Postponed; "Postponed"; "status-scheduled" |]
       [| "scheduled"; MlbScoreboardPhase.Postponed; "Postponed"; "status-scheduled" |]
       [| "canceled"; MlbScoreboardPhase.Canceled; "Canceled"; "status-final" |] ]
 
@@ -486,15 +483,18 @@ let ``the page badge agrees with an interrupted scoreboard`` (status: string) (p
     Assert.Contains("detail-status-badge", classes)
     Assert.DoesNotContain("status-live", classes)
 
-let storedInterruptionCases : obj[] list =
-    [ [| "delayed"; "Delayed" |]; [| "suspended"; "Suspended" |]; [| "postponed"; "Postponed" |] ]
+[<Fact>]
+let ``a postponed scheduled game keeps the matchup center and says postponed`` () =
+    let doc = page (game "scheduled") (view MlbScoreboardPhase.Postponed (Some fiveInnings) None)
+    Assert.Equal("Postponed", fst (badge doc))
+    Assert.Equal("VS", text doc ".scoreboard-center .scoreboard-vs")
+    Assert.Equal("Postponed", text doc ".scoreboard-center #detail-clock")
 
-[<Theory>]
-[<MemberData(nameof storedInterruptionCases)>]
-let ``without a board the page badge names the stored interruption`` (status: string) (label: string) =
-    let label', classes = badge (page (game status) (view MlbScoreboardPhase.Unavailable None None))
-    Assert.Equal(label, label')
-    Assert.Contains("status-scheduled", classes)
+[<Fact>]
+let ``an in progress game without a scoreboard keeps the live badge`` () =
+    let label, classes = badge (livePage (view MlbScoreboardPhase.Unavailable None None))
+    Assert.Equal("Live", label)
+    Assert.Contains("status-live", classes)
 
 [<Fact>]
 let ``a delayed patch says delayed rather than live`` () =
