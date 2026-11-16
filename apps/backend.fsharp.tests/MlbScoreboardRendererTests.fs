@@ -187,6 +187,20 @@ let ``detail pages without a scoreboard view carry no MLB scoreboard markup`` sp
     Assert.NotNull(doc.QuerySelector("#detail-scoreboard"))
     for selector in [ "#mlb-situation"; "#mlb-line-score"; ".scoreboard-side" ] do
         Assert.Null(doc.QuerySelector(selector))
+    let signature (element: IElement) =
+        let id = if element.Id = "" then "" else "#" + element.Id
+        let classes = element.ClassList |> Seq.map (fun c -> "." + c) |> String.concat ""
+        element.LocalName + id + classes
+    let children (selector: string) =
+        (single doc selector).Children |> Seq.filter (fun e -> e.LocalName <> "img") |> Seq.map signature |> Seq.toList
+    Assert.Equal<string list>(
+        [ "div.detail-topbar"; "div#detail-scoreboard.panel"; "div.panel"; "section#game-highlights.panel" ],
+        children ".page-narrow")
+    Assert.Equal<string list>([ "div.scoreboard"; "div#detail-probbar" ], children "#detail-scoreboard")
+    Assert.Equal<string list>([ "div.scoreboard-team"; "div.scoreboard-center"; "div.scoreboard-team" ], children ".scoreboard")
+    Assert.Equal<string list>([ "span.scoreboard-abbr"; "span.meta-text"; "span#detail-away-score.detail-score" ], children ".scoreboard-team")
+    Assert.Equal<string list>([ "div#detail-clock" ], children ".scoreboard-center")
+    Assert.Equal<string list>([ "span#detail-status.detail-status-badge.status-live.animate-live-pulse" ], children ".detail-league")
 
 let private occupied name = MlbBase.Occupied name
 
