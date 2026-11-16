@@ -21,9 +21,7 @@ public sealed class MigrationReplayTests
     [Fact]
     public async Task Replaying_every_migration_retires_latest_odds_and_keeps_the_newest_odds_listing_read()
     {
-        await using var container = await StartAsync();
-        foreach (var deploy in new[] { 1, 2 })
-            await DeployAsync(container, deploy, Migrations);
+        await using var container = await ReplayEveryMigrationTwiceAsync();
 
         await using var db = Context(container);
         db.Games.AddRange(Game("tied"), Game("replaced"), Game("quiet"));
@@ -52,9 +50,7 @@ public sealed class MigrationReplayTests
     [Fact]
     public async Task Replaying_every_migration_twice_on_a_fresh_database_widens_games_status_and_keeps_probability_changes()
     {
-        await using var container = await StartAsync();
-        foreach (var deploy in new[] { 1, 2 })
-            await DeployAsync(container, deploy, Migrations);
+        await using var container = await ReplayEveryMigrationTwiceAsync();
 
         await using var db = Context(container);
         Assert.Equal("character varying(30)", await StatusTypeAsync(db));
@@ -94,9 +90,7 @@ public sealed class MigrationReplayTests
     [Fact]
     public async Task Replaying_over_a_games_status_already_at_30_passes_when_a_view_depends_on_it()
     {
-        await using var container = await StartAsync();
-        foreach (var deploy in new[] { 1, 2 })
-            await DeployAsync(container, deploy, Migrations);
+        await using var container = await ReplayEveryMigrationTwiceAsync();
         await using var db = Context(container);
         Assert.Equal("character varying(30)", await StatusTypeAsync(db));
         await db.Database.ExecuteSqlRawAsync("CREATE VIEW status_reader AS SELECT id, status FROM games");
@@ -122,6 +116,22 @@ public sealed class MigrationReplayTests
             await DeployAsync(container, deploy, Migrations);
 
         Assert.Equal(expected, await StatusTypeAsync(db));
+    }
+
+    private static async Task<PostgreSqlContainer> ReplayEveryMigrationTwiceAsync()
+    {
+        var container = await StartAsync();
+        try
+        {
+            foreach (var deploy in new[] { 1, 2 })
+                await DeployAsync(container, deploy, Migrations);
+            return container;
+        }
+        catch
+        {
+            await container.DisposeAsync();
+            throw;
+        }
     }
 
     private static async Task<PostgreSqlContainer> StartAsync()
