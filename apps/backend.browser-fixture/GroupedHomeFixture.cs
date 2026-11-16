@@ -312,28 +312,29 @@ internal sealed class GroupedHomeFixture : TimeProvider
             var odds = await db.OddsSnapshots.Where(o => o.GameId == game.Id).OrderByDescending(o => o.Timestamp).FirstOrDefaultAsync();
             var scores = await scope.ServiceProvider.GetRequiredService<GameDataService>().GetExcitementScoresForGamesAsync(
                 Microsoft.FSharp.Collections.ListModule.OfSeq(new[] { game.Id }), CancellationToken.None);
-            await scope.ServiceProvider.GetRequiredService<IGameUpdateService>().PublishUpdateAsync(new GameUpdate
-            {
-                GameId = game.Id,
-                Sport = SportExtensions.FromDbValue(game.Sport)!.Value,
-                Status = GameStatusExtensions.FromDbValue(game.Status)!.Value,
-                HomeTeam = game.HomeTeam,
-                AwayTeam = game.AwayTeam,
-                HomeTeamAbbreviation = game.HomeTeamAbbreviation,
-                AwayTeamAbbreviation = game.AwayTeamAbbreviation,
-                HomeTeamId = game.HomeTeamId,
-                AwayTeamId = game.AwayTeamId,
-                HomeColor = game.HomeColor,
-                AwayColor = game.AwayColor,
-                HomeScore = game.HomeScore,
-                AwayScore = game.AwayScore,
-                HomeWinProbability = odds?.HomeWinProbability,
-                AwayWinProbability = odds?.AwayWinProbability,
-                ExcitementScore = scores[game.Id],
-                Period = game.Period,
-                GameClock = game.GameClock,
-                UpdatedAt = Now.UtcDateTime,
-            });
+            if (GameStatusExtensions.FromDbValue(game.Status) is { } status)
+                await scope.ServiceProvider.GetRequiredService<IGameUpdateService>().PublishUpdateAsync(new GameUpdate
+                {
+                    GameId = game.Id,
+                    Sport = SportExtensions.FromDbValue(game.Sport)!.Value,
+                    Status = status,
+                    HomeTeam = game.HomeTeam,
+                    AwayTeam = game.AwayTeam,
+                    HomeTeamAbbreviation = game.HomeTeamAbbreviation,
+                    AwayTeamAbbreviation = game.AwayTeamAbbreviation,
+                    HomeTeamId = game.HomeTeamId,
+                    AwayTeamId = game.AwayTeamId,
+                    HomeColor = game.HomeColor,
+                    AwayColor = game.AwayColor,
+                    HomeScore = game.HomeScore,
+                    AwayScore = game.AwayScore,
+                    HomeWinProbability = odds?.HomeWinProbability,
+                    AwayWinProbability = odds?.AwayWinProbability,
+                    ExcitementScore = scores[game.Id],
+                    Period = game.Period,
+                    GameClock = game.GameClock,
+                    UpdatedAt = Now.UtcDateTime,
+                });
         }
         else if (command == "fail-refresh") failRefresh = true;
         else if (command == "recover") failRefresh = false;
