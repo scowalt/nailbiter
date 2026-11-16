@@ -5,6 +5,7 @@ origin=https://live.nailbiter.app
 ready_ms=120000
 timeout_ms=10000
 revision=${GITHUB_SHA:?The released commit is required}
+checker_sha256=${LISTING_CHECKER_SHA256:-}
 image=$(tr -d '\n' < .ci/backend-image.txt)
 summary=${GITHUB_STEP_SUMMARY:-/dev/null}
 
@@ -32,9 +33,10 @@ finish() {
   exit "$code"
 }
 
-if [[ "$(tr -d '\n' < .ci/listing-checker.commit 2>/dev/null)" != "$revision" ]] ||
-  ! sha256sum --check --status .ci/listing-checker.sha256 2>/dev/null; then
-  finish 2 "The listing-checker artifact does not match commit $revision or its recorded hash. No request was sent."
+if [[ ! "$checker_sha256" =~ ^[0-9a-f]{64}$ ]] ||
+  [[ "$(tr -d '\n' < .ci/listing-checker.commit 2>/dev/null)" != "$revision" ]] ||
+  ! printf '%s  .ci/listing-checker.tar\n' "$checker_sha256" | sha256sum --check --status 2>/dev/null; then
+  finish 2 "The listing-checker artifact does not match commit $revision or the hash its job reported. No request was sent."
 fi
 tar -C .ci -xf .ci/listing-checker.tar
 
@@ -47,6 +49,7 @@ set +e
 code=${PIPESTATUS[0]}
 set -e
 detail=$(grep -m1 -E '^(readiness|revision) ' .ci/listing-check.txt || true)
+checker_clause=${detail:+ Checker: $detail.}
 
 case "$code" in
   0) finish 0 "Verified: $origin served revision $revision on every listing request, with listing markup and median timing within budget." ;;
@@ -55,7 +58,7 @@ case "$code" in
   4) finish 4 "A listing did not send a complete response within $((timeout_ms / 1000)) s. The release is deployed; a slow listing query is the likely cause." ;;
   5) finish 5 'A listing answered 200 without its listing markup. The release is deployed; open the path and compare it with the page renderer.' ;;
   7) finish 7 'Every listing loaded, but a median was over budget. Do not raise the budget here; open an issue with the attached report.' ;;
-  8) finish 8 "/health did not serve revision $revision within $((ready_ms / 1000)) s. No listing was requested. Checker: $detail. If the last poll names a different revision, that revision answered instead of this release (expected $revision): check which container serves on the host with docker ps and the backend logs. A status or request failure points at Cloudflare, Caddy or the network." ;;
-  9) finish 9 "A listing response came from a different revision than this release (expected $revision). Checker: $detail. Check which containers serve behind Caddy on the host. No timing from this run is attributed to the release." ;;
+  8) finish 8 "/health did not serve revision $revision within $((ready_ms / 1000)) s. No listing was requested.$checker_clause If the last poll names a different revision, that revision answered instead of this release (expected $revision): check which container serves on the host with docker ps and the backend logs. A status or request failure points at Cloudflare, Caddy or the network." ;;
+  9) finish 9 "A listing response came from a different revision than this release (expected $revision).$checker_clause Check which containers serve behind Caddy on the host. No timing from this run is attributed to the release." ;;
   *) finish "$code" 'The checker stopped without a result. Read its stack trace in this step log.' ;;
 esac
