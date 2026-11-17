@@ -259,8 +259,9 @@ public sealed class MlbScoreboardDetailTests : IClassFixture<SharedPostgreSql>, 
         foreach (var person in new[] { "Synthetic Batter", "Synthetic Pitcher", "Synthetic Runner" })
             Assert.DoesNotContain(person, page.Body!.TextContent);
         var competitors = Competition(gameId, "opening")["competitors"]!.AsArray();
-        Assert.Equal(Score(competitors, "away"), page.QuerySelector("#detail-away-score")!.TextContent.Trim());
-        Assert.Equal(Score(competitors, "home"), page.QuerySelector("#detail-home-score")!.TextContent.Trim());
+        var scored = status != "postponed";
+        Assert.Equal(scored ? Score(competitors, "away") : "", page.QuerySelector("#detail-away-score")!.TextContent.Trim());
+        Assert.Equal(scored ? Score(competitors, "home") : "", page.QuerySelector("#detail-home-score")!.TextContent.Trim());
         if (innings == 0)
             AssertNoLineScore(page);
         else
@@ -745,7 +746,8 @@ public sealed class MlbScoreboardDetailTests : IClassFixture<SharedPostgreSql>, 
 
     private async Task<FSharpResult<MlbScoreboardFrame, MlbScoreboardRejection>> AcceptAsync(JsonObject report) =>
         await host.Services.GetRequiredService<MlbScoreboardStore>().AcceptAsync(
-            JsonSerializer.Deserialize<MlbScoreboardReport>(report.ToJsonString(), JsonSerializerOptions.Web)!, CancellationToken.None);
+            JsonSerializer.Deserialize<MlbScoreboardReport>(report.ToJsonString(), JsonSerializerOptions.Web)!,
+            MlbScoreboardTests.StatusFor(report), CancellationToken.None);
 
     private static void Accepted(FSharpResult<MlbScoreboardFrame, MlbScoreboardRejection> result) =>
         Assert.True(result.IsOk, result.IsOk ? "accepted" : result.ErrorValue.ToString());

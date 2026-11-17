@@ -577,7 +577,7 @@ let ``postponed and canceled scoreboards show no quote despite fresh odds`` () =
         let patch = fragments status (Some 0.6) (view phase (Some fiveInnings) None)
         Assert.Equal("", text patch "#detail-probbar")
 
-let private assertSettled (doc: IDocument) (label: string) =
+let private assertSettled (doc: IDocument) (label: string) (away: string, home: string) =
     let clock = text doc "#detail-clock"
     Assert.Equal(label, clock)
     Assert.DoesNotContain("Top", clock)
@@ -587,22 +587,22 @@ let private assertSettled (doc: IDocument) (label: string) =
     Assert.Equal(label, fst (badge doc))
     assertNoLineScore doc
     Assert.DoesNotContain("%", text doc "#detail-probbar")
-    Assert.Equal("1", text doc "#detail-away-score")
-    Assert.Equal("2", text doc "#detail-home-score")
+    Assert.Equal(away, text doc "#detail-away-score")
+    Assert.Equal(home, text doc "#detail-home-score")
 
 [<Theory>]
-[<InlineData("final", "Final")>]
-[<InlineData("canceled", "Canceled")>]
-[<InlineData("postponed", "Postponed")>]
-let ``a settled stored status overrides an in progress frame on the page`` status label =
+[<InlineData("final", "Final", "1", "2")>]
+[<InlineData("canceled", "Canceled", "1", "2")>]
+[<InlineData("postponed", "Postponed", "", "")>]
+let ``a settled stored status overrides an in progress frame on the page`` status label away home =
     let doc = pageWith (game status) [ snapshot 0.6 0.5 ] (HighlightsDetailState(HighlightsDetailStatus.Hidden)) (live richContext)
-    assertSettled doc label
+    assertSettled doc label (away, home)
 
 [<Theory>]
 [<InlineData("final", "Final")>]
 [<InlineData("canceled", "Canceled")>]
 let ``a settled update status overrides an in progress frame in the patch`` status label =
-    assertSettled (fragments (GameStatusExtensions.FromDbValue(status).Value) (Some 0.6) (live richContext)) label
+    assertSettled (fragments (GameStatusExtensions.FromDbValue(status).Value) (Some 0.6) (live richContext)) label ("1", "2")
 
 [<Fact>]
 let ``a settled update empties the in progress line score an open page shows`` () =

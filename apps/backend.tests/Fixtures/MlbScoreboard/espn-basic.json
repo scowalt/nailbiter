@@ -2,7 +2,7 @@
   "synthetic": true,
   "provenance": "Independently constructed by scripts/test-fixtures/generate.py from authored contests, line scores and statuses; no provider responses, captures or real game IDs used.",
   "evidenceLimit": "Validates implemented ESPN-basic contracts only, not current provider conformance, field availability, authorization or live latency.",
-  "observationTimes": "servedAt is the fake clock when a board is served; responseDate is the source time a later fake handler can send as the HTTP Date header. The current scoreboard fetch reads neither.",
+  "observationTimes": "servedAt is the fake clock when a board is served and becomes the observation time; responseDate is the HTTP Date header the fake handler sends and becomes the source revision.",
   "contests": {
     "991300101": {
       "case": "final-unplayed-bottom-ninth",

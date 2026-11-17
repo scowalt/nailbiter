@@ -26,7 +26,7 @@ module LeaguePageRenderer =
             | true, o -> Some o
             | _ -> None
 
-        let statusLabel = if status.HasValue then FormatHelpers.getStatusLabel status.Value else ""
+        let statusLabel = FormatHelpers.storedStatusLabel game
         let statusClass = if status.HasValue then FormatHelpers.getStatusClass status.Value else ""
         let isLive = game.Status = "in_progress"
 
@@ -37,7 +37,7 @@ module LeaguePageRenderer =
 
         let homeWinProb = latestOdds |> Option.map (fun o -> o.HomeWinProbability) |> Option.defaultValue 0.5
         let liveClass = if isLive then " is-live" else ""
-        let showScores = game.Status <> "scheduled"
+        let showScores = FormatHelpers.showsScore game.Status
 
         let card = Elem.a [ Attr.href $"/game/{game.Id}"; cls $"league-game{liveClass}" ] [
             Elem.div [ cls "league-game-body" ] [

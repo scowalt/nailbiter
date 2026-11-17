@@ -1,8 +1,8 @@
 {
   "provenance": "Independently constructed by scripts/test-fixtures/generate.py; no provider responses used as inputs.",
   "sha256": {
-    "apps/backend.fsharp.tests/Fixtures/kalshi-mlb-401907993.json": "d89116d1c8c8cf03e904d8870792be0fd23d7e2b4edc0dab8077d637faa7ec48",
-    "apps/backend.fsharp.tests/Fixtures/kalshi-mlb-401908031.json": "8ee7a692f9488e416abd5eb8bbfe7463f8417863d65b301e017ef31cec9a1dfc",
+    "apps/backend.fsharp.tests/Fixtures/kalshi-mlb-401907993.json": "4c799e39a29674ad431c7b2aed3096f16d0155e53accdf492833ac29805dd87b",
+    "apps/backend.fsharp.tests/Fixtures/kalshi-mlb-401908031.json": "45bad730c1875e0acf57c265c0b3d3556b9817c84c616e276670c796b91c74dc",
     "apps/backend.fsharp.tests/Fixtures/kalshi-mlb-playoffs-2026.json": "fa7c5be2cdb6c0c1beb70abbaa8d8efb2aa075a0e6ceb22a1e9970897e2674e2",
     "apps/backend.fsharp.tests/Fixtures/kalshi-nba-playoffs-2026-archived.json": "005c08249899f034c2fe0e51f218b163b83ff78a95fdec602004d703fba6e75c",
     "apps/backend.fsharp.tests/Fixtures/kalshi-nba-playoffs-2026-event.json": "c0c94483b51fb45a893e5c2a400f2bf1610eecae6f0924ca28778eecf8d0b96b",
@@ -12,7 +12,7 @@
     "apps/backend.tests/Fixtures/Broadcasts/mlb-board.json": "f1ce9893b96aad59537d7282523c262764133e8af93445bc56643bbd3096335a",
     "apps/backend.tests/Fixtures/Excitement/context.json": "8ffa1648cb53dfe24b0014725d48e194a93a03c175a976c4964f350dd14f5fdb",
     "apps/backend.tests/Fixtures/Excitement/histories.csv": "590d831763b985a75926d4a6c0bf2e61f2d18b4ce0ee867ea1b54d73c60273d5",
-    "apps/backend.tests/Fixtures/MlbScoreboard/espn-basic.json": "44433b89f068cf6550007d77e74f167e326147effb5b6cd59f739650f56c2212",
+    "apps/backend.tests/Fixtures/MlbScoreboard/espn-basic.json": "bc5525ea119f0afc410897fe499e1edcb2eb1eb0ef2cd64629bf4d431dc3471d",
     "apps/backend.tests/Fixtures/MlbScoreboard/rich-frames.json": "8573bf309f7baa5c558fac3c197b4216dc545c84fc5b857044e75456bec27099",
     "apps/backend.tests/Fixtures/MoneyPuck/rankings_current.csv": "e177e60b1da75ecea00d9ac5a5c1f2394b314536200c6482a550cbb67dde9473",
     "apps/backend.tests/Fixtures/MoneyPuck/update_time.txt": "36ea5f0ee50d76e383884dc902041d4678ba9e8d16e6a8fe547a205edfad7177",
@@ -28,7 +28,7 @@
     "apps/backend.tests/Fixtures/NflPlayoffLeverage/synthetic-espn-controls.csv": "88c68873e47b2a27a903290eef73ab6632467b207381f3cd1a351852bbfe1a40",
     "apps/backend.tests/Fixtures/NhlGuru/rankings.html": "84a4c25dc0455300ea33e108d2a98c9b9af186a3a23c5d5413c8b57cfd435b9d",
     "apps/backend.tests/Fixtures/ProHype/espnschedule.json": "4c2e4b183754b33fe61ff7a014de762b7811ab42841bf9e50850292a9fad3259",
-    "apps/backend.tests/Fixtures/ProHype/mlb-pregame-401907973.json": "2421062499b1bd08e2ed2bf12329795ff07220597caccef7f0f311775b9970a2",
+    "apps/backend.tests/Fixtures/ProHype/mlb-pregame-401907973.json": "47c0596b080e46e1233e3b3544216f8292ac11701eb5a3643a18bdcbcc9e58d6",
     "apps/backend.tests/Fixtures/ProHype/nba-board.json": "2b21fd71b420f2db2ed26aab4275b91796f29dc1f92961581f64b3a5185069ab",
     "apps/backend.tests/Fixtures/ProHype/nba-decider-board.json": "1d7a21591bed8076ab10d4ba37202406a4ca23230285fa38c4a33e29fbda128f",
     "apps/backend.tests/Fixtures/ProHype/nba-seeding-contests.csv": "71b376e322e839289d3f72bcfa8ab1a59d52e89885a4b3fe7b93b3fe2159f636",
@@ -40,6 +40,6 @@
     "apps/backend.tests/Fixtures/ProHype/nhl-seeding-contests.csv": "522c373c49f747b94304c50c9c1990868c10ecdd88a6083ff92c16d31138813a",
     "apps/backend.tests/Fixtures/ProHype/nhl-stakes-401891819.json": "b83a3f6aba5a2d7186596fe1bae7f619a4644294ed24d6f46977e7e6af40b42b",
     "apps/backend.tests/Fixtures/ProHype/nhl-upcoming-board.json": "e0ae73acbf81bc560e3666792cefd92dbb507e66e69b696c16eabd5992495171",
-    "apps/backend.tests/Fixtures/ProHype/postseason-rounds.json": "c54ee55d4ffc69419551eb2383489ad9f57bc6b2260706510b9452eb82dea767"
+    "apps/backend.tests/Fixtures/ProHype/postseason-rounds.json": "0b50ed3d1ab467b14687a7ea8bbfea5c82663bdb92e1c9760ba51ef5ed0f902b"
   }
 }

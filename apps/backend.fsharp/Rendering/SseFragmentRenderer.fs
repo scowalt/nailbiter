@@ -246,8 +246,9 @@ module SseFragmentRenderer =
 
         let excitementScore = if update.ExcitementScore.HasValue then Nullable update.ExcitementScore.Value else Nullable()
         let board = scoreboard.Board
-        let homeScore = match board with Some b -> Some b.Home.Runs | None -> Option.ofNullable update.HomeScore
-        let awayScore = match board with Some b -> Some b.Away.Runs | None -> Option.ofNullable update.AwayScore
+        let scored = FormatHelpers.showsScore (update.Status.ToDbValue())
+        let homeScore = if not scored then None else match board with Some b -> Some b.Home.Runs | None -> Option.ofNullable update.HomeScore
+        let awayScore = if not scored then None else match board with Some b -> Some b.Away.Runs | None -> Option.ofNullable update.AwayScore
 
         let period = Option.ofNullable update.Period
         let gameClock = update.GameClock |> Option.ofObj |> Option.defaultValue ""

@@ -22,7 +22,9 @@
           "type": {
             "name": "STATUS_IN_PROGRESS",
             "state": "in",
-            "completed": false
+            "completed": false,
+            "detail": "Top 3rd",
+            "shortDetail": "Top 3rd"
           },
           "period": 3,
           "displayClock": "0:00"
@@ -35,7 +37,9 @@
               "type": {
                 "name": "STATUS_IN_PROGRESS",
                 "state": "in",
-                "completed": false
+                "completed": false,
+                "detail": "Top 3rd",
+                "shortDetail": "Top 3rd"
               },
               "period": 3,
               "displayClock": "0:00"

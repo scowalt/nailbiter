@@ -100,7 +100,9 @@ type EspnStatusType =
       [<JsonPropertyName("name")>] Name: string
       [<JsonPropertyName("state")>] State: string
       [<JsonPropertyName("completed")>] Completed: Nullable<bool>
-      [<JsonPropertyName("description")>] Description: string }
+      [<JsonPropertyName("description")>] Description: string
+      [<JsonPropertyName("detail")>] Detail: string
+      [<JsonPropertyName("shortDetail")>] ShortDetail: string }
 
 type EspnStatus =
     { [<JsonPropertyName("clock")>] Clock: float
@@ -230,7 +232,8 @@ type EspnScoreboardResponse =
       [<JsonPropertyName("week")>] Week: EspnWeek
       [<JsonPropertyName("season")>] Season: EspnSeason
       [<JsonPropertyName("leagues")>] Leagues: ResizeArray<EspnLeague>
-      [<JsonIgnore>] RawJson: JsonElement }
+      [<JsonIgnore>] RawJson: JsonElement
+      [<JsonIgnore>] ResponseDate: Nullable<DateTimeOffset> }
 
 module EspnSeasonMetadata =
     let seasonType (eventSeason: EspnEventSeason) (scoreboard: EspnScoreboardResponse) =

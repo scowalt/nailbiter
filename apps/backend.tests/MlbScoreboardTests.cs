@@ -64,6 +64,21 @@ public sealed class MlbScoreboardTests : IClassFixture<SharedPostgreSql>, IAsync
         Assert.Equal(FSharpOption<int>.Some(1), board.Home.Errors);
     }
 
+    [Theory]
+    [InlineData("final")]
+    [InlineData("scheduled")]
+    [InlineData("postponed")]
+    public async Task A_frame_is_rejected_with_a_status_its_state_contradicts_and_writes_nothing(string status)
+    {
+        await host.SeedAsync(MlbGame("991300104"), []);
+        At("2027-07-10T23:50:30Z");
+
+        Rejected(MlbScoreboardRejection.NewImpossible("status"), await AcceptAsync(Frame("zero-count-empty-bases", "advance"), status));
+
+        var row = await RowAsync("991300104");
+        Assert.Equal(("in_progress", (DateTime?)null, (string?)null), (row.Status, row.ScoreboardUpdatedAt, row.Json));
+    }
+
     [Fact]
     public async Task Extra_innings_keep_every_inning_in_the_line_score()
     {
@@ -251,6 +266,71 @@ public sealed class MlbScoreboardTests : IClassFixture<SharedPostgreSql>, IAsync
         var row = await RowAsync("991300104");
         Assert.Equal(Utc("2027-07-11T00:30:00Z"), row.ScoreboardUpdatedAt);
         Assert.Equal(Utc("2027-07-10T23:49:55Z"), row.Revision);
+    }
+
+    [Fact]
+    public async Task A_withdrawal_cancels_only_a_scheduled_game_newer_than_its_last_frame_and_shuts_out_older_frames()
+    {
+        await host.SeedAsync(MlbGame("991300106", "scheduled"), []);
+        await host.SeedAsync(MlbGame("991300104"), []);
+        At("2027-07-10T23:31:00Z");
+        Accepted(await AcceptAsync(Report("991300106", "opening", Instant("2027-07-10T23:30:00Z"))));
+        Accepted(await AcceptAsync(Report("991300104", "opening", Instant("2027-07-10T23:30:00Z"))));
+        var scheduled = await RowAsync("991300106");
+        var live = await RowAsync("991300104");
+
+        Assert.False(await WithdrawAsync("991300106", "2027-07-10T23:30:00Z"));
+        Assert.False(await WithdrawAsync("991300104", "2027-07-10T23:31:00Z"));
+        Assert.Equal(scheduled, await RowAsync("991300106"));
+        Assert.Equal(live, await RowAsync("991300104"));
+
+        Assert.True(await WithdrawAsync("991300106", "2027-07-10T23:31:00Z"));
+        Rejected(MlbScoreboardRejection.RegressingObservation,
+            await AcceptAsync(Report("991300106", "opening", Instant("2027-07-10T23:30:30Z"))));
+        Assert.Equal(new Row("canceled", null, null, null, null, Utc("2027-07-10T23:31:00Z"), null, null), await RowAsync("991300106"));
+    }
+
+    [Theory]
+    [InlineData("991300106", "opening")]
+    [InlineData("991300104", "resumption")]
+    public async Task A_withdrawal_racing_an_acceptance_ends_as_one_of_the_two_serial_orders(string gameId, string observation)
+    {
+        const string withdrawnAt = "2027-07-11T00:00:00Z";
+        await host.SeedAsync(MlbGame(gameId, "scheduled"), []);
+        At("2027-07-11T00:01:00Z");
+        foreach (var offset in new[] { -10, 0, 10 })
+        {
+            var frame = Report(gameId, observation, Instant(withdrawnAt).AddSeconds(offset));
+            await ResetAsync(gameId);
+            var accepted = (await AcceptAsync(frame)).IsOk;
+            var acceptFirst = (accepted, await WithdrawAsync(gameId, withdrawnAt), await RowAsync(gameId));
+            await ResetAsync(gameId);
+            var withdrawn = await WithdrawAsync(gameId, withdrawnAt);
+            var withdrawFirst = ((await AcceptAsync(frame)).IsOk, withdrawn, await RowAsync(gameId));
+
+            for (var round = 0; round < 40; round++)
+            {
+                await ResetAsync(gameId);
+                Task<FSharpResult<MlbScoreboardFrame, MlbScoreboardRejection>> acceptance;
+                Task<bool> withdrawal;
+                if (round % 2 == 0)
+                {
+                    acceptance = Task.Run(() => AcceptAsync(frame));
+                    withdrawal = Task.Run(() => WithdrawAsync(gameId, withdrawnAt));
+                }
+                else
+                {
+                    withdrawal = Task.Run(() => WithdrawAsync(gameId, withdrawnAt));
+                    acceptance = Task.Run(() => AcceptAsync(frame));
+                }
+                var raced = ((await acceptance).IsOk, await withdrawal, await RowAsync(gameId));
+
+                Assert.True(raced.Item3.Status != "canceled" || raced.Item3 is { Json: null, HomeScore: null, AwayScore: null },
+                    $"{offset}s round {round}: {raced}");
+                Assert.True(raced.Item3.Json is null || raced.Item3.Status == StatusFor(frame), $"{offset}s round {round}: {raced}");
+                Assert.Contains(raced, new[] { acceptFirst, withdrawFirst });
+            }
+        }
     }
 
     [Fact]
@@ -467,8 +547,8 @@ public sealed class MlbScoreboardTests : IClassFixture<SharedPostgreSql>, IAsync
 
         const string template = "MLB scoreboard stored frame for {GameId} observed at {ObservedAt} is unusable: {Fault}";
         Assert.Equal([
-            new Logged(LogLevel.Error, template, "991300104", Utc("2027-07-10T23:30:00Z"), "WrongTeam Home"),
-            new Logged(LogLevel.Error, template, "991300104", Utc("2027-07-10T23:31:00Z"), "Unreadable"),
+            new Logged(LogLevel.Error, template, "991300104", "2027-07-10T23:30:00.0000000Z", "WrongTeam Home"),
+            new Logged(LogLevel.Error, template, "991300104", "2027-07-10T23:31:00.0000000Z", "Unreadable"),
         ], logs.From<MlbScoreboardStore>());
     }
 
@@ -582,8 +662,26 @@ public sealed class MlbScoreboardTests : IClassFixture<SharedPostgreSql>, IAsync
 
     private async Task<FSharpResult<MlbScoreboardFrame, MlbScoreboardRejection>> AcceptAsync(JsonObject report)
     {
-        return await host.Services.GetRequiredService<MlbScoreboardStore>().AcceptAsync(Parse(report), CancellationToken.None);
+        return await AcceptAsync(report, StatusFor(report));
     }
+
+    internal static string StatusFor(JsonObject report) => (string)report["state"]! is "delayed" or "suspended" ? "in_progress" : (string)report["state"]!;
+
+    private async Task<FSharpResult<MlbScoreboardFrame, MlbScoreboardRejection>> AcceptAsync(JsonObject report, string status) =>
+        await host.Services.GetRequiredService<MlbScoreboardStore>().AcceptAsync(Parse(report), status, CancellationToken.None);
+
+    private async Task ResetAsync(string gameId)
+    {
+        using var scope = host.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().Games.Where(g => g.Id == gameId).ExecuteUpdateAsync(s => s
+            .SetProperty(g => g.Status, "scheduled").SetProperty(g => g.MlbScoreboardJson, (string?)null)
+            .SetProperty(g => g.HomeScore, (int?)null).SetProperty(g => g.AwayScore, (int?)null)
+            .SetProperty(g => g.StatusDetail, (string?)null).SetProperty(g => g.Period, (int?)null)
+            .SetProperty(g => g.ScoreboardUpdatedAt, (DateTime?)null).SetProperty(g => g.ScoreboardSourceRevisionAt, (DateTime?)null));
+    }
+
+    private async Task<bool> WithdrawAsync(string gameId, string observedAt) =>
+        await host.Services.GetRequiredService<MlbScoreboardStore>().WithdrawAsync(gameId, Utc(observedAt), null, CancellationToken.None);
 
     private static MlbScoreboardReport Parse(JsonObject report) =>
         JsonSerializer.Deserialize<MlbScoreboardReport>(report.ToJsonString(), JsonSerializerOptions.Web)!;

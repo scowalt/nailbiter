@@ -98,6 +98,7 @@ public sealed class ExcitementLiveWiringTests : IAsyncLifetime
         await AssertHttpScore(sport, "single", "0", "low");
 
         provider.Final = true;
+        host.Clock.Advance(TimeSpan.FromSeconds(30));
         historyReads.Commands.Clear();
         await RunProfessional(sport, deadline.Token);
         using (var fragments = await live.ReadForAsync("excitement-drama"))
@@ -334,10 +335,10 @@ public sealed class ExcitementLiveWiringTests : IAsyncLifetime
         {
             id = game.Id, date = game.ScheduledStart, shortName = game.AwayTeam + " @ " + game.HomeTeam,
             season = new { year = 2026, type = 2 }, week = new { number = 5 },
-            status = new { period = Final ? 4 : 2, displayClock = Final ? "0:00" : "5:00", type = new { state = Final ? "post" : "in", name = Final ? "STATUS_FINAL" : "STATUS_IN_PROGRESS" } },
+            status = new { period = Final ? 4 : 2, displayClock = Final ? "0:00" : "5:00", type = new { state = Final ? "post" : "in", name = Final ? "STATUS_FINAL" : "STATUS_IN_PROGRESS", completed = Final, detail = Final ? "Final" : "In Progress" } },
             competitions = new[] { new { id = game.Id, competitors = new[] {
-                new { homeAway = "home", score = Final ? "21" : "14", team = new { id = game.HomeTeamId, displayName = game.HomeTeam, abbreviation = game.HomeTeamAbbreviation } },
-                new { homeAway = "away", score = "10", team = new { id = game.AwayTeamId, displayName = game.AwayTeam, abbreviation = game.AwayTeamAbbreviation } }
+                new { id = game.HomeTeamId, homeAway = "home", score = Final ? "21" : "14", team = new { id = game.HomeTeamId, displayName = game.HomeTeam, abbreviation = game.HomeTeamAbbreviation } },
+                new { id = game.AwayTeamId, homeAway = "away", score = "10", team = new { id = game.AwayTeamId, displayName = game.AwayTeam, abbreviation = game.AwayTeamAbbreviation } }
             } } }
         };
 
@@ -358,61 +359,6 @@ public sealed class ExcitementLiveWiringTests : IAsyncLifetime
                 yes_bid_size_fp = bound && !home ? "0" : "10", yes_ask_size_fp = bound && home ? "0" : "10"
             };
         }
-    }
-
-    private sealed class SsePeer : IAsyncDisposable
-    {
-        private readonly CancellationTokenSource deadline = new(TimeSpan.FromSeconds(30));
-        private readonly Task<HttpResponseMessage> pending;
-        private HttpResponseMessage? response;
-        private StreamReader? reader;
-
-        public SsePeer(HttpClient client, string path) => pending = client.GetAsync(path, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
-
-        public async Task<IDocument> ReadForAsync(string id)
-        {
-            response ??= await pending;
-            response.EnsureSuccessStatusCode();
-            Assert.Equal("text/event-stream", response.Content.Headers.ContentType!.MediaType);
-            reader ??= new StreamReader(await response.Content.ReadAsStreamAsync(deadline.Token));
-            var elements = new List<string>();
-            while (true)
-            {
-                var line = await reader.ReadLineAsync(deadline.Token) ?? throw new EndOfStreamException("SSE ended before " + id);
-                if (line.StartsWith("data: elements ")) elements.Add(line[15..]);
-                if (line.Length != 0 || elements.Count == 0) continue;
-                var page = await new HtmlParser().ParseDocumentAsync(string.Join("\n", elements), deadline.Token);
-                if (page.QuerySelector("#" + id) is not null) return page;
-                page.Dispose();
-                elements.Clear();
-            }
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            await deadline.CancelAsync();
-            try { response ??= await pending; }
-            catch (OperationCanceledException) { }
-            reader?.Dispose();
-            response?.Dispose();
-            deadline.Dispose();
-        }
-    }
-
-    private sealed class ReadyBroadcaster : ISseBroadcaster
-    {
-        private readonly ISseBroadcaster inner = new SseBroadcaster();
-        private readonly ConcurrentDictionary<string, TaskCompletionSource> subscriptions = new();
-        public Task PublishAsync(GameUpdate update, CancellationToken ct) => inner.PublishAsync(update, ct);
-        public ChannelReader<GameUpdate> Subscribe(string topic)
-        {
-            var reader = inner.Subscribe(topic);
-            subscriptions.GetOrAdd(topic, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult();
-            return reader;
-        }
-        public void Unsubscribe(string topic, ChannelReader<GameUpdate> subscription) => inner.Unsubscribe(topic, subscription);
-        public Task ReadyAsync(IEnumerable<string> topics, CancellationToken ct) => Task.WhenAll(topics.Select(topic =>
-            subscriptions.GetOrAdd(topic, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).Task)).WaitAsync(ct);
     }
 
     private sealed record HistoryRead(string Sql, object[] Parameters, bool CanBeCanceled);

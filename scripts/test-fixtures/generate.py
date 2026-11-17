@@ -36,18 +36,21 @@ def stamp(value):
     return value.isoformat(timespec='microseconds').replace('+00:00', '0Z')
 
 
-def state(phase='pre', period=0):
+def state(phase='pre', period=0, detail=None):
     names = {'pre': 'STATUS_SCHEDULED', 'post': 'STATUS_FINAL', 'in': 'STATUS_IN_PROGRESS'}
-    return {'type': {'name': names[phase], 'state': phase, 'completed': phase == 'post'}, 'period': period, 'displayClock': '0:00'}
+    kind = {'name': names[phase], 'state': phase, 'completed': phase == 'post'}
+    if detail:
+        kind.update(detail=detail, shortDetail=detail)
+    return {'type': kind, 'period': period, 'displayClock': '0:00'}
 
 
-def event(identity, home, away, date, year=2027, phase=2, status='pre', period=0, score=(0, 0), label=None, wins=None, best=7):
+def event(identity, home, away, date, year=2027, phase=2, status='pre', period=0, score=(0, 0), label=None, wins=None, best=7, detail=None):
     competitors = []
     for i, (team, role) in enumerate([(home, 'home'), (away, 'away')]):
         team_id = IDS.get(team, str(301 + i))
         competitors.append({'id': team_id, 'homeAway': role, 'score': str(score[i]), 'winner': status == 'post' and score[i] > score[1-i],
                             'team': {'id': team_id, 'abbreviation': team, 'displayName': f'Synthetic {team}', 'name': team}})
-    competition = {'id': identity, 'date': date, 'status': state(status, period), 'competitors': competitors}
+    competition = {'id': identity, 'date': date, 'status': state(status, period, detail), 'competitors': competitors}
     if label:
         competition['notes'] = [{'headline': label}]
     if wins is not None:
@@ -55,7 +58,7 @@ def event(identity, home, away, date, year=2027, phase=2, status='pre', period=0
                                  'competitors': [{'id': c['id'], 'wins': wins[i]} for i, c in enumerate(competitors)]}
     return {'id': identity, 'name': f'{away} at {home} synthetic scenario', 'shortName': f'{away} @ {home}', 'date': date,
             'season': {'year': year, 'type': phase}, 'seasonType': {'type': phase}, 'week': {'number': 6},
-            'status': state(status, period), 'competitions': [competition]}
+            'status': state(status, period, detail), 'competitions': [competition]}
 
 
 def schedule(team, events, year=2027, phase=2, now='2026-09-30T18:55:00Z'):
@@ -215,14 +218,15 @@ def pro_schedules():
     for sport, round_number, identity, label, ordinal, best, wins, scores in definitions:
         home, away = ('FLA', 'EDM') if sport == 'nhl' else ('ATL', 'PHI') if sport == 'mlb' else ('BOS', 'MIA')
         cases.append({'synthetic': True, 'sport': sport, 'round': round_number, 'url': f'https://fixture.invalid/{sport}/round-{round_number}',
-                      'event': event(identity, home, away, '2026-05-01T20:00:00Z', 2026, 3, 'post', 4, scores, f'{label} - Game {ordinal}', wins, best)})
+                      'event': event(identity, home, away, '2026-05-01T20:00:00Z', 2026, 3, 'post', 4, scores, f'{label} - Game {ordinal}', wins, best,
+                                     'Final' if sport == 'mlb' else None)})
     emit(F + 'ProHype/postseason-rounds.json', cases)
     emit(F + 'ProHype/nfl-fpi.json', {'synthetic': True, 'pagination': {'pages': 1}, 'requestedSeason': {'year': 2026}, 'currentValues': {'season': 2026},
          'categories': [{'name': 'fpi', 'names': ['fpi', 'fpirank']}], 'teams': [{'team': {'id': str(i+1), 'abbreviation': t, 'displayName': f'Synthetic {t}'}, 'categories': [{'name': 'fpi', 'values': [16-i, i+1], 'ranks': [str(i+1)]}]}  for i, t in enumerate(TEAMS['nfl'])]})
 
 
 def mlb_preview():
-    game = event('401907973', 'ATL', 'PHI', '2026-10-02T00:00:00Z', 2026, 3, period=1, label='NLWC - Game 3', wins=(1, 1), best=3)
+    game = event('401907973', 'ATL', 'PHI', '2026-10-02T00:00:00Z', 2026, 3, period=1, label='NLWC - Game 3', wins=(1, 1), best=3, detail='10/1 - 8:00 PM EDT')
     game['competitions'][0]['odds'] = [{'moneyline': {'home': {'close': {'odds': '-120'}}, 'away': {'close': {'odds': '+110'}}}}]
     prior = [event('401907965', 'ATL', 'PHI', '2026-09-29T20:00:00Z', 2026, 3, 'post', 9, (3, 1), 'NLWC - Game 1'), event('401907972', 'ATL', 'PHI', '2026-09-30T20:00:00Z', 2026, 3, 'post', 9, (1, 3), 'NLWC - Game 2')]
     emit(F + 'ProHype/mlb-pregame-401907973.json', {'synthetic': True, 'board': envelope('mlb', 'scoreboard?dates=20261001&limit=1000', board([game])),
@@ -277,7 +281,7 @@ def mlb_reconciliation():
                           rules_primary=f'If Synthetic {team} wins the {game_text}, then the market resolves to Yes.',
                           rules_secondary=f'The following market refers to the {game_text}. If this game is postponed or delayed, the market will remain open and close after the rescheduled game has finished (within two days). If the game is cancelled or rescheduled to over two days away, the market will resolve to a fair price in accordance with the rules. Kalshi is not affiliated, associated, authorized, endorsed by, or in any way officially connected with the Governing League. All trademarks, logos, and brand names are the property of their respective owners.')
             markets.append(market)
-        emit(FS + f'kalshi-mlb-{identity}.json', {'synthetic': True, 'scoreboard': board([event(identity, home, away, date, 2026, status='in', period=3, score=(2, 1))]), 'catalog': {'markets': markets, 'cursor': ''},
+        emit(FS + f'kalshi-mlb-{identity}.json', {'synthetic': True, 'scoreboard': board([event(identity, home, away, date, 2026, status='in', period=3, score=(2, 1), detail='Top 3rd')]), 'catalog': {'markets': markets, 'cursor': ''},
              'schedule': {'cursor': '', 'milestones': [{'id': f'synthetic-{identity}', 'category': 'Sports', 'type': 'baseball_game', 'start_date': date, 'primary_event_tickers': [ticker], 'details': {'league': 'MLB', 'status': 'inprogress', 'main_game_event_ticker': ticker, 'home_team_id': f'fixture-{home}', 'away_team_id': f'fixture-{away}'}}]}})
 
 
@@ -526,7 +530,7 @@ def mlb_scoreboard():
         'synthetic': True,
         'provenance': 'Independently constructed by scripts/test-fixtures/generate.py from authored contests, line scores and statuses; no provider responses, captures or real game IDs used.',
         'evidenceLimit': 'Validates implemented ESPN-basic contracts only, not current provider conformance, field availability, authorization or live latency.',
-        'observationTimes': 'servedAt is the fake clock when a board is served; responseDate is the source time a later fake handler can send as the HTTP Date header. The current scoreboard fetch reads neither.',
+        'observationTimes': 'servedAt is the fake clock when a board is served and becomes the observation time; responseDate is the HTTP Date header the fake handler sends and becomes the source revision.',
         'contests': contests, 'observations': observations})
 
     def base(runner):

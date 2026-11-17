@@ -42,12 +42,12 @@ public sealed class HighlightsPersistenceTests : IAsyncLifetime
     private static JsonObject Board() => JsonNode.Parse("""
         {"season":{"year":2026,"type":3},"events":[{
           "id":"completed-mlb","date":"2026-10-05T23:00:00Z","name":"Phillies at Braves","shortName":"PHI @ ATL",
-          "status":{"period":9,"type":{"name":"STATUS_FINAL","state":"post","completed":true}},
+          "status":{"period":9,"type":{"name":"STATUS_FINAL","state":"post","completed":true,"detail":"Final","shortDetail":"Final"}},
           "competitions":[{"id":"completed-mlb",
-            "status":{"period":9,"type":{"name":"STATUS_FINAL","state":"post","completed":true}},
+            "status":{"period":9,"type":{"name":"STATUS_FINAL","state":"post","completed":true,"detail":"Final","shortDetail":"Final"}},
             "competitors":[
-              {"homeAway":"home","score":"3","team":{"id":"15","displayName":"Atlanta Braves","abbreviation":"ATL"}},
-              {"homeAway":"away","score":"1","team":{"id":"22","displayName":"Philadelphia Phillies","abbreviation":"PHI"}}
+              {"id":"15","homeAway":"home","score":"3","team":{"id":"15","displayName":"Atlanta Braves","abbreviation":"ATL"}},
+              {"id":"22","homeAway":"away","score":"1","team":{"id":"22","displayName":"Philadelphia Phillies","abbreviation":"PHI"}}
             ]}]
         }]}
         """)!.AsObject();
@@ -108,6 +108,8 @@ public sealed class HighlightsPersistenceTests : IAsyncLifetime
     [InlineData("contradictory-competition")]
     [InlineData("contradictory-description")]
     [InlineData("contradictory-detail")]
+    [InlineData("contradictory-nested-detail")]
+    [InlineData("contradictory-nested-short-detail")]
     public async Task Stored_final_never_substitutes_for_actual_completion(string variant)
     {
         var ev = board["events"]![0]!;
@@ -126,6 +128,8 @@ public sealed class HighlightsPersistenceTests : IAsyncLifetime
             case "contradictory-competition": competition["status"]!["type"]!["completed"] = false; break;
             case "contradictory-description": status["description"] = "Postponed"; break;
             case "contradictory-detail": competition["status"]!["detail"] = "Suspended"; break;
+            case "contradictory-nested-detail": competition["status"]!["type"]!["detail"] = "Suspended"; break;
+            case "contradictory-nested-short-detail": status["shortDetail"] = "Final - Delayed"; break;
         }
         if (variant is "scheduled" or "live")
             ev["date"] = "2099-10-05T23:00:00Z";
@@ -134,7 +138,7 @@ public sealed class HighlightsPersistenceTests : IAsyncLifetime
         Assert.False(result.IsActuallyCompleted);
         Assert.Null(result.Game.CompletionConfirmedAt);
         Assert.Null(result.Game.HighlightsDiscoveryExpiresAt);
-        if (variant is not ("scheduled" or "live")) Assert.Equal("final", result.Game.Status);
+        if (variant is not ("scheduled" or "live")) Assert.Equal(variant == "missing-competition-status" ? "final" : "unknown", result.Game.Status);
     }
 
     [Fact]
@@ -261,6 +265,7 @@ public sealed class HighlightsPersistenceTests : IAsyncLifetime
             Assert.Contains("Highlights not available yet", await client.GetStringAsync("/game/completed-mlb"));
             Assert.Equal("TemporaryFailure", (await Cycle()).Reason);
             board["events"]![0]!["competitions"]![0]!["competitors"]![0]!["score"] = "4";
+            clock.Now = clock.Now.AddSeconds(30);
             await Collect();
             Assert.Equal(4, (await Inspect()).Game.HomeScore);
             Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/game/completed-mlb")).StatusCode);

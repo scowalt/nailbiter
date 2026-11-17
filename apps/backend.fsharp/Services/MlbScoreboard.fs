@@ -322,17 +322,47 @@ module MlbScoreboard =
             return frame
         }
 
-    let internal write (game: Game) (frame: MlbScoreboardFrame) =
-        game.MlbScoreboardJson <- JsonSerializer.Serialize(frame.Report, JsonSerializerOptions.Web)
+    let admits (frame: MlbScoreboardFrame) (status: string) =
+        match frame.State, status with
+        | MlbGameState.Scheduled, "scheduled"
+        | MlbGameState.InProgress, "in_progress"
+        | (MlbGameState.Delayed | MlbGameState.Suspended), ("scheduled" | "in_progress")
+        | MlbGameState.Postponed, "postponed"
+        | MlbGameState.Canceled, "canceled"
+        | MlbGameState.Final, "final" -> true
+        | _ -> false
+
+    let private raiseRevision (game: Game) (revision: DateTime option) =
         game.ScoreboardSourceRevisionAt <-
-            match [ frame.SourceRevisionAt; ofNullable game.ScoreboardSourceRevisionAt ] |> List.choose id with
+            match [ revision; ofNullable game.ScoreboardSourceRevisionAt ] |> List.choose id with
             | [] -> Nullable()
             | revisions -> Nullable(List.max revisions)
+
+    let internal write (game: Game) (frame: MlbScoreboardFrame) (status: string) =
+        game.Status <- status
+        game.MlbScoreboardJson <- JsonSerializer.Serialize(frame.Report, JsonSerializerOptions.Web)
+        raiseRevision game frame.SourceRevisionAt
         game.AwayScore <- Nullable frame.AwayLine.Runs
         game.HomeScore <- Nullable frame.HomeLine.Runs
         game.StatusDetail <- frame.Detail
         game.Period <- toNullable frame.Inning
         game.ScoreboardUpdatedAt <- Nullable frame.ObservedAt
+
+    let internal withdraw (game: Game) (observedAt: DateTime) (revision: DateTime option) =
+        let current =
+            game.Status = "scheduled"
+            && ofNullable game.ScoreboardUpdatedAt |> Option.forall (fun accepted -> observedAt > accepted)
+            && Option.map2 (>=) revision (ofNullable game.ScoreboardSourceRevisionAt) |> Option.defaultValue true
+        if current then
+            game.Status <- "canceled"
+            game.MlbScoreboardJson <- null
+            raiseRevision game revision
+            game.AwayScore <- Nullable()
+            game.HomeScore <- Nullable()
+            game.StatusDetail <- null
+            game.Period <- Nullable()
+            game.ScoreboardUpdatedAt <- Nullable observedAt
+        current
 
     let private cells (line: MlbTeamLine) =
         line.Innings |> Option.defaultValue [] |> List.map (Option.map MlbLineCell.Runs >> Option.defaultValue MlbLineCell.Missing)
@@ -392,36 +422,56 @@ type MlbScoreboardStore(scopes: IServiceScopeFactory, timeProvider: TimeProvider
                 | MlbStoredFrameFault.Invalid rejection -> string rejection
             logger.LogError(
                 "MLB scoreboard stored frame for {GameId} observed at {ObservedAt} is unusable: {Fault}",
-                box game.Id, box game.ScoreboardUpdatedAt, box fault)
+                box game.Id, box (ofNullable game.ScoreboardUpdatedAt |> Option.map _.ToString("O") |> Option.toObj), box fault)
 
-    member _.AcceptAsync(report: MlbScoreboardReport, cancellationToken: CancellationToken)
+    let locked (db: ExcitementDbContext) (gameId: string) (cancellationToken: CancellationToken) =
+        if db.Database.IsNpgsql() then
+            task {
+                do! db.LockProHypeFenceAsync(ProHypeFenceAccess.WriteGames, cancellationToken)
+                let admission: FormattableString = $"SELECT pg_advisory_xact_lock(683, hashtext({gameId}))"
+                let! _ = db.Database.ExecuteSqlInterpolatedAsync(admission, cancellationToken)
+                let row: FormattableString = $"SELECT * FROM games WHERE id = {gameId} FOR UPDATE"
+                return! db.Games.FromSqlInterpolated(row).SingleOrDefaultAsync(cancellationToken)
+            }
+        else db.Games.SingleOrDefaultAsync((fun g -> g.Id = gameId), cancellationToken)
+
+    member _.AcceptAsync(report: MlbScoreboardReport, status: string, cancellationToken: CancellationToken)
         : Task<Result<MlbScoreboardFrame, MlbScoreboardRejection>> =
         task {
             let gameId = report |> ofObj |> Option.map _.GameId |> Option.defaultValue null
             use scope = scopes.CreateScope()
             let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
             use! transaction = db.Database.BeginTransactionAsync(cancellationToken)
-            let! game =
-                if db.Database.IsNpgsql() then
-                    task {
-                        do! db.LockProHypeFenceAsync(ProHypeFenceAccess.WriteGames, cancellationToken)
-                        let admission: FormattableString = $"SELECT pg_advisory_xact_lock(683, hashtext({gameId}))"
-                        let! _ = db.Database.ExecuteSqlInterpolatedAsync(admission, cancellationToken)
-                        let row: FormattableString = $"SELECT * FROM games WHERE id = {gameId} FOR UPDATE"
-                        return! db.Games.FromSqlInterpolated(row).SingleOrDefaultAsync(cancellationToken)
-                    }
-                else db.Games.SingleOrDefaultAsync((fun g -> g.Id = gameId), cancellationToken)
+            let! game = locked db gameId cancellationToken
             match ofObj game with
             | None -> return Error MlbScoreboardRejection.WrongGame
             | Some game ->
-                let accepted = MlbScoreboard.accept (timeProvider.GetUtcNow().UtcDateTime) game report
+                let accepted =
+                    MlbScoreboard.accept (timeProvider.GetUtcNow().UtcDateTime) game report
+                    |> Result.bind (fun frame ->
+                        if MlbScoreboard.admits frame status then Ok frame else Error(MlbScoreboardRejection.Impossible "status"))
                 match accepted with
                 | Ok frame ->
-                    MlbScoreboard.write game frame
+                    MlbScoreboard.write game frame status
                     let! _ = db.SaveChangesAsync(cancellationToken)
                     do! transaction.CommitAsync(cancellationToken)
                 | Error _ -> ()
                 return accepted
+        }
+
+    member _.WithdrawAsync(gameId: string, observedAt: DateTime, revision: Nullable<DateTimeOffset>, cancellationToken: CancellationToken)
+        : Task<bool> =
+        task {
+            use scope = scopes.CreateScope()
+            let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
+            use! transaction = db.Database.BeginTransactionAsync(cancellationToken)
+            let! game = locked db gameId cancellationToken
+            match ofObj game with
+            | Some game when game.Sport = "mlb" && MlbScoreboard.withdraw game observedAt (ofNullable revision |> Option.map _.UtcDateTime) ->
+                let! _ = db.SaveChangesAsync(cancellationToken)
+                do! transaction.CommitAsync(cancellationToken)
+                return true
+            | _ -> return false
         }
 
     member _.ReadAsync(gameId: string, cancellationToken: CancellationToken) : Task<MlbScoreboardView option> =

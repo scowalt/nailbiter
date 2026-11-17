@@ -203,11 +203,12 @@ module GameDetailRenderer =
                             ]
                             Elem.span [ cls "meta-text" ] [ Text.enc game.AwayTeam ]
                             Elem.span [ cls "detail-score"; Attr.id "detail-away-score" ] [
-                                match board with
-                                | Some b -> Text.raw $"{b.Away.Runs}"
-                                | None ->
-                                    if game.AwayScore.HasValue then
-                                        Text.raw $"{game.AwayScore.Value}"
+                                if FormatHelpers.showsScore game.Status then
+                                    match board with
+                                    | Some b -> Text.raw $"{b.Away.Runs}"
+                                    | None ->
+                                        if game.AwayScore.HasValue then
+                                            Text.raw $"{game.AwayScore.Value}"
                             ]
                         ]
                         Elem.div [ cls "scoreboard-center" ] [
@@ -255,11 +256,12 @@ module GameDetailRenderer =
                             ]
                             Elem.span [ cls "meta-text" ] [ Text.enc game.HomeTeam ]
                             Elem.span [ cls "detail-score"; Attr.id "detail-home-score" ] [
-                                match board with
-                                | Some b -> Text.raw $"{b.Home.Runs}"
-                                | None ->
-                                    if game.HomeScore.HasValue then
-                                        Text.raw $"{game.HomeScore.Value}"
+                                if FormatHelpers.showsScore game.Status then
+                                    match board with
+                                    | Some b -> Text.raw $"{b.Home.Runs}"
+                                    | None ->
+                                        if game.HomeScore.HasValue then
+                                            Text.raw $"{game.HomeScore.Value}"
                             ]
                         ]
                     ]
