@@ -225,7 +225,8 @@ class DotnetSdkCheckTests(unittest.TestCase):
         self.assertIn('::error title=.NET SDK not on PATH::', result.stdout)
 
     def test_pinned_sdk_reporting_another_version_fails(self):
-        self.dotnet(self.pinned, '10.0.404')
+        major_minor, patch = SDK.rsplit('.', 1)
+        self.dotnet(self.pinned, f'{major_minor}.{int(patch) + 1}')
         result = self.check(self.pinned)
         self.assertNotEqual(result.returncode, 0, result.stdout)
         self.assertIn('::error title=.NET SDK version mismatch::', result.stdout)
