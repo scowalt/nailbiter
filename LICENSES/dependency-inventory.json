@@ -246,13 +246,6 @@
     {
       "ecosystem": "npm",
       "name": "@esbuild/linux-x64",
-      "version": "0.25.12",
-      "declared_license": "MIT",
-      "notices": []
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@esbuild/linux-x64",
       "version": "0.27.4",
       "declared_license": "MIT",
       "notices": []
@@ -469,22 +462,8 @@
     },
     {
       "ecosystem": "npm",
-      "name": "@rollup/rollup-linux-x64-gnu",
-      "version": "4.60.3",
-      "declared_license": "MIT",
-      "notices": []
-    },
-    {
-      "ecosystem": "npm",
       "name": "@rollup/rollup-linux-x64-musl",
       "version": "4.54.0",
-      "declared_license": "MIT",
-      "notices": []
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@rollup/rollup-linux-x64-musl",
-      "version": "4.60.3",
       "declared_license": "MIT",
       "notices": []
     },
@@ -1749,15 +1728,6 @@
       "declared_license": "MIT",
       "notices": [
         "LICENSES/npm/es-object-atoms@1.1.1/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "esbuild",
-      "version": "0.25.12",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/esbuild@0.25.12/LICENSE.md"
       ]
     },
     {
@@ -3203,15 +3173,6 @@
     },
     {
       "ecosystem": "npm",
-      "name": "nanoid",
-      "version": "3.3.12",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/nanoid@3.3.12/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
       "name": "negotiator",
       "version": "0.6.3",
       "declared_license": "MIT",
@@ -3663,15 +3624,6 @@
     {
       "ecosystem": "npm",
       "name": "postcss",
-      "version": "8.5.14",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/postcss@8.5.14/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "postcss",
       "version": "8.5.6",
       "declared_license": "MIT",
       "notices": [
@@ -3999,15 +3951,6 @@
       "declared_license": "MIT",
       "notices": [
         "LICENSES/npm/rollup@4.54.0/LICENSE.md"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "rollup",
-      "version": "4.60.3",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/rollup@4.60.3/LICENSE.md"
       ]
     },
     {
@@ -4400,15 +4343,6 @@
     },
     {
       "ecosystem": "npm",
-      "name": "tinyglobby",
-      "version": "0.2.16",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/tinyglobby@0.2.16/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
       "name": "tinyrainbow",
       "version": "3.2.0",
       "declared_license": "MIT",
@@ -4747,15 +4681,6 @@
       "declared_license": "MIT",
       "notices": [
         "LICENSES/npm/vfile-message@4.0.3/license"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "vite",
-      "version": "6.4.2",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/vite@6.4.2/LICENSE.md"
       ]
     },
     {

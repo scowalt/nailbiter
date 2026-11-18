@@ -25,7 +25,7 @@ bun run lint
 python scripts/test-fixtures/generate.py --check
 
 bun install --cwd apps/web-components --frozen-lockfile --ignore-scripts
-bun run --cwd apps/web-components build --outDir ../../.ci/web-components
+bun run --cwd apps/web-components build --outdir ../../.ci/web-components
 
 bun install --cwd apps/www --frozen-lockfile --ignore-scripts
 bun run --cwd apps/www build

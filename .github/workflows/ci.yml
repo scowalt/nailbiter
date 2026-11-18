@@ -77,7 +77,7 @@ jobs:
       - name: Build web components independently
         run: |
           bun install --cwd apps/web-components --frozen-lockfile --ignore-scripts
-          bun run --cwd apps/web-components build --outDir ../../.ci/web-components
+          bun run --cwd apps/web-components build --outdir ../../.ci/web-components
       - name: Backend build and F# suite
         env:
           DOTNET_CLI_TELEMETRY_OPTOUT: '1'

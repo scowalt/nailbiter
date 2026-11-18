@@ -3,11 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build",
-    "dev": "vite build --watch"
-  },
-  "devDependencies": {
-    "vite": "^6.3.5"
+    "build": "bun build src/index.js --target=browser --format=esm --minify-syntax --minify-identifiers --entry-naming=nailbiter-components.js --outdir ../backend/wwwroot/js",
+    "dev": "bun run build --watch"
   },
   "dependencies": {
     "chart.js": "^4.4.8"
