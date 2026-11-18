@@ -191,7 +191,7 @@ bun run test:live-sync
 bun tests/browser-fixture/highlights-acceptance.js
 bun tests/browser-fixture/setup-smoke.js
 bun tests/browser-fixture/setup-failure-smoke.js
-uv run --no-project --python 3.14 --with-requirements .comment-policy/requirements.txt python .comment-policy/check.py
+scripts/comment-policy-python .comment-policy/check.py
 ```
 
 The browser test extends the existing isolated fixture, using actual game routes,

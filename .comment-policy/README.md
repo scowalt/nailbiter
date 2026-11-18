@@ -12,11 +12,16 @@ also banned. Runtime descriptions belong in explicit metadata, such as Click
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/) and
 [Lefthook](https://lefthook.dev/installation/). The checker uses an isolated,
 pinned parser environment; application dependencies and runtimes are unchanged.
+`scripts/comment-policy-python` runs Python from the repository root in a
+temporary virtual environment that holds only the packages in
+`.comment-policy/requirements.txt`, installed with `uv pip install
+--require-hashes`. Do not use `uv run --with-requirements` instead: uv 0.11.32
+does not check the file's hashes that way.
 
 ```sh
 lefthook install pre-commit
-uv run --no-project --python 3.14 --with-requirements .comment-policy/requirements.txt python .comment-policy/check.py
-uv run --no-project --python 3.14 --with-requirements .comment-policy/requirements.txt python -m unittest discover -s .comment-policy -p 'test_*.py'
+scripts/comment-policy-python .comment-policy/check.py
+scripts/comment-policy-python -m unittest discover -s .comment-policy -p 'test_*.py'
 ```
 
 The pre-commit hook passes `--staged` and reads the **complete Git index**, not the
