@@ -590,7 +590,7 @@ type EspnOddsService
                                     HomeWinProbability = homeProb,
                                     AwayWinProbability = awayProb,
                                     DrawWinProbability = drawProb,
-                                    GameClock = espnEvent.Status.DisplayClock,
+                                    GameClock = OddsSnapshot.BoundGameClock espnEvent.Status.DisplayClock,
                                     Period = Nullable<int>(espnEvent.Status.Period),
                                     HomeScore = (if Int32.TryParse(homeComp.Score, &hs) then Nullable<int>(hs) else Nullable<int>()),
                                     AwayScore = (if Int32.TryParse(awayComp.Score, &aws) then Nullable<int>(aws) else Nullable<int>()),

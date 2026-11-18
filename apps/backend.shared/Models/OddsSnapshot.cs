@@ -2,6 +2,13 @@ namespace backend.Models;
 
 public class OddsSnapshot
 {
+    public const int GameClockMaxLength = 20;
+
+    public static string? BoundGameClock(string? clock) =>
+        clock is not { Length: > GameClockMaxLength } ? clock
+        : char.IsHighSurrogate(clock[GameClockMaxLength - 1]) ? clock[..(GameClockMaxLength - 1)]
+        : clock[..GameClockMaxLength];
+
     public long Id { get; set; }
     public required string GameId { get; set; }
     public DateTime Timestamp { get; set; }

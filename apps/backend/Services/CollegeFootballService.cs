@@ -347,7 +347,7 @@ public sealed class CollegeFootballService(
                     AwayWinProbability = 1 - observation.HomeProbability,
                     Source = observation.Source,
                     Period = game.Period,
-                    GameClock = game.GameClock,
+                    GameClock = OddsSnapshot.BoundGameClock(game.GameClock),
                     HomeScore = game.HomeScore,
                     AwayScore = game.AwayScore
                 });
