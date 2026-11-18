@@ -216,6 +216,36 @@ public sealed class ExcitementLiveWiringTests : IAsyncLifetime
         await AssertHttpScore("cfb", "1002", "0", "low");
     }
 
+    [Theory]
+    [InlineData("nba", "End of 2nd Quarter Delayed", "End of 2nd Quarter D")]
+    [InlineData("cfb", "End of 2nd Quarter Delayed", "End of 2nd Quarter D")]
+    [InlineData("nba", "xxxxxxxxxxxxxxxxxxx\U0001F600tail", "xxxxxxxxxxxxxxxxxxx")]
+    [InlineData("cfb", "xxxxxxxxxxxxxxxxxxx\U0001F600tail", "xxxxxxxxxxxxxxxxxxx")]
+    public async Task An_ESPN_clock_longer_than_the_odds_snapshot_column_is_stored_truncated(string sport, string clock, string stored)
+    {
+        var game = Game("1001", sport, "HOM", "AWY");
+        await host.SeedAsync(game, []);
+        using (var scope = host.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+            db.CollegeImports.Add(new CollegeImport { Season = 2026, FirstImportAt = now.UtcDateTime, WindowStart = now.UtcDateTime.AddDays(-14) });
+            db.CollegeTeams.Add(new CollegeTeam { Season = 2026, EspnId = game.HomeTeamId!, Name = game.HomeTeam,
+                Abbreviation = game.HomeTeamAbbreviation, FetchedAt = now.UtcDateTime, FpiUpdatedAt = now.UtcDateTime });
+            await db.SaveChangesAsync();
+        }
+        provider.SetGames(now, game);
+        provider.Clock = clock;
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+        if (sport == "cfb") await RunCollege(deadline.Token);
+        else await RunProfessional(sport, deadline.Token);
+
+        using var read = host.Services.CreateScope();
+        var snapshot = await read.ServiceProvider.GetRequiredService<ExcitementDbContext>().OddsSnapshots
+            .AsNoTracking().SingleAsync(s => s.GameId == game.Id && s.Timestamp == now.UtcDateTime);
+        Assert.Equal(stored, snapshot.GameClock);
+    }
+
     private async Task RunCollege(CancellationToken ct)
     {
         using var scope = host.Services.CreateScope();
@@ -292,6 +322,7 @@ public sealed class ExcitementLiveWiringTests : IAsyncLifetime
         public bool Final;
         public bool BoundSecond;
         public bool FailQuotes;
+        public string Clock = "5:00";
 
         public void SetGames(DateTimeOffset time, params Game[] values) { observed = time; games = values; }
 
@@ -334,7 +365,7 @@ public sealed class ExcitementLiveWiringTests : IAsyncLifetime
         {
             id = game.Id, date = game.ScheduledStart, shortName = game.AwayTeam + " @ " + game.HomeTeam,
             season = new { year = 2026, type = 2 }, week = new { number = 5 },
-            status = new { period = Final ? 4 : 2, displayClock = Final ? "0:00" : "5:00", type = new { state = Final ? "post" : "in", name = Final ? "STATUS_FINAL" : "STATUS_IN_PROGRESS" } },
+            status = new { period = Final ? 4 : 2, displayClock = Final ? "0:00" : Clock, type = new { state = Final ? "post" : "in", name = Final ? "STATUS_FINAL" : "STATUS_IN_PROGRESS" } },
             competitions = new[] { new { id = game.Id, competitors = new[] {
                 new { homeAway = "home", score = Final ? "21" : "14", team = new { id = game.HomeTeamId, displayName = game.HomeTeam, abbreviation = game.HomeTeamAbbreviation } },
                 new { homeAway = "away", score = "10", team = new { id = game.AwayTeamId, displayName = game.AwayTeam, abbreviation = game.AwayTeamAbbreviation } }

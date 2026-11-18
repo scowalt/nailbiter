@@ -309,7 +309,7 @@ public class ExcitementDbContext : DbContext
             entity.Property(e => e.HomeWinProbability).HasColumnName("home_win_probability");
             entity.Property(e => e.AwayWinProbability).HasColumnName("away_win_probability");
             entity.Property(e => e.DrawWinProbability).HasColumnName("draw_win_probability");
-            entity.Property(e => e.GameClock).HasColumnName("game_clock");
+            entity.Property(e => e.GameClock).HasColumnName("game_clock").HasMaxLength(OddsSnapshot.GameClockMaxLength);
             entity.Property(e => e.Period).HasColumnName("period");
             entity.Property(e => e.IsHistorical).HasColumnName("is_historical").HasDefaultValue(false);
             entity.Property(e => e.HomeScore).HasColumnName("home_score");
