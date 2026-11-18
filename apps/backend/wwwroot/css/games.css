@@ -503,7 +503,7 @@
   .unavailable-note {
     font-size: var(--text-xs);
     line-height: var(--text-xs-line-height);
-    color: var(--color-text-muted);
+    color: var(--color-text-subtle);
   }
 
   .series-metric {
@@ -547,7 +547,7 @@
   .detail-unavailable-note {
     font-size: var(--text-sm);
     line-height: var(--text-sm-line-height);
-    color: var(--color-text-muted);
+    color: var(--color-text-subtle);
   }
 
   .detail-clock-text {

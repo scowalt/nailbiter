@@ -24,6 +24,7 @@
     <Compile Include="HypeScoreTests.fs" />
     <Compile Include="FormatHelpersTests.fs" />
     <Compile Include="LayoutTests.fs" />
+    <Compile Include="NoOddsContrastTests.fs" />
     <Compile Include="TeamColorsTests.fs" />
     <Compile Include="ProbabilityDisplayTests.fs" />
     <Compile Include="GameDetailRendererTests.fs" />
@@ -50,6 +51,7 @@
   <ItemGroup>
     <None Include="Fixtures/kalshi-*-playoffs-*.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Fixtures/kalshi-mlb-*.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../backend/wwwroot/css/global.css;../backend/wwwroot/css/games.css" Link="Css/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="../backend.fsharp/backend.fsharp.fsproj" />
   </ItemGroup>
 
