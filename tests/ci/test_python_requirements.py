@@ -52,6 +52,14 @@ def ci_sources():
             yield str(script.relative_to(ROOT)), script.read_text(errors='replace')
 
 
+def local_sources():
+    for hook, config in yaml.safe_load((ROOT / 'lefthook.yml').read_text()).items():
+        for name, command in config.get('commands', {}).items():
+            yield f'lefthook.yml:{hook}.{name}', command['run']
+    script = ROOT / 'scripts/comment-policy-python'
+    yield str(script.relative_to(ROOT)), script.read_text()
+
+
 def hashed_file_problems(path):
     if not path.is_file():
         return [f'{path} does not exist']
@@ -167,9 +175,9 @@ def line_install_problems(line):
     return install_problems(shlex.split(line, comments=True))
 
 
-def ci_install_problems():
+def install_problems_in(sources):
     found = []
-    for source, text in ci_sources():
+    for source, text in sources:
         for line in logical_lines(text):
             for problem in line_install_problems(line):
                 found.append(f'{source}: {problem}: {line.strip()}')
@@ -190,7 +198,15 @@ class CiPythonPackageTests(unittest.TestCase):
     maxDiff = None
 
     def test_every_ci_python_install_is_exactly_pinned_and_hashed(self):
-        self.assertEqual(ci_install_problems(), [])
+        self.assertEqual(install_problems_in(ci_sources()), [])
+
+    def test_lefthook_and_local_policy_runs_install_only_hashed_packages(self):
+        self.assertEqual(install_problems_in(local_sources()), [])
+
+    def test_lefthook_runs_the_comment_policy_through_the_hashed_script(self):
+        hooks = dict(local_sources())
+        self.assertTrue(hooks['lefthook.yml:pre-commit.no-comments'].startswith('scripts/comment-policy-python .comment-policy/check.py'))
+        self.assertIn('--require-hashes --no-build -r .comment-policy/requirements.txt', hooks['scripts/comment-policy-python'])
 
     def test_ci_installs_each_suite_from_a_hashed_file(self):
         files = ci_requirement_files()
