@@ -5180,7 +5180,7 @@
     {
       "ecosystem": "nuget",
       "name": "FSharp.Core",
-      "version": "10.1.401",
+      "version": "10.1.404",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5193,7 +5193,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "e34a38d2ae1fc26406a317517196e55c68ff83ab"
+          "commit": "2ab2854867733112c84ac12c4273d7970ac3afdf"
         }
       ],
       "notices": []
@@ -5244,7 +5244,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.AspNetCore.Mvc.Testing",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5257,7 +5257,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5265,7 +5265,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.AspNetCore.OpenApi",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5278,7 +5278,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5286,7 +5286,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.AspNetCore.TestHost",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5299,7 +5299,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5481,7 +5481,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Data.Sqlite.Core",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5494,7 +5494,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5502,7 +5502,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.EntityFrameworkCore",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5515,7 +5515,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5544,7 +5544,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.EntityFrameworkCore.Abstractions",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5557,7 +5557,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5586,7 +5586,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.EntityFrameworkCore.Analyzers",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5599,7 +5599,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5628,7 +5628,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.EntityFrameworkCore.Design",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5641,7 +5641,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5649,7 +5649,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.EntityFrameworkCore.InMemory",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5662,7 +5662,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5670,7 +5670,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.EntityFrameworkCore.Relational",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5683,7 +5683,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5712,7 +5712,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.EntityFrameworkCore.Sqlite",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5725,7 +5725,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5733,7 +5733,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.EntityFrameworkCore.Sqlite.Core",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5746,7 +5746,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5775,7 +5775,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Caching.Abstractions",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5788,7 +5788,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5817,7 +5817,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Caching.Memory",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5830,7 +5830,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5880,7 +5880,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Configuration",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5893,7 +5893,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5901,7 +5901,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Configuration.Abstractions",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5914,7 +5914,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5943,7 +5943,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Configuration.Binder",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5956,7 +5956,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5964,7 +5964,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Configuration.CommandLine",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5977,7 +5977,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -5985,7 +5985,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Configuration.EnvironmentVariables",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -5998,7 +5998,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6006,7 +6006,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Configuration.FileExtensions",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6019,7 +6019,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6027,7 +6027,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Configuration.Json",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6040,7 +6040,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6048,7 +6048,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Configuration.UserSecrets",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6061,7 +6061,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6069,7 +6069,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.DependencyInjection",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6082,7 +6082,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6111,7 +6111,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.DependencyInjection.Abstractions",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6124,7 +6124,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6174,7 +6174,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.DependencyModel",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6187,7 +6187,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6195,7 +6195,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Diagnostics",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6208,7 +6208,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6216,7 +6216,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Diagnostics.Abstractions",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6229,7 +6229,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6258,7 +6258,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.FileProviders.Abstractions",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6271,7 +6271,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6279,7 +6279,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.FileProviders.Physical",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6292,7 +6292,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6300,7 +6300,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.FileSystemGlobbing",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6313,7 +6313,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6321,7 +6321,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Hosting",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6334,7 +6334,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6342,7 +6342,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Hosting.Abstractions",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6355,7 +6355,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6426,7 +6426,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Logging",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6439,7 +6439,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6468,7 +6468,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Logging.Abstractions",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6481,7 +6481,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6510,7 +6510,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Logging.Configuration",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6523,7 +6523,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6531,7 +6531,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Logging.Console",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6544,7 +6544,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6552,7 +6552,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Logging.Debug",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6565,7 +6565,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6573,7 +6573,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Logging.EventLog",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6586,7 +6586,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6594,7 +6594,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Logging.EventSource",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6607,7 +6607,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6636,7 +6636,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Options",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6649,7 +6649,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6678,7 +6678,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Options.ConfigurationExtensions",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6691,7 +6691,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6699,7 +6699,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.Extensions.Primitives",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6712,7 +6712,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
@@ -6847,7 +6847,7 @@
     {
       "ecosystem": "nuget",
       "name": "Microsoft.OpenApi",
-      "version": "2.12.2",
+      "version": "2.13.0",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -6860,7 +6860,7 @@
         {
           "type": "git",
           "url": "https://github.com/Microsoft/OpenAPI.NET",
-          "commit": "a24aac560adbf013ff5aa63a873e5a7babce38d2"
+          "commit": "0b8c9d697dcf0fca2d107cb79517c56d3f9ae940"
         }
       ],
       "notices": []
@@ -7264,7 +7264,7 @@
     {
       "ecosystem": "nuget",
       "name": "SQLitePCLRaw.bundle_e_sqlite3",
-      "version": "2.1.12",
+      "version": "2.1.13",
       "declared_license": "Apache-2.0",
       "license_type": "expression",
       "license_urls": [
@@ -7284,7 +7284,7 @@
     {
       "ecosystem": "nuget",
       "name": "SQLitePCLRaw.core",
-      "version": "2.1.12",
+      "version": "2.1.13",
       "declared_license": "Apache-2.0",
       "license_type": "expression",
       "license_urls": [
@@ -7304,7 +7304,7 @@
     {
       "ecosystem": "nuget",
       "name": "SQLitePCLRaw.lib.e_sqlite3",
-      "version": "2.1.12",
+      "version": "2.1.13",
       "declared_license": "Apache-2.0",
       "license_type": "expression",
       "license_urls": [
@@ -7324,7 +7324,7 @@
     {
       "ecosystem": "nuget",
       "name": "SQLitePCLRaw.provider.e_sqlite3",
-      "version": "2.1.12",
+      "version": "2.1.13",
       "declared_license": "Apache-2.0",
       "license_type": "expression",
       "license_urls": [
@@ -7649,7 +7649,7 @@
     {
       "ecosystem": "nuget",
       "name": "System.Diagnostics.EventLog",
-      "version": "10.0.12",
+      "version": "10.0.15",
       "declared_license": "MIT",
       "license_type": "expression",
       "license_urls": [
@@ -7662,7 +7662,7 @@
         {
           "type": "git",
           "url": "https://github.com/dotnet/dotnet",
-          "commit": "95017c711e6afc1085133d440e42b4bd78155701"
+          "commit": "8e0f8ed2312954727f8919d7d1c2f78b483b4ee7"
         }
       ],
       "notices": []
