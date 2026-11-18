@@ -1,6 +1,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0.404@sha256:fe0fd4e93bd2fbb47c883b7a6369e5c8d3db8bf01cdc5981f6ee35fbdf3ff4fb AS build
 WORKDIR /src
 
+COPY backend/global.json backend/
+RUN expected=$(sed -n 's/^ *"version": *"\([0-9][0-9.]*\)",* *$/\1/p' backend/global.json) \
+    && actual=$(dotnet --version) \
+    && echo "SDK image: $actual, apps/backend/global.json: $expected" \
+    && if [ -z "$expected" ] || [ "$actual" != "$expected" ]; then echo "The SDK image is not the apps/backend/global.json SDK" >&2; exit 1; fi
+
 COPY backend/backend.csproj backend/
 COPY backend.shared/backend.shared.csproj backend.shared/
 COPY backend.fsharp/backend.fsharp.fsproj backend.fsharp/

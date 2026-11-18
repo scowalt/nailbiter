@@ -93,6 +93,57 @@ class DotnetImageTests(unittest.TestCase):
         self.assertRegex(runtime.split(':')[1].split('@')[0], rf'^{re.escape(major_minor)}\.[0-9]+$')
 
 
+class DotnetImageSdkGuardTests(unittest.TestCase):
+    def setUp(self):
+        text = (ROOT / 'apps/backend/Dockerfile').read_text().replace('\\\n', ' ')
+        self.instructions = [line.split(None, 1) for line in text.splitlines() if line.strip()]
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.src = self.root / 'src'
+        (self.src / 'backend').mkdir(parents=True)
+        (self.src / 'backend/global.json').write_bytes((ROOT / 'apps/backend/global.json').read_bytes())
+        self.bin = self.root / 'bin'
+        self.bin.mkdir()
+
+    def guard(self):
+        copy = self.instructions.index(['COPY', 'backend/global.json backend/'])
+        self.assertEqual(self.instructions[copy + 1][0], 'RUN')
+        return copy + 1
+
+    def run_guard(self, version):
+        (self.bin / 'dotnet').write_text(f'#!/bin/sh\n[ "$1" = --version ] && echo {version}\n')
+        (self.bin / 'dotnet').chmod(0o755)
+        env = {'PATH': str(self.bin) + os.pathsep + os.environ['PATH']}
+        return subprocess.run(['sh', '-c', self.instructions[self.guard()][1]], cwd=self.src, env=env, capture_output=True, text=True, timeout=30)
+
+    def test_the_guard_runs_in_the_build_stage_before_restore(self):
+        froms = [i for i, (keyword, _) in enumerate(self.instructions) if keyword == 'FROM']
+        restore = next(i for i, (keyword, rest) in enumerate(self.instructions) if keyword == 'RUN' and 'dotnet restore' in rest)
+        self.assertLess(froms[0], self.guard())
+        self.assertLess(self.guard(), restore)
+        self.assertLess(restore, froms[1])
+
+    def test_the_global_json_sdk_passes(self):
+        result = self.run_guard(SDK)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn(f'SDK image: {SDK}, apps/backend/global.json: {SDK}', result.stdout)
+
+    def test_another_sdk_fails(self):
+        major_minor, patch = SDK.rsplit('.', 1)
+        for version in [f'{major_minor}.{int(patch) - 1}', f'{major_minor}.{int(patch) + 1}', '']:
+            with self.subTest(version=version):
+                result = self.run_guard(version)
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn('The SDK image is not the apps/backend/global.json SDK', result.stderr)
+
+    def test_unreadable_global_json_fails(self):
+        (self.src / 'backend/global.json').write_text('{"sdk": {"version": "latest"}}')
+        result = self.run_guard(SDK)
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn('The SDK image is not the apps/backend/global.json SDK', result.stderr)
+
+
 class DotnetSdkInstallTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
