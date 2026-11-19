@@ -71,6 +71,21 @@ class DotnetSdkWorkflowTests(unittest.TestCase):
         self.assertRegex(lines[0], rf'^[0-9a-f]{{128}}  {re.escape(ARCHIVE)}$')
         self.assertEqual(tomllib.loads((ROOT / '.mise.toml').read_text())['tools'][mise_dotnet_tool()], SDK)
 
+    def test_no_tracked_file_selects_a_dotnet_sdk_outside_the_mise_config(self):
+        pattern = re.compile(r'dotnet-legacy|mise-dotnet-core@|installs/[\w-]*dotnet[\w-]*/\d')
+        tracked = subprocess.run(['git', 'ls-files', '-z'], cwd=ROOT, capture_output=True, check=True).stdout.decode().split('\0')
+        offenders = []
+        for name in filter(None, tracked):
+            path = ROOT / name
+            if name == 'tests/ci/test_dotnet_sdk.py' or path.is_symlink() or not path.is_file():
+                continue
+            try:
+                text = path.read_text()
+            except UnicodeDecodeError:
+                continue
+            offenders += [f'{name}:{number}' for number, line in enumerate(text.splitlines(), 1) if pattern.search(line)]
+        self.assertEqual(offenders, [], 'Run dotnet with `mise exec -- dotnet` so it uses the .mise.toml SDK')
+
 
 class DotnetImageTests(unittest.TestCase):
     def base_images(self):

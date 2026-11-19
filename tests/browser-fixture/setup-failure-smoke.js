@@ -9,7 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const env = Object.fromEntries(["PATH", "HOME", "USER", "TMPDIR"]
 	.filter((key) => process.env[key]).map((key) => [key, process.env[key]]));
-const dotnet = ["exec", "dotnet-legacy@10.0.401", "--", "dotnet"];
+const dotnet = ["exec", "--", "dotnet"];
 const build = spawnSync("mise", [...dotnet, "build", "apps/backend.browser-fixture/backend.browser-fixture.csproj", "--nologo", "-v:q"], {
 	cwd: root, env, encoding: "utf8", timeout: 120_000,
 });

@@ -178,8 +178,8 @@ Portless/private Tailscale, normal private TLS and installed Playwright Chromium
 Missing infrastructure is a blocker, never a passing result.
 
 ```sh
-export PATH=/home/scowalt/.local/share/mise/installs/dotnet-legacy/10.0.401:/home/scowalt/.local/share/mise/installs/bun/1.4.4/bin:$PATH
-export DOTNET_ROOT=/home/scowalt/.local/share/mise/installs/dotnet-legacy/10.0.401
+eval "$(mise env -s bash)"
+export DOTNET_ROOT="$(mise where asdf:mise-plugins/mise-dotnet-core)"
 unset TESTCONTAINERS_RYUK_DISABLED
 bun install --frozen-lockfile
 (cd apps/web-components && bun install --frozen-lockfile && bun run build)

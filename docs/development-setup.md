@@ -40,8 +40,8 @@ The first run of BB's hook in a new worktree on the shared host, with the daemon
 
 ```text
 nailbiter setup: /tmp/nb-hook-8hy1/wt
-ok    bun 1.4.2
-ok    .NET SDK 10.0.401 (apps/backend/global.json)
+ok    bun 1.4.4
+ok    .NET SDK 10.0.404 (apps/backend/global.json)
 ok    gitleaks 8.30.1
 ok    python 3.14.8
 ok    uv 0.11.32
