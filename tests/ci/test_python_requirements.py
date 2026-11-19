@@ -172,6 +172,8 @@ def install_problems(tokens):
             problems.append(f'{token} installs packages without a hashed requirements file')
         if token.startswith('UV_VENV_SEED='):
             problems.append('UV_VENV_SEED installs pip into the virtual environment without a hash')
+        if token.startswith('UV_WORKING_DIR='):
+            problems.append('UV_WORKING_DIR moves uv to another directory, so uv reads a script or requirements file this check did not read; use uv run --directory')
         if token == 'uv' or program(token) == 'uv' and start in starts:
             command = list(itertools.takewhile(lambda arg: arg not in SEPARATORS, tokens[start + 1:]))
             if command[:1] == ['run']:
@@ -208,7 +210,7 @@ def install_problems(tokens):
 
 
 def line_install_problems(line):
-    if not re.search(r'\b(pip[0-9.]*|piptools|uvx|pipx|uv|UV_VENV_SEED)\b', line):
+    if not re.search(r'\b(pip[0-9.]*|piptools|uvx|pipx|uv|UV_VENV_SEED|UV_WORKING_DIR)\b', line):
         return []
     return install_problems(shlex.split(line, comments=True))
 
@@ -355,6 +357,23 @@ class InstallRuleTests(unittest.TestCase):
             line = shlex.join(['uv', 'run', '--no-project', *words])
             with self.subTest(line=line):
                 self.assertEqual(line_install_problems(line) == [], expected, line_install_problems(line))
+
+    def test_rejects_uv_working_dir_set_on_the_command_line(self):
+        inline = '# /// script\n# dependencies = ["six"]\n# ///\nprint(1)\n'
+        script = 'tests/ci/test_actions.py'
+        (self.directory / script).parent.mkdir(parents=True)
+        (self.directory / script).write_text(inline)
+        self.assertEqual(line_install_problems(f'uv run --no-project {script}'), [])
+        for line in [
+            f'UV_WORKING_DIR={self.directory} uv run --no-project {script}',
+            f'UV_CACHE_DIR=c UV_WORKING_DIR={self.directory} /usr/bin/uv run --no-project {script}',
+            f'env UV_WORKING_DIR={self.directory} uv run --no-project {script}',
+            f'export UV_WORKING_DIR={self.directory}; uv run --no-project {script}',
+            'export UV_WORKING_DIR=sub',
+            f'UV_WORKING_DIR={self.directory} uv pip install --python v --require-hashes --no-build -r scripts/ci/tests-ci-requirements.txt',
+        ]:
+            with self.subTest(line=line):
+                self.assertNotEqual(line_install_problems(line), [])
 
     def test_a_path_ending_in_uv_is_uv_only_where_a_command_starts(self):
         for line in ['mkdir -p "$RUNNER_TEMP/uv"', 'directory="$RUNNER_TEMP/uv"', 'uv venv --cache-dir "$RUNNER_TEMP/uv" "$RUNNER_TEMP/v"', 'cp -r "$RUNNER_TEMP/uv" build && echo copied']:
