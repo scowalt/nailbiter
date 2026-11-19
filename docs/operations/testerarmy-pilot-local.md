@@ -22,7 +22,7 @@ commands for this pilot.
 | Playwright / Chromium installer | 1.63.0 (matches existing browser regressions) |
 | TypeScript / Node types | 5.9.3 / 24.10.0 |
 | Node / Bun | exercised 24.20.0 / 1.3.11 |
-| .NET | 10.0.401 via `mise exec dotnet-legacy@10.0.401 -- dotnet` |
+| .NET | The `apps/backend/global.json` SDK via `mise exec -- dotnet` |
 | Testcontainers | 4.15.0; PostgreSQL image `postgres:16-alpine` (tag, not digest pin) |
 | Portless | exercised 0.15.4 with private Tailscale |
 | Docker | working local Unix endpoint and Ryuk; exercised rootless Docker 29.8.x |
@@ -202,13 +202,13 @@ after review, any manual deletion must identify only your owned invocation root.
 Existing suite/build reproduction (separate from model evaluation):
 
 ```sh
-mise exec dotnet-legacy@10.0.401 -- dotnet build apps/backend/backend.csproj
-mise exec dotnet-legacy@10.0.401 -- dotnet test apps/backend.fsharp.tests/backend.fsharp.tests.fsproj
+mise exec -- dotnet build apps/backend/backend.csproj
+mise exec -- dotnet test apps/backend.fsharp.tests/backend.fsharp.tests.fsproj
 # Derive these process-local values from YOUR actual selected Unix Docker context.
 endpoint=$(docker context inspect "$(docker context show)" --format '{{.Endpoints.docker.Host}}')
 case "$endpoint" in unix://*) ;; *) echo 'STOP: local Unix Docker endpoint required'; exit 1;; esac
 DOCKER_HOST="$endpoint" TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="${endpoint#unix://}" \
-  mise exec dotnet-legacy@10.0.401 -- dotnet test apps/backend.tests/backend.tests.csproj
+  mise exec -- dotnet test apps/backend.tests/backend.tests.csproj
 (cd apps/web-components && bun install --frozen-lockfile && bun run build)
 ```
 

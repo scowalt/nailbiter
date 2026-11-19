@@ -9,7 +9,7 @@ import { setTimeout as delay } from "node:timers/promises";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const project = "apps/backend.browser-fixture/backend.browser-fixture.csproj";
 const dll = "apps/backend.browser-fixture/bin/Debug/net10.0/backend.browser-fixture.dll";
-const dotnet = ["exec", "asdf:mise-plugins/mise-dotnet-core@10.0.401", "--", "dotnet"];
+const dotnet = ["exec", "--", "dotnet"];
 
 function cleanEnvironment() {
 	return Object.fromEntries(

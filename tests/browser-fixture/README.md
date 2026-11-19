@@ -9,8 +9,8 @@ See [maintainer setup/commands](../../docs/operations/testerarmy-pilot-local.md)
 
 ## Requirements / smoke
 
-From the repository root: Docker with working Testcontainers/Ryuk, .NET 10.0.401
-(`mise exec dotnet-legacy@10.0.401 -- dotnet`), Bun, and Portless with **private Tailscale**.
+From the repository root: Docker with working Testcontainers/Ryuk, the .NET SDK
+from `apps/backend/global.json` (`mise exec -- dotnet`), Bun, and Portless with **private Tailscale**.
 
 ```sh
 bun install --frozen-lockfile
