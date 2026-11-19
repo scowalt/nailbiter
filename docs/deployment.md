@@ -127,6 +127,13 @@ To change Trivy:
 4. Set `version` and the tarball's `sha256` in `scripts/ci/install-trivy.sh`.
 5. Run `tests/ci`. In the pull request's `Build and scan backend image` log, check that `Install pinned Trivy` prints `trivy.tar.gz: OK`.
 
+The advisory tables in `tests/ci/test_tool_caches.py` run only when CI runs on a change, and nobody updates them when an advisory is published after the last bump. The `Tool advisories` workflow (`.github/workflows/tool-advisories.yml`) runs every day at 14:23 UTC and on demand. It installs bun and Trivy with the same two install scripts and reads the versions that the binaries print. Then `scripts/ci/watch-tool-advisories.py` asks two sources about each version:
+
+- OSV (`api.osv.dev`), for the npm package `bun` and the Go module `github.com/aquasecurity/trivy`.
+- The published security advisories of `oven-sh/bun` and `aquasecurity/trivy` on GitHub. bun's advisories are published only there: on 2026-11-19, OSV listed none of the three high advisories that affect bun 1.4.2.
+
+The script counts an advisory once when both sources list it. If a version range cannot be parsed, the script reports the advisory and asks for a check by hand. If any advisory affects a version, the job opens an issue titled `Published advisories affect the pinned CI <tool> <version>`. If an open issue with that title already exists, the job comments on it only with advisories that the issue does not mention yet. The job fails, and GitHub reports the failed scheduled run, if a source cannot be reached or a binary prints no version. The workflow has only `contents: read` and, in its one job, `issues: write`. It runs only in `scowalt/nailbiter`. `tests/ci/test_tool_advisories.py` covers the range parsing, the sources and the issue handling with fakes.
+
 ### CI .NET SDK
 
 Every CI job that runs `dotnet` on the runner (`checks`, `backend-tests` and `listing-checker`) installs the SDK with `scripts/ci/install-dotnet-sdk.sh`, not through mise. The workflow sets `MISE_DISABLE_TOOLS` so that `jdx/mise-action` does not install the `mise-plugins/mise-dotnet-core` plugin, which would clone the plugin at its default branch and run an unpinned `dotnet-install.sh` with no hash check. Local development still uses the plugin through `.mise.toml`. The `image` job does not use this script. It builds inside Docker, and `apps/backend/Dockerfile` names the `mcr.microsoft.com/dotnet/sdk` and `mcr.microsoft.com/dotnet/aspnet` images by version tag and `@sha256` digest. Docker pulls the digest and ignores the tag, so the tag only records the version that the digest holds.
