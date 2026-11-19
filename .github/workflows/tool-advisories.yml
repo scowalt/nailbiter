@@ -1,0 +1,35 @@
+name: Tool advisories
+
+on:
+  schedule:
+    - cron: '23 14 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tool-advisories
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: Watch pinned CI tools for advisories
+    if: github.repository == 'scowalt/nailbiter'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install pinned bun
+        run: sh scripts/ci/install-bun.sh
+      - name: Install pinned Trivy
+        run: sh scripts/ci/install-trivy.sh
+      - name: Report advisories that affect the installed versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/watch-tool-advisories.py

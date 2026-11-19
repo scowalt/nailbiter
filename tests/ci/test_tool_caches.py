@@ -212,7 +212,7 @@ class PinnedBunInstallTests(InstallScriptTests):
 
     def test_each_job_that_runs_bun_installs_the_pinned_bun_before_it(self):
         users, problems = bun_install_problems()
-        self.assertEqual(sorted(users), ['ci.yml:checks', 'ci.yml:release'])
+        self.assertEqual(sorted(users), ['ci.yml:checks', 'ci.yml:release', 'tool-advisories.yml:watch'])
         self.assertEqual(problems, {})
 
     def test_finds_bun_in_any_workflow_file_and_in_scripts_and_local_actions_that_steps_call(self):
