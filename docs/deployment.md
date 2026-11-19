@@ -155,6 +155,7 @@ Each step creates a virtual environment under `$RUNNER_TEMP` and runs `uv pip in
 - `uv run --with`, `uvx`, `uv tool`, `pipx`, `pip-sync` or `python -m piptools`;
 - a plain `pip install`;
 - `uv venv --seed` or `UV_VENV_SEED=`, which install pip without a hash;
+- `UV_WORKING_DIR=` anywhere on a command line: before `uv`, after `env` or in an `export`. uv changes to that directory first, so `UV_WORKING_DIR=sub uv run --no-project s.py` runs `sub/s.py` and resolves its PEP 723 dependencies, and `uv pip install -r r.txt` reads `sub/r.txt`. The test reads `s.py` and `r.txt` from the repository root. Use `uv run --directory`, which the test follows;
 - a `uv run` whose `--no-project` is missing or comes after the command, where uv passes it to that command and still installs the project;
 - a `uv run` of a script with a PEP 723 `# /// script` block, of a script it cannot read, of stdin (`-`) or of a URL. uv resolves inline dependencies without a hash check when the target ends in `.py` or `.pyw` in any case, such as `S.PY`, or when `--script`, `-s` or `--gui-script` is given. It does not read them for `uv run python script.py`. The test reads a relative script from the `--directory` that the command gives, because uv changes to that directory first;
 - a `uv run` option that is not in the test's lists, because the test cannot then tell whether the option takes a value. A value hides the script: uv still resolves the dependencies of `s.py` in `uv run --no-project --env-file e s.py`. The lists hold every option that `uv run --help` prints for uv 0.11.32, written alone or as `--name=value`. The test rejects hidden options such as `--python-preference`, option clusters such as `-qq`, and short options with the value attached, such as `-p3.14`. When uv changes, compare `RUN_OPTIONS_WITH_VALUES` and `RUN_FLAGS` with the new `uv run --help`.
@@ -171,7 +172,7 @@ The test reads one command line at a time and splits it like a shell, without ru
 - `(uv sync)`, `x=$(uv sync)` and `uv run …;uv sync` with no space around `;`, because the splitter keeps the punctuation in the word;
 - `$UV sync`, `${{ env.UV }} sync` and `PIP=pip; $PIP install`, because the program name is not known until the shell runs;
 - a path ending in `/uv` run by a program not in that list, as in `xargs /usr/bin/uv sync`, `stdbuf -oL /usr/bin/uv sync`, `mise exec -- /usr/bin/uv sync` or `find . -exec /usr/bin/uv sync \;`, because the test does not know which other programs run their arguments. `env -S "/usr/bin/uv sync"` passes for the same reason as `bash -c`. A bare `uv` counts anywhere, so `xargs uv sync` fails;
-- `UV_VENV_SEED` or another `UV_` setting that comes from an `env:` mapping, from `$GITHUB_ENV` written in an earlier step, or from a `uv.toml`, because the test reads commands and not the environment that uv starts with.
+- `UV_VENV_SEED`, `UV_WORKING_DIR` or another `UV_` setting that comes from an `env:` mapping, from `$GITHUB_ENV` written in an earlier step, or from a `uv.toml`, because the test reads commands and not the environment that uv starts with.
 
 Catching these would need a shell parser and the step's environment. A reviewer has to check them by hand. `python -m venv` and `python -m ensurepip` also pass. They install the pip wheel that ships inside the pinned Python, without a download.
 
