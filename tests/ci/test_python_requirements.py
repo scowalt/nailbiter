@@ -14,6 +14,17 @@ INSTALLERS = {'uvx', 'pipx', 'pip-sync', 'piptools'}
 PIP = re.compile(r'pip[0-9.]*')
 SEPARATORS = {'&&', '||', ';', '|'}
 ASSIGNMENT = re.compile(r'[A-Za-z_][A-Za-z0-9_]*=.*', re.DOTALL)
+KEYWORDS = {'if', 'then', 'elif', 'else', 'while', 'until', 'do', '!', '{'}
+WRAPPERS = {
+    'timeout': ({'-k', '--kill-after', '-s', '--signal'}, 1),
+    'env': ({'-a', '--argv0', '-C', '--chdir', '-f', '--file', '-S', '--split-string', '-u', '--unset'}, 0),
+    'nice': ({'-n', '--adjustment'}, 0),
+    'nohup': (set(), 0),
+    'sudo': ({'-C', '--close-from', '-D', '--chdir', '-g', '--group', '-p', '--prompt', '-R', '--chroot', '-r', '--role', '-T', '--command-timeout', '-t', '--type', '-U', '--other-user', '-u', '--user'}, 0),
+    'time': (set(), 0),
+    'exec': ({'-a'}, 0),
+    'command': (set(), 0),
+}
 RUN_OPTIONS_WITH_VALUES = {
     '--allow-insecure-host', '--cache-dir', '--color', '--config-file', '--config-setting', '--config-settings-package',
     '--default-index', '--directory', '--env-file', '--exclude-newer', '--exclude-newer-package', '--extra',
@@ -115,14 +126,41 @@ def uv_run_problems(args):
     return problems
 
 
+def wrapped_command(tokens, index, options_with_values, operands):
+    index += 1
+    while index < len(tokens) and tokens[index].startswith('-') and tokens[index] not in {'-', '--'}:
+        token = tokens[index]
+        if token.startswith('--'):
+            takes_value = token in options_with_values
+        else:
+            letters = token[1:]
+            first = next((position for position, letter in enumerate(letters) if f'-{letter}' in options_with_values), None)
+            takes_value = first == len(letters) - 1
+        index += 2 if takes_value else 1
+    if tokens[index:index + 1] == ['--']:
+        index += 1
+    while index < len(tokens) and ASSIGNMENT.fullmatch(tokens[index]):
+        index += 1
+    return index + operands
+
+
 def command_starts(tokens):
-    starts, expecting = set(), True
-    for index, token in enumerate(tokens):
-        if token in SEPARATORS:
-            expecting = True
-        elif expecting and not ASSIGNMENT.fullmatch(token):
+    starts, index = set(), 0
+    while index < len(tokens):
+        while index < len(tokens) and ASSIGNMENT.fullmatch(tokens[index]):
+            index += 1
+        if index < len(tokens) and tokens[index] not in SEPARATORS:
             starts.add(index)
-            expecting = False
+            name = program(tokens[index])
+            if name in KEYWORDS:
+                index += 1
+                continue
+            if name in WRAPPERS:
+                index = wrapped_command(tokens, index, *WRAPPERS[name])
+                continue
+        while index < len(tokens) and tokens[index] not in SEPARATORS and not tokens[index].endswith(';'):
+            index += 1
+        index += 1
     return starts
 
 
@@ -325,6 +363,49 @@ class InstallRuleTests(unittest.TestCase):
         for line in ['"$RUNNER_TEMP/uv" sync', 'mkdir -p d && "$RUNNER_TEMP/bin/uv" sync', 'UV_CACHE_DIR=c /usr/bin/uv sync', 'timeout 60 uv sync', 'mise exec -- uv sync']:
             with self.subTest(line=line):
                 self.assertNotEqual(line_install_problems(line), [])
+
+    def test_a_path_ending_in_uv_counts_after_programs_and_keywords_that_run_a_command(self):
+        for line in [
+            'timeout 60 /usr/bin/uv sync',
+            'timeout -s KILL 60 /usr/bin/uv sync',
+            'timeout --signal KILL -k 5 60 /usr/bin/uv sync',
+            'timeout --signal=KILL --preserve-status 60 /usr/bin/uv sync',
+            'timeout -sKILL 60 /usr/bin/uv sync',
+            '/usr/bin/timeout 60 /usr/bin/uv sync',
+            'env /usr/bin/uv sync',
+            'env -i HOME=/tmp /usr/bin/uv sync',
+            'env -u HOME -C /tmp -- /usr/bin/uv sync',
+            'nice /usr/bin/uv sync',
+            'nice -n 5 /usr/bin/uv sync',
+            'nice -5 /usr/bin/uv sync',
+            'nohup /usr/bin/uv sync',
+            'sudo /usr/bin/uv sync',
+            'sudo -u runner "$RUNNER_TEMP/bin/uv" sync',
+            'sudo -Eu runner /usr/bin/uv sync',
+            'sudo --user=runner -- /usr/bin/uv sync',
+            'sudo env A=1 nice -n 5 timeout -s KILL 60 /usr/bin/uv sync',
+            'time /usr/bin/uv sync',
+            'command /usr/bin/uv sync',
+            'exec -a name /usr/bin/uv sync',
+            'if /usr/bin/uv sync; then echo ok; fi',
+            'if true; then /usr/bin/uv sync; fi',
+            'if true; then echo; else /usr/bin/uv sync; fi',
+            '! /usr/bin/uv sync',
+            'while true; do /usr/bin/uv sync; done',
+            '{ /usr/bin/uv sync; }',
+        ]:
+            with self.subTest(line=line):
+                self.assertNotEqual(line_install_problems(line), [])
+        for line in [
+            'timeout 60 cp -r "$RUNNER_TEMP/uv" build',
+            'timeout -s KILL 60 ls "$RUNNER_TEMP/uv"',
+            'sudo -u runner mkdir -p "$RUNNER_TEMP/uv"',
+            'env -C "$RUNNER_TEMP" ls "$RUNNER_TEMP/uv"',
+            'if test -d "$RUNNER_TEMP/uv"; then echo ok; fi',
+            'nice -n 5 tar -cf c.tar "$RUNNER_TEMP/uv"',
+        ]:
+            with self.subTest(line=line):
+                self.assertEqual(line_install_problems(line), [])
 
     def test_hashed_file_rejects_ranges_missing_hashes_and_extra_options(self):
         digest = '--hash=sha256:' + 'a' * 64
