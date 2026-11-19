@@ -81,13 +81,20 @@ cd opentofu
 
 The script uses `doppler run` to inject the infrastructure provider credentials and passes all arguments to the real `tofu` command.
 
+### State
+
+State lives in the Cloudflare R2 bucket `opentofu-state` under the key `nailbiter/terraform.tfstate`, with a lock file. The helper script reads the R2 credentials (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) from Doppler `mission-control/dev`, and the provider credentials from `nailbiter/prd`. The GitHub provider uses `GITHUB_TOKEN`; run `export GITHUB_TOKEN=$(gh auth token)` first.
+
+`imports.tf` records how the live resources were adopted into this state on 2026-11-19. Applying it again is a no-op.
+
 ### Manual Setup (Alternative)
 
 If you prefer to set up credentials manually:
 
 ```bash
 cd opentofu
-doppler run --project nailbiter --config prd -- tofu plan
+doppler run --project mission-control --config dev --only-secrets AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY -- \
+  doppler run --project nailbiter --config prd -- tofu plan
 ```
 
 ## What This Configuration Manages
