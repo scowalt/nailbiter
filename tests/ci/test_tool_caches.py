@@ -23,6 +23,7 @@ BUN_ADVISORIES = {
     'GHSA-cf8x-9m69-3gg3': ((1, 3, 14), (1, 4, 4)),
 }
 RUNS_BUN = re.compile(r'(?<![\w./-])bunx?(?![\w.-])')
+REPO_PATH = re.compile(r'(?<![\w./$-])(?:\./)?[\w.-]+(?:/[\w.-]+)+')
 INSTALL_TRIVY = 'sh scripts/ci/install-trivy.sh'
 TRIVY_ADVISORIES = {
     'GHSA-xcq4-m2r3-cmrj': ((0, 0, 0), (0, 51, 2)),
@@ -47,6 +48,37 @@ def steps_using(action, workflows=ROOT / '.github/workflows'):
             for index, step in enumerate(steps):
                 if step.get('uses', '').lower().startswith(action + '@'):
                     yield f'{workflow.name}:{job_name}[{index}]', steps, index, step.get('with', {})
+
+
+def text_runs_bun(text, root, seen):
+    if RUNS_BUN.search(text):
+        return True
+    for reference in REPO_PATH.findall(text):
+        path = (root / reference.removeprefix('./')).resolve()
+        if not path.is_relative_to(root.resolve()) or path in seen:
+            continue
+        seen.add(path)
+        files = sorted(path.glob('action.y*ml')) if path.is_dir() else [path] if path.is_file() else []
+        if any(text_runs_bun(file.read_text(errors='replace'), root, seen) for file in files):
+            return True
+    return False
+
+
+def bun_install_problems(workflows=ROOT / '.github/workflows', root=ROOT):
+    users, problems = [], {}
+    for workflow in sorted(workflows.glob('*.y*ml')):
+        for name, job in yaml.safe_load(workflow.read_text())['jobs'].items():
+            steps = job.get('steps', [])
+            installs = [i for i, step in enumerate(steps) if step.get('run', '').strip() == INSTALL_BUN]
+            first_bun = next((i for i, step in enumerate(steps) if i not in installs
+                              and text_runs_bun(step.get('run', '') + '\n' + step.get('uses', ''), root, set())), None)
+            if first_bun is None:
+                continue
+            source = f'{workflow.name}:{name}'
+            users.append(source)
+            if len(installs) != 1 or installs[0] > first_bun:
+                problems[source] = {'installs': installs, 'first bun': first_bun}
+    return users, problems
 
 
 def bun_archive(script):
@@ -179,18 +211,37 @@ class PinnedBunInstallTests(InstallScriptTests):
         self.assertIn('bun', self.workflow['env']['MISE_DISABLE_TOOLS'].split(','))
 
     def test_each_job_that_runs_bun_installs_the_pinned_bun_before_it(self):
-        users, problems = [], {}
-        for name, job in self.workflow['jobs'].items():
-            runs = [step.get('run', '') for step in job.get('steps', [])]
-            first_bun = next((i for i, run in enumerate(runs) if RUNS_BUN.search(run)), None)
-            if first_bun is None:
-                continue
-            users.append(name)
-            installs = [i for i, run in enumerate(runs) if run.strip() == INSTALL_BUN]
-            if len(installs) != 1 or installs[0] > first_bun:
-                problems[name] = {'installs': installs, 'first bun': first_bun}
-        self.assertIn('release', users)
+        users, problems = bun_install_problems()
+        self.assertEqual(sorted(users), ['ci.yml:checks', 'ci.yml:release'])
         self.assertEqual(problems, {})
+
+    def test_finds_bun_in_any_workflow_file_and_in_scripts_and_local_actions_that_steps_call(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workflows = root / '.github/workflows'
+            workflows.mkdir(parents=True)
+            (root / 'scripts/nested').mkdir(parents=True)
+            (root / 'scripts/outer.sh').write_text('set -eu\npython3 ./scripts/nested/inner.py\n')
+            (root / 'scripts/nested/inner.py').write_text('import subprocess\nsubprocess.run(["bunx", "wrangler"])\n')
+            (root / 'scripts/quiet.sh').write_text('echo bundle bun.lock /usr/bin/bunny\n')
+            (root / '.github/actions/deploy').mkdir(parents=True)
+            (root / '.github/actions/deploy/action.yaml').write_text('runs:\n  using: composite\n  steps:\n    - run: bun run deploy\n      shell: bash\n')
+            (root / 'scripts/loop.sh').write_text('sh scripts/loop.sh\n')
+            install = f'      - run: {INSTALL_BUN}\n'
+            (workflows / 'other.yaml').write_text(
+                'jobs:\n'
+                '  direct:\n    steps:\n      - run: bunx playwright test\n'
+                '  script:\n    steps:\n      - run: sh scripts/outer.sh\n' + install +
+                '  action:\n    steps:\n      - uses: ./.github/actions/deploy\n'
+                '  installed:\n    steps:\n' + install + '      - run: bash scripts/outer.sh\n'
+                '  unrelated:\n    steps:\n      - run: sh scripts/quiet.sh && sh scripts/loop.sh && cat ../outside/x\n')
+            users, problems = bun_install_problems(workflows, root)
+        self.assertEqual(users, ['other.yaml:direct', 'other.yaml:script', 'other.yaml:action', 'other.yaml:installed'])
+        self.assertEqual(problems, {
+            'other.yaml:direct': {'installs': [], 'first bun': 0},
+            'other.yaml:script': {'installs': [1], 'first bun': 0},
+            'other.yaml:action': {'installs': [], 'first bun': 0},
+        })
 
     def pinned_version(self):
         version = re.search(r'^version=(\S+)$', self.script.read_text(), re.MULTILINE)
