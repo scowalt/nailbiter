@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
+venv=$(mktemp -d "${TMPDIR:-/tmp}/nailbiter-tests-ci.XXXXXX")
+trap 'rm -rf "$venv"' EXIT
+uv venv --quiet --python 3.14 "$venv"
+uv pip install --quiet --python "$venv" --require-hashes --no-build -r scripts/ci/tests-ci-requirements.txt
+"$venv/bin/python" "$@"

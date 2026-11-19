@@ -54,5 +54,5 @@ The required checks on `main` come from the `main-branch-protection` ruleset, re
 `tests/ci/test_pr_ci.py` drives the tool with a fake `gh`, an injected clock and an injected sleep. It never uses the network. CI runs it with the other `tests/ci` suites:
 
 ```sh
-uv run --no-project --with pyyaml==6.0.3 python -m unittest discover -s tests/ci -p 'test_*.py' -v
+scripts/tests-ci-python -m unittest discover -s tests/ci -p 'test_*.py' -v
 ```

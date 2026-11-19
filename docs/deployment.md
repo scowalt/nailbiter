@@ -169,7 +169,7 @@ Each step creates a virtual environment under `$RUNNER_TEMP` and runs `uv pip in
 
 The test also fails on any requirements line that is not an exact pin followed only by sha256 hashes.
 
-The same test reads the commands in `lefthook.yml` and in `scripts/comment-policy-python`, which the pre-commit hook and the local commands in `.comment-policy/README.md` use to run the comment policy. That script installs `.comment-policy/requirements.txt` with `uv pip install --require-hashes --no-build` into a temporary virtual environment, so local runs check the same hashes as CI.
+The same test reads the commands in `lefthook.yml` and in `scripts/comment-policy-python`, which the pre-commit hook and the local commands in `.comment-policy/README.md` use to run the comment policy. That script installs `.comment-policy/requirements.txt` with `uv pip install --require-hashes --no-build` into a temporary virtual environment, so local runs check the same hashes as CI. `scripts/tests-ci-python` does the same with `scripts/ci/tests-ci-requirements.txt` for local `tests/ci` runs, and the test fails if a Markdown file runs the `tests/ci` suite through anything else.
 
 A word counts as uv when it is `uv`, or when it is a path ending in `/uv` where a command starts: first on the line, after `&&`, `||`, `;` or `|` (or a word ending in `;`), after `NAME=value` assignments, after the shell words `if`, `then`, `elif`, `else`, `while`, `until`, `do`, `!` and `{`, or as the command that `timeout`, `env`, `nice`, `nohup`, `sudo`, `time`, `exec` or `command` runs. The test skips each of those programs' options, using a list of the options that take a separate value, such as `timeout -s KILL`, `nice -n 5` and `sudo -u runner`, then any `NAME=value` words and `timeout`'s duration. A cluster such as `sudo -Eu runner` takes a value when its last letter does. So `timeout -s KILL 60 /usr/bin/uv sync` and `if true; then "$RUNNER_TEMP/bin/uv" sync; fi` fail. So `mkdir -p "$RUNNER_TEMP/uv"`, `directory="$RUNNER_TEMP/uv"` and `--cache-dir "$RUNNER_TEMP/uv"` pass. `uv pip install` knows only `--python`, `-r` and `--requirement` as options that take a value, so it still rejects `uv pip install --cache-dir "$RUNNER_TEMP/uv" …` as naming a package. That fails closed: set the cache directory with `UV_CACHE_DIR` instead.
 
@@ -216,7 +216,7 @@ The 2026-11-03 handoff followed the sequence below. It is a reference for future
 
 ```sh
 python scripts/test-fixtures/generate.py --check
-uv run --no-project --with pyyaml==6.0.3 python -m unittest discover -s tests/ci -v
+scripts/tests-ci-python -m unittest discover -s tests/ci -v
 python -m unittest discover -s tests/deployment -v
 bash -n scripts/ci/*.sh
 ```
