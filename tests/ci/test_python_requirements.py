@@ -2,6 +2,7 @@ from pathlib import Path
 import itertools
 import re
 import shlex
+import subprocess
 import tempfile
 import unittest
 
@@ -46,6 +47,8 @@ RUN_FLAGS = {
 SCRIPT_FLAGS = {'--script', '-s', '--gui-script'}
 INLINE_METADATA = re.compile(r'^# /// script\s*$', re.MULTILINE)
 MIN_HASHED_FILES = 3
+LOCAL_SCRIPTS = ['scripts/comment-policy-python', 'scripts/tests-ci-python']
+TESTS_CI_DISCOVERY = re.compile(r'discover\s.*-s\s+tests/ci\b')
 
 
 def logical_lines(text):
@@ -67,8 +70,16 @@ def local_sources():
     for hook, config in yaml.safe_load((ROOT / 'lefthook.yml').read_text()).items():
         for name, command in config.get('commands', {}).items():
             yield f'lefthook.yml:{hook}.{name}', command['run']
-    script = ROOT / 'scripts/comment-policy-python'
-    yield str(script.relative_to(ROOT)), script.read_text()
+    for script in LOCAL_SCRIPTS:
+        yield script, (ROOT / script).read_text()
+
+
+def markdown_lines_that_run_tests_ci():
+    tracked = subprocess.run(['git', 'ls-files', '-z', '*.md'], cwd=ROOT, capture_output=True, text=True, check=True).stdout
+    for doc in sorted(filter(None, tracked.split('\0'))):
+        for number, line in enumerate((ROOT / doc).read_text(errors='replace').splitlines(), 1):
+            if TESTS_CI_DISCOVERY.search(line):
+                yield f'{doc}:{number}', line.strip()
 
 
 def hashed_file_problems(path):
@@ -247,6 +258,13 @@ class CiPythonPackageTests(unittest.TestCase):
         hooks = dict(local_sources())
         self.assertTrue(hooks['lefthook.yml:pre-commit.no-comments'].startswith('scripts/comment-policy-python .comment-policy/check.py'))
         self.assertIn('--require-hashes --no-build -r .comment-policy/requirements.txt', hooks['scripts/comment-policy-python'])
+
+    def test_documented_local_tests_ci_runs_go_through_the_hashed_script(self):
+        scripts = dict(local_sources())
+        self.assertIn('--require-hashes --no-build -r scripts/ci/tests-ci-requirements.txt', scripts['scripts/tests-ci-python'])
+        runs = dict(markdown_lines_that_run_tests_ci())
+        self.assertGreaterEqual(len(runs), 2, runs)
+        self.assertEqual({where: line for where, line in runs.items() if not line.startswith('scripts/tests-ci-python -m unittest discover')}, {})
 
     def test_ci_installs_each_suite_from_a_hashed_file(self):
         files = ci_requirement_files()
