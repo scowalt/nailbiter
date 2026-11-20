@@ -48,7 +48,9 @@ test "$running" = "true $expected"
 curl --fail --silent --show-error --retry 5 --retry-connrefused --retry-delay 2 --max-time 10 \
   --proto '=https' https://api.nailbiter.app/health >/dev/null
 
-echo '==> Cleaning up old images'
+echo '==> Removing backend images except the running one and the two newest others'
+docker images --no-trunc --filter reference=ghcr.io/scowalt/nailbiter/backend --format '{{.CreatedAt}}\t{{.ID}}' |
+  sort -r | awk -F '\t' -v running="$expected" '$2 != running && ++kept > 2 { print $2 }' | xargs -r docker image rm
 docker image prune -f
 
 echo '==> Deploy complete'
