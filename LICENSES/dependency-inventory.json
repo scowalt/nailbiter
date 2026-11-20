@@ -1031,10 +1031,10 @@
     {
       "ecosystem": "npm",
       "name": "body-parser",
-      "version": "1.20.5",
+      "version": "1.20.9",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/body-parser@1.20.5/LICENSE"
+        "LICENSES/npm/body-parser@1.20.9/LICENSE"
       ]
     },
     {
@@ -1047,10 +1047,10 @@
     {
       "ecosystem": "npm",
       "name": "brace-expansion",
-      "version": "1.1.14",
+      "version": "1.1.21",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/brace-expansion@1.1.14/LICENSE"
+        "LICENSES/npm/brace-expansion@1.1.21/LICENSE"
       ]
     },
     {
@@ -2266,10 +2266,10 @@
     {
       "ecosystem": "npm",
       "name": "ip-address",
-      "version": "10.2.0",
+      "version": "10.7.4",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/ip-address@10.2.0/LICENSE"
+        "LICENSES/npm/ip-address@10.7.4/LICENSE"
       ]
     },
     {
@@ -2356,10 +2356,10 @@
     {
       "ecosystem": "npm",
       "name": "js-yaml",
-      "version": "4.1.1",
+      "version": "4.3.2",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/js-yaml@4.1.1/LICENSE"
+        "LICENSES/npm/js-yaml@4.3.2/LICENSE"
       ]
     },
     {
@@ -3219,10 +3219,10 @@
     {
       "ecosystem": "npm",
       "name": "proxy-addr",
-      "version": "2.0.7",
+      "version": "2.0.8",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/proxy-addr@2.0.7/LICENSE"
+        "LICENSES/npm/proxy-addr@2.0.8/LICENSE"
       ]
     },
     {
@@ -3278,10 +3278,10 @@
     {
       "ecosystem": "npm",
       "name": "qs",
-      "version": "6.15.1",
+      "version": "6.16.2",
       "declared_license": "BSD-3-Clause",
       "notices": [
-        "LICENSES/npm/qs@6.15.1/LICENSE.md"
+        "LICENSES/npm/qs@6.16.2/LICENSE.md"
       ]
     },
     {
@@ -3516,6 +3516,15 @@
       "declared_license": "MIT",
       "notices": [
         "LICENSES/npm/side-channel@1.1.0/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "side-channel",
+      "version": "1.1.1",
+      "declared_license": "MIT",
+      "notices": [
+        "LICENSES/npm/side-channel@1.1.1/LICENSE"
       ]
     },
     {
@@ -3954,10 +3963,10 @@
     {
       "ecosystem": "npm",
       "name": "undici",
-      "version": "7.30.0",
+      "version": "7.30.1",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/undici@7.30.0/LICENSE"
+        "LICENSES/npm/undici@7.30.1/LICENSE"
       ]
     },
     {
@@ -4202,15 +4211,6 @@
     {
       "ecosystem": "npm",
       "name": "ws",
-      "version": "8.20.0",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/ws@8.20.0/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "ws",
       "version": "8.21.0",
       "declared_license": "MIT",
       "notices": [
@@ -4323,6 +4323,15 @@
       "declared_license": "MIT",
       "notices": [
         "LICENSES/npm/zod@4.6.1/LICENSE"
+      ]
+    },
+    {
+      "ecosystem": "npm",
+      "name": "zod",
+      "version": "4.6.6",
+      "declared_license": "MIT",
+      "notices": [
+        "LICENSES/npm/zod@4.6.6/LICENSE"
       ]
     },
     {
