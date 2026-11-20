@@ -1,7 +1,7 @@
 Nailbiter third-party software notices. Original project license and artwork exclusions are documented in LICENSE-SCOPE.txt. These are upstream declarations, not a relicensing grant by Nailbiter.
 
 
-astro 6.4.8
+astro 7.4.11
 Declared license: MIT
 
 MIT License
