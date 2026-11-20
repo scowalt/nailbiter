@@ -27,7 +27,8 @@ type private QuotationSite =
     { Location: string
       Method: string
       InGenericCode: bool
-      Replay: Replay }
+      Replay: Replay
+      Constants: string list }
 
 type private Slot =
     | TypeToken of Type
@@ -194,6 +195,24 @@ let rec private scanTree (expression: Expression) =
 
 let private blockCount (expression: Expression) = (scanTree expression).Blocks
 
+let rec private capturedConstants (quotation: Expr) =
+    match quotation with
+    | Patterns.ValueWithName(_, t, name) when
+        not (
+            typeof<DbContext>.IsAssignableFrom t
+            || t = typeof<QueryBuilder>
+            || typeof<Expression>.IsAssignableFrom t
+            || typeof<IQueryable>.IsAssignableFrom t
+        )
+        ->
+        [ name ]
+    | Patterns.Call(None, m, _) when m.DeclaringType = typeof<EF> && (m.Name = "Parameter" || m.Name = "Constant") -> []
+    | Patterns.PropertyGet(Some(Patterns.ValueWithName _), _, args) -> List.collect capturedConstants args
+    | Patterns.FieldGet(Some(Patterns.ValueWithName _), _) -> []
+    | ExprShape.ShapeVar _ -> []
+    | ExprShape.ShapeLambda(_, body) -> capturedConstants body
+    | ExprShape.ShapeCombination(_, args) -> List.collect capturedConstants args
+
 let private locator (pdb: MetadataReader) =
     fun (m: MethodBase) offset ->
         pdb.GetMethodDebugInformation(MetadataTokens.MethodDefinitionHandle m.MetadataToken).GetSequencePoints()
@@ -217,11 +236,12 @@ let private replay (m: MethodBase) (il: byte[]) (locate: MethodBase -> int -> st
     let popN n = List.init n (fun _ -> pop ()) |> List.rev
     let sites = ResizeArray<QuotationSite>()
 
-    let site offset replay =
+    let site offset replay constants =
         { Location = locate m offset
           Method = $"{m.DeclaringType.FullName}.{m.Name}"
           InGenericCode = m.ContainsGenericParameters || m.DeclaringType.ContainsGenericParameters
-          Replay = replay }
+          Replay = replay
+          Constants = constants }
 
     let consume index replay =
         sites[index] <- { sites[index] with Replay = replay }
@@ -274,14 +294,15 @@ let private replay (m: MethodBase) (il: byte[]) (locate: MethodBase -> int -> st
                         site
                             offset
                             (NotReplayed "the literal is not passed straight to LeafExpressionConverter.QuotationToLambdaExpression")
+                            (capturedConstants quoted)
                     )
 
                     Quoted(quoted, Some(sites.Count - 1))
                 with ex ->
-                    sites.Add(site offset (NotReplayed $"Deserialize40 failed: {ex.Message}"))
+                    sites.Add(site offset (NotReplayed $"Deserialize40 failed: {ex.Message}") [])
                     Unknown
             | t, name, _ when t = typeof<Expr> && name.StartsWith "Deserialize" ->
-                sites.Add(site offset (NotReplayed "quotation literal built from values this scanner cannot replay"))
+                sites.Add(site offset (NotReplayed "quotation literal built from values this scanner cannot replay") [])
                 Unknown
             | t, "Cast", [ Quoted(quotation, index) ] when t = typeof<Expr> -> Quoted(quotation, index)
             | t, "QuotationToLambdaExpression", [ Quoted(quotation, Some index) ] when
@@ -398,8 +419,15 @@ let private blockedHelp =
     "These F# query lambdas compile to a BlockExpression, and EF Core throws NotSupportedException "
     + "on it every time the query runs (#55, #66). F# adds the block when a lambda reads a member of a "
     + "struct that is not a local, such as DateTime.UtcNow.AddDays(-1.0) or g.HomeScore.HasValue. "
-    + "Hoist the value into a local before the query, or compare g.HomeScore <> Nullable() instead of "
-    + "reading HasValue."
+    + "Hoist the value into a local before the query and read it as EF.Parameter(local), or compare "
+    + "g.HomeScore <> Nullable() instead of reading HasValue."
+
+let private constantHelp =
+    "These F# query lambdas read a local value directly, and F# hands that value to EF Core as a constant. "
+    + "EF Core compiles and caches a new query for each constant it sees, so a date or ID list that changes "
+    + "between calls compiles the query on every call and fills the query cache. Read the value as "
+    + "EF.Parameter(value), such as g.ScheduledStart >= EF.Parameter(cutoff), or as EF.Constant(value) when "
+    + "the SQL should hold the literal."
 
 let private genericHelp =
     "QueryLambdaTests cannot replay query lambdas in a generic function or type, because the entity "
@@ -466,7 +494,8 @@ let private problems sites =
       report unreplayedHelp (notReplayed false)
       report correlatedHelp (hiddenBy readsOuterParameters)
       report hiddenTreeHelp (hiddenBy (readsOuterParameters >> not))
-      report blockedHelp (sites |> List.filter (fun site -> blocksIn site > 0) |> withoutReasons) ]
+      report blockedHelp (sites |> List.filter (fun site -> blocksIn site > 0) |> withoutReasons)
+      report constantHelp (sites |> List.filter (fun site -> not site.Constants.IsEmpty) |> List.map (fun site -> site, site.Constants)) ]
     |> List.choose id
 
 [<Fact>]
@@ -503,6 +532,21 @@ let ``the scan flags the struct copy EF Core rejects and passes the hoisted form
 
     Assert.Equal<int list>([ 1 ], controlSites (nameof copiesTheStruct) |> List.map blocksIn)
     Assert.Equal<int list>([ 0 ], controlSites (nameof hoistsTheValue) |> List.map blocksIn)
+
+let private parameterizesTheValue (games: IQueryable<Game>) =
+    let cutoff = DateTime.UtcNow.AddDays(-1.0)
+    games.Where(fun g -> g.ScheduledStart >= EF.Parameter(cutoff))
+
+[<Fact>]
+let ``the scan sends a local read as a constant to EF.Parameter`` () =
+    use db = npgsqlContext ()
+    Assert.StartsWith("-- @p=", (parameterizesTheValue db.Games).ToQueryString())
+    Assert.DoesNotContain("@p", (hoistsTheValue db.Games).ToQueryString())
+
+    let report = Assert.Single(problems (controlSites (nameof hoistsTheValue)))
+    Assert.StartsWith(constantHelp, report)
+    Assert.EndsWith("(cutoff)", report)
+    Assert.Empty(problems (controlSites (nameof parameterizesTheValue)))
 
 let private filtersInsideAQuery (db: ExcitementDbContext) =
     query {

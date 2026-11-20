@@ -204,7 +204,7 @@ type F1DataService
 
                         let! existingRaces =
                             db.F1Races
-                                .Where(fun race -> race.Year = year)
+                                .Where(fun race -> race.Year = EF.Parameter(year))
                                 .OrderBy(fun race -> race.RoundNumber)
                                 .ThenBy(fun race -> race.Id)
                                 .ToListAsync(ct)
@@ -368,7 +368,7 @@ type F1DataService
                         let! staleRaces =
                             db.F1Races
                                 .Where(fun r ->
-                                    r.Year = year
+                                    r.Year = EF.Parameter(year)
                                     && r.Status = "scheduled"
                                     && r.ScheduledStart < DateTime.UtcNow)
                                 .OrderBy(fun r -> r.RoundNumber)
@@ -469,7 +469,7 @@ type F1DataService
 
             let! completedRace =
                 db.F1Races
-                    .Where(fun r -> r.Year = year && r.Status = "final")
+                    .Where(fun r -> r.Year = EF.Parameter(year) && r.Status = "final")
                     .OrderByDescending(fun r -> r.RoundNumber)
                     .FirstOrDefaultAsync(ct)
 
@@ -485,7 +485,7 @@ type F1DataService
 
                 let! upcomingRace =
                     db.F1Races
-                        .Where(fun r -> r.Year = year && r.ScheduledStart >= cutoff)
+                        .Where(fun r -> r.Year = EF.Parameter(year) && r.ScheduledStart >= EF.Parameter(cutoff))
                         .OrderBy(fun r -> r.ScheduledStart)
                         .FirstOrDefaultAsync(ct)
 
@@ -494,7 +494,7 @@ type F1DataService
                 if isNull race then
                     let! anyRace =
                         db.F1Races
-                            .Where(fun r -> r.Year = year)
+                            .Where(fun r -> r.Year = EF.Parameter(year))
                             .OrderByDescending(fun r -> r.RoundNumber)
                             .FirstOrDefaultAsync(ct)
 
@@ -530,7 +530,7 @@ type F1DataService
                             espnF1.FetchCompetitorsAsync(race.EspnEventId, ct = ct)
 
                         let! existingDrivers =
-                            db.F1Drivers.Where(fun d -> d.Season = year).ToListAsync(ct)
+                            db.F1Drivers.Where(fun d -> d.Season = EF.Parameter(year)).ToListAsync(ct)
 
                         db.F1Drivers.RemoveRange(existingDrivers)
 
@@ -680,7 +680,7 @@ type F1DataService
 
             let! completedRaces =
                 db.F1Races
-                    .Where(fun r -> r.Year = year && r.Status = "final")
+                    .Where(fun r -> r.Year = EF.Parameter(year) && r.Status = "final")
                     .OrderByDescending(fun r -> r.RoundNumber)
                     .ToListAsync(ct)
 

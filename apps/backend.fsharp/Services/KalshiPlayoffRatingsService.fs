@@ -201,7 +201,7 @@ type KalshiPlayoffRatingsService
             else
                 use scope = serviceProvider.CreateScope()
                 let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
-                let! teams = db.CollegeTeams.Where(fun t -> t.Season = season).ToListAsync(ct)
+                let! teams = db.CollegeTeams.Where(fun t -> t.Season = EF.Parameter(season)).ToListAsync(ct)
                 return teams |> Seq.map (fun t -> t.Abbreviation) |> Seq.distinct |> Seq.toList
         }
         let league =
@@ -239,8 +239,8 @@ type KalshiPlayoffRatingsService
                     let live = PlayoffMarkets.groupMarkets league markets
                     use scope = serviceProvider.CreateScope()
                     let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
-                    let! existing = db.TeamRatings.Where(fun r -> r.Sport = sport && r.Season = season
-                                                                   && (r.Source = "kalshi" || (sport = "cfb" && r.Source = PlayoffRatingPolicy.collegeNoMarketSource))).ToListAsync(ct)
+                    let! existing = db.TeamRatings.Where(fun r -> r.Sport = EF.Parameter(sport) && r.Season = EF.Parameter(season)
+                                                                   && (r.Source = "kalshi" || (EF.Constant(sport) = "cfb" && r.Source = PlayoffRatingPolicy.collegeNoMarketSource))).ToListAsync(ct)
                     let rowsByTeam = existing |> Seq.groupBy (fun r -> r.TeamAbbreviation) |> Seq.map (fun (team, rows) -> team, Seq.toList rows) |> Map.ofSeq
                     let rowsFor team = Map.tryFind team rowsByTeam |> Option.defaultValue []
                     let needsArchive =

@@ -637,11 +637,11 @@ type EspnOddsService
                 let! staleGames =
                     db.Games
                         .Where(fun g ->
-                            g.Sport = sportLower
+                            g.Sport = EF.Parameter(sportLower)
                             && g.Status = "scheduled"
-                            && g.ScheduledStart >= dayStart
-                            && g.ScheduledStart < dayEnd
-                            && not (espnIdList.Contains(g.Id)))
+                            && g.ScheduledStart >= EF.Parameter(dayStart)
+                            && g.ScheduledStart < EF.Parameter(dayEnd)
+                            && not (EF.Parameter(espnIdList).Contains(g.Id)))
                         .ToListAsync(ct)
 
                 for game in staleGames do
@@ -678,7 +678,7 @@ type EspnOddsService
                     Task.FromResult(Collections.Generic.List<OddsSnapshot>())
                 else
                     db.OddsSnapshots
-                        .Where(fun snapshot -> missingSnapshotIds.Contains(snapshot.GameId))
+                        .Where(fun snapshot -> EF.Parameter(missingSnapshotIds).Contains(snapshot.GameId))
                         .ToListAsync(ct)
 
             let snapshotByGame =

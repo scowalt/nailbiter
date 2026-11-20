@@ -63,7 +63,7 @@ type RetrospectiveEloService(logger: ILogger<RetrospectiveEloService>, servicePr
                 db.Games
                     .Where(fun (g: Game) ->
                         g.Sport = "nfl"
-                        && g.SeasonYear = Nullable seasonYear
+                        && g.SeasonYear = EF.Parameter(Nullable seasonYear)
                         && g.Status = "final"
                         && g.HomeScore <> Nullable()
                         && g.AwayScore <> Nullable())

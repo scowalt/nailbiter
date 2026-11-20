@@ -136,7 +136,7 @@ type EspnPowerIndexService [<ActivatorUtilitiesConstructor>]
                 verified <- verified && expected.HasValue && allTeams.Count = expected.Value
                             && (allTeams |> Seq.forall (fun t -> not (isNull (box t)) && not (isNull (box t.Team)) && not (String.IsNullOrWhiteSpace(t.Team.Abbreviation))))
                             && (allTeams |> Seq.map (fun t -> t.Team.Abbreviation) |> Seq.distinct |> Seq.length) = allTeams.Count
-                let! previous = db.TeamRatings.Where(fun r -> r.Sport = sport && r.Season = season && r.Source = source).ToListAsync(ct)
+                let! previous = db.TeamRatings.Where(fun r -> r.Sport = EF.Parameter(sport) && r.Season = EF.Parameter(season) && r.Source = EF.Parameter(source)).ToListAsync(ct)
                 for row in previous do
                     row.PowerRank <- Nullable()
                     row.SourceSeason <- Nullable()
@@ -147,7 +147,7 @@ type EspnPowerIndexService [<ActivatorUtilitiesConstructor>]
                     if not (String.IsNullOrEmpty(abbr)) then
                         let! existing =
                             db.TeamRatings.FirstOrDefaultAsync(
-                                (fun r -> r.Sport = sport && r.TeamAbbreviation = abbr && r.Season = season && r.Source = source), ct)
+                                (fun r -> r.Sport = EF.Parameter(sport) && r.TeamAbbreviation = EF.Parameter(abbr) && r.Season = EF.Parameter(season) && r.Source = EF.Parameter(source)), ct)
 
                         let rating = extractRating team sport
                         let rank = extractRank team sport columnMappings

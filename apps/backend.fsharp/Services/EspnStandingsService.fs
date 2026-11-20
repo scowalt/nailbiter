@@ -63,7 +63,7 @@ type EspnStandingsService
                     let abbr = entry.Team.Abbreviation
                     let! existing =
                         db.TeamStandings.FirstOrDefaultAsync(
-                            (fun s -> s.Sport = sport && s.TeamAbbreviation = abbr && s.Season = season), ct)
+                            (fun s -> s.Sport = EF.Parameter(sport) && s.TeamAbbreviation = EF.Parameter(abbr) && s.Season = EF.Parameter(season)), ct)
 
                     let mutable conferenceRank: Nullable<int> = Nullable()
                     if not (isNull (box entry.Stats)) then

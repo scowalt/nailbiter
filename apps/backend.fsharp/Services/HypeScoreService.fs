@@ -331,9 +331,9 @@ type HypeScoreService
                 let season = game.SeasonYear.GetValueOrDefault()
                 let homeKey = ProHypePolicy.TeamKey(game.Sport, game.HomeTeamAbbreviation)
                 let awayKey = ProHypePolicy.TeamKey(game.Sport, game.AwayTeamAbbreviation)
-                let! rows = db.TeamRatings.Where(fun r -> r.Sport = game.Sport && r.Season = season
+                let! rows = db.TeamRatings.Where(fun r -> r.Sport = game.Sport && r.Season = EF.Parameter(season)
                                                          && (r.TeamAbbreviation = game.HomeTeamAbbreviation || r.TeamAbbreviation = game.AwayTeamAbbreviation
-                                                             || r.TeamAbbreviation = homeKey || r.TeamAbbreviation = awayKey)).ToListAsync(ct)
+                                                             || r.TeamAbbreviation = EF.Parameter(homeKey) || r.TeamAbbreviation = EF.Parameter(awayKey))).ToListAsync(ct)
                 let! pregame = db.PregameOdds.FirstOrDefaultAsync((fun o -> o.GameId = game.Id), ct)
                 let! completed = db.Games.Where(fun g -> g.Sport = game.Sport && g.SeasonYear = game.SeasonYear && g.Status = "final"
                                                         && g.SeasonType = game.SeasonType).Select(fun g -> g.Id).ToListAsync(ct)
@@ -341,7 +341,7 @@ type HypeScoreService
             elif game.Sport = "cfb" then
                 let season = PlayoffRatingPolicy.gameSeason game
                 let now = timeProvider.GetUtcNow().UtcDateTime
-                let! rows = db.TeamRatings.Where(fun r -> r.Sport = "cfb" && r.Season = season
+                let! rows = db.TeamRatings.Where(fun r -> r.Sport = "cfb" && r.Season = EF.Parameter(season)
                                                         && (r.Source = "kalshi" || r.Source = PlayoffRatingPolicy.collegeNoMarketSource)).ToListAsync(ct)
                 let! pregame = db.PregameOdds.FirstOrDefaultAsync((fun o -> o.GameId = game.Id), ct)
                 return collegeEvaluation game rows pregame now
@@ -370,7 +370,7 @@ type HypeScoreService
                     .Where(fun (r: TeamRating) ->
                         r.Sport = game.Sport.ToLower()
                         && r.TeamAbbreviation = game.HomeTeamAbbreviation
-                        && r.Season = season)
+                        && r.Season = EF.Parameter(season))
                     .OrderByDescending(fun (r: TeamRating) -> r.FetchedAt)
                     .ToListAsync(ct)
 
@@ -381,7 +381,7 @@ type HypeScoreService
                     .Where(fun (r: TeamRating) ->
                         r.Sport = game.Sport.ToLower()
                         && r.TeamAbbreviation = game.AwayTeamAbbreviation
-                        && r.Season = season)
+                        && r.Season = EF.Parameter(season))
                     .OrderByDescending(fun (r: TeamRating) -> r.FetchedAt)
                     .ToListAsync(ct)
 
@@ -406,7 +406,7 @@ type HypeScoreService
                     .Where(fun (s: TeamStanding) ->
                         s.Sport = game.Sport.ToLower()
                         && s.TeamAbbreviation = game.HomeTeamAbbreviation
-                        && s.Season = season)
+                        && s.Season = EF.Parameter(season))
                     .OrderByDescending(fun (s: TeamStanding) -> s.FetchedAt)
                     .FirstOrDefaultAsync(ct)
 
@@ -415,7 +415,7 @@ type HypeScoreService
                     .Where(fun (s: TeamStanding) ->
                         s.Sport = game.Sport.ToLower()
                         && s.TeamAbbreviation = game.AwayTeamAbbreviation
-                        && s.Season = season)
+                        && s.Season = EF.Parameter(season))
                     .OrderByDescending(fun (s: TeamStanding) -> s.FetchedAt)
                     .FirstOrDefaultAsync(ct)
 
@@ -605,9 +605,9 @@ type HypeScoreService
                 let now = timeProvider.GetUtcNow().UtcDateTime
                 let seasons = college |> Array.map PlayoffRatingPolicy.gameSeason |> Array.distinct
                 let ids = college |> Array.map (fun g -> g.Id)
-                let! rows = db.TeamRatings.AsNoTracking().Where(fun r -> r.Sport = "cfb" && seasons.Contains(r.Season)
+                let! rows = db.TeamRatings.AsNoTracking().Where(fun r -> r.Sport = "cfb" && EF.Parameter(seasons).Contains(r.Season)
                                                                        && (r.Source = "kalshi" || r.Source = PlayoffRatingPolicy.collegeNoMarketSource)).ToListAsync(ct)
-                let! pregame = db.PregameOdds.AsNoTracking().Where(fun o -> ids.Contains(o.GameId)).ToDictionaryAsync((fun o -> o.GameId), ct)
+                let! pregame = db.PregameOdds.AsNoTracking().Where(fun o -> EF.Parameter(ids).Contains(o.GameId)).ToDictionaryAsync((fun o -> o.GameId), ct)
                 for game in college do
                     let components = collegeEvaluation game rows (match pregame.TryGetValue game.Id with | true, odds -> odds | _ -> null) now
                     scores[game.Id] <- if components.IsComplete then Nullable(this.CalculateFinalScore(game.Sport, components)) else Nullable()
