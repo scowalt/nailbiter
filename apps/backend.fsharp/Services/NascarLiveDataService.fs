@@ -168,7 +168,7 @@ type NascarLiveDataService
                 let season = DateTime.UtcNow.Year
 
                 let! drivers =
-                    db.NascarDrivers.Where(fun d -> d.Season = season).ToListAsync(ct)
+                    db.NascarDrivers.Where(fun d -> d.Season = EF.Parameter(season)).ToListAsync(ct)
 
                 for race in inProgressRaces do
                     ct.ThrowIfCancellationRequested()

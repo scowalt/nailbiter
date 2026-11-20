@@ -295,7 +295,7 @@ type PowerRankingsGuruService [<ActivatorUtilitiesConstructor>]
 
                     use invalidationScope = serviceProvider.CreateScope()
                     let invalidationDb = invalidationScope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
-                    let! previous = invalidationDb.TeamRatings.Where(fun r -> r.Sport = sport && r.Season = season && r.Source = "powerrankingsguru").ToListAsync(ct)
+                    let! previous = invalidationDb.TeamRatings.Where(fun r -> r.Sport = EF.Parameter(sport) && r.Season = EF.Parameter(season) && r.Source = "powerrankingsguru").ToListAsync(ct)
                     let expected = backend.Scoring.ProHypePolicy.TeamCount(sport, season)
                     let distinctTeams = teams |> Seq.map (fun t -> t.Abbreviation) |> Seq.distinct |> Seq.length
                     let complete = expected.HasValue && teams.Count = expected.Value
@@ -343,9 +343,9 @@ type PowerRankingsGuruService [<ActivatorUtilitiesConstructor>]
                             let! existing =
                                 db.TeamRatings.FirstOrDefaultAsync(
                                     (fun r ->
-                                        r.Sport = sport
+                                        r.Sport = EF.Parameter(sport)
                                         && r.TeamAbbreviation = team.Abbreviation
-                                        && r.Season = season
+                                        && r.Season = EF.Parameter(season)
                                         && r.Source = "powerrankingsguru"),
                                     ct
                                 )

@@ -190,7 +190,7 @@ type internal MoneyPuckQualificationCollector(source: MoneyPuckHttpClient, logge
         use scope = serviceProvider.CreateScope()
         let db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>()
         use! tx = db.Database.BeginTransactionAsync(ct)
-        let! existing = db.TeamRatings.Where(fun r -> r.Sport = "nhl" && r.Season = season && r.Source = MoneyPuckQualification.source).ToListAsync(ct)
+        let! existing = db.TeamRatings.Where(fun r -> r.Sport = "nhl" && r.Season = EF.Parameter(season) && r.Source = MoneyPuckQualification.source).ToListAsync(ct)
         let batch = if batch.FetchedAt > now () then { batch with Reason = "future_observation" } else batch
         let highWater =
             existing |> Seq.choose (fun row ->

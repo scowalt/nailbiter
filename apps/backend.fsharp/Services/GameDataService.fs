@@ -30,7 +30,7 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
 
         let! games =
             publicGames
-                .Where(fun g -> g.ScheduledStart >= todayStart && g.ScheduledStart < todayEnd && g.Status <> "canceled")
+                .Where(fun g -> g.ScheduledStart >= EF.Parameter(todayStart) && g.ScheduledStart < EF.Parameter(todayEnd) && g.Status <> "canceled")
                 .OrderBy(fun g -> g.ScheduledStart)
                 .ToListAsync(ct)
 
@@ -55,7 +55,7 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
         else
             let! latestSnapshots =
                 db.OddsSnapshots
-                    .Where(fun o -> gameIds.Contains(o.GameId))
+                    .Where(fun o -> EF.Parameter(gameIds).Contains(o.GameId))
                     .ToListAsync(ct)
 
             let snapshotsByGame =
@@ -66,7 +66,7 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
 
             let! pregameOdds =
                 db.PregameOdds
-                    .Where(fun o -> gameIds.Contains(o.GameId))
+                    .Where(fun o -> EF.Parameter(gameIds).Contains(o.GameId))
                     .ToListAsync(ct)
 
             let pregameByGame =
@@ -175,13 +175,13 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
 
         let! liveGames =
             publicGames
-                .Where(fun g -> g.Sport = sport && g.Status = "in_progress")
+                .Where(fun g -> g.Sport = EF.Parameter(sport) && g.Status = "in_progress")
                 .OrderBy(fun g -> g.ScheduledStart)
                 .ToListAsync(ct)
 
         let! upcomingGames =
             publicGames
-                .Where(fun g -> g.Sport = sport && g.Status = "scheduled" && g.ScheduledStart >= scheduledGraceCutoff)
+                .Where(fun g -> g.Sport = EF.Parameter(sport) && g.Status = "scheduled" && g.ScheduledStart >= EF.Parameter(scheduledGraceCutoff))
                 .OrderBy(fun g -> g.ScheduledStart)
                 .Take(3)
                 .ToListAsync(ct)
@@ -208,11 +208,11 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
         let! games =
             publicGames
                 .Where(fun g ->
-                    g.Sport = sport
+                    g.Sport = EF.Parameter(sport)
                     && g.Status <> "canceled"
                     && (g.Status = "in_progress"
-                        || (g.Status = "scheduled" && g.ScheduledStart >= scheduledGraceCutoff)
-                        || (g.Status = "final" && g.ScheduledStart >= todayStart && g.ScheduledStart < todayEnd)))
+                        || (g.Status = "scheduled" && g.ScheduledStart >= EF.Parameter(scheduledGraceCutoff))
+                        || (g.Status = "final" && g.ScheduledStart >= EF.Parameter(todayStart) && g.ScheduledStart < EF.Parameter(todayEnd))))
                 .ToListAsync(ct)
 
         let orderedGames =
@@ -234,7 +234,7 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
         let sport = SportExtensions.ToDbValue(Sport.WORLD_CUP)
         let! game =
             publicGames
-                .FirstOrDefaultAsync((fun g -> g.Id = gameId && g.Sport = sport && g.Status <> "canceled"), ct)
+                .FirstOrDefaultAsync((fun g -> g.Id = EF.Parameter(gameId) && g.Sport = EF.Parameter(sport) && g.Status <> "canceled"), ct)
 
         if isNull game then
             return None
@@ -245,10 +245,10 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
 
     member _.GetGamesByFilterAsync(sport: string, seasonYear: Nullable<int>, seasonType: Nullable<int>, weekNumber: Nullable<int>, ct: CancellationToken) = task {
         let query =
-            publicGames.Where(fun g -> g.Sport = sport && g.Status <> "canceled")
-            |> fun q -> if seasonYear.HasValue then q.Where(fun g -> g.SeasonYear = seasonYear) else q
-            |> fun q -> if seasonType.HasValue then q.Where(fun g -> g.SeasonType = seasonType) else q
-            |> fun q -> if weekNumber.HasValue then q.Where(fun g -> g.WeekNumber = weekNumber) else q
+            publicGames.Where(fun g -> g.Sport = EF.Parameter(sport) && g.Status <> "canceled")
+            |> fun q -> if seasonYear.HasValue then q.Where(fun g -> g.SeasonYear = EF.Parameter(seasonYear)) else q
+            |> fun q -> if seasonType.HasValue then q.Where(fun g -> g.SeasonType = EF.Parameter(seasonType)) else q
+            |> fun q -> if weekNumber.HasValue then q.Where(fun g -> g.WeekNumber = EF.Parameter(weekNumber)) else q
 
         let ordered = query.OrderBy(fun g -> g.ScheduledStart) :> IQueryable<Game>
         let bounded = if sport = "cfb" && weekNumber.HasValue then ordered else ordered.Take(100)
@@ -268,7 +268,7 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
     }
 
     member _.GetGameAsync(gameId: string, ct: CancellationToken) = task {
-        let! game = publicGames.FirstOrDefaultAsync((fun g -> g.Id = gameId), ct)
+        let! game = publicGames.FirstOrDefaultAsync((fun g -> g.Id = EF.Parameter(gameId)), ct)
         return game |> ofObj
     }
 
@@ -287,7 +287,7 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
                 .ToDictionaryAsync((fun o -> o.GameId), ct)
         let expiredBounds = odds |> Seq.filter (fun entry -> not (GameWinnerProbabilityPolicy.FreshForDisplay(entry.Value, timeProvider.GetUtcNow().UtcDateTime))) |> Seq.map (fun entry -> entry.Key) |> Seq.toArray
         for id in expiredBounds do odds.Remove(id) |> ignore
-        let! collegeGames = db.Games.AsNoTracking().Where(fun g -> gameIds.Contains(g.Id) && g.Sport = "cfb").ToListAsync(ct)
+        let! collegeGames = db.Games.AsNoTracking().Where(fun g -> EF.Parameter(gameIds).Contains(g.Id) && g.Sport = "cfb").ToListAsync(ct)
         for game in collegeGames do
             match odds.TryGetValue(game.Id) with
             | true, snapshot when not (CollegeFootballPolicy.UsableLiveOdds(game, snapshot, timeProvider.GetUtcNow().UtcDateTime)) -> odds.Remove(game.Id) |> ignore
@@ -298,7 +298,7 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
     member _.GetExcitementScoresForGamesAsync(gameIds: string list, ct: CancellationToken) = task {
         let! allSnapshots =
             db.OddsSnapshots
-                .Where(fun o -> gameIds.Contains(o.GameId) && not o.IsHistorical && not o.Game.IsHistoricalImport)
+                .Where(fun o -> EF.Parameter(gameIds).Contains(o.GameId) && not o.IsHistorical && not o.Game.IsHistoricalImport)
                 .OrderBy(fun o -> o.GameId)
                 .ThenBy(fun o -> o.Timestamp)
                 .ThenBy(fun o -> o.Id)
@@ -323,14 +323,14 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
     member _.GetOddsSnapshotsAsync(gameId: string, ct: CancellationToken) = task {
         let! snapshots =
             db.OddsSnapshots
-                .Where(fun o -> o.GameId = gameId)
+                .Where(fun o -> o.GameId = EF.Parameter(gameId))
                 .OrderBy(fun o -> o.Timestamp)
                 .ToListAsync(ct)
         return snapshots
     }
 
     member _.GetPregameOddsAsync(gameId: string, ct: CancellationToken) = task {
-        let! odds = db.PregameOdds.FirstOrDefaultAsync((fun o -> o.GameId = gameId), ct)
+        let! odds = db.PregameOdds.FirstOrDefaultAsync((fun o -> o.GameId = EF.Parameter(gameId)), ct)
         return odds |> ofObj
     }
 
@@ -393,7 +393,7 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
 
         let! allStandings =
             db.TeamStandings
-                .Where(fun s -> s.Sport = sportLower)
+                .Where(fun s -> s.Sport = EF.Parameter(sportLower))
                 .GroupBy(fun s -> s.TeamAbbreviation)
                 .Select(fun g -> g.OrderByDescending(fun s -> s.FetchedAt).First())
                 .ToDictionaryAsync((fun s -> s.TeamAbbreviation), ct)
@@ -491,14 +491,14 @@ type GameDataService(db: ExcitementDbContext, timeProvider: TimeProvider, option
         let rankSource = if sport = "nhl" then MoneyPuckRankings.Source else "powerrankingsguru"
         let! ratings =
             db.TeamRatings
-                .Where(fun r -> r.Sport = sport && teamKeys.Contains(r.TeamAbbreviation)
-                                && ((r.Source = rankSource && (not hasPlayoffs || r.Season = season))
-                                    || (hasPlayoffs && r.Season = season && (r.Source = "kalshi" || (sport = "nhl" && (r.Source = PlayoffRatingPolicy.playoffStatusSource || r.Source = PlayoffRatingPolicy.moneyPuckQualificationSource)) || (sport = "cfb" && r.Source = PlayoffRatingPolicy.collegeNoMarketSource)))))
+                .Where(fun r -> r.Sport = EF.Parameter(sport) && EF.Parameter(teamKeys).Contains(r.TeamAbbreviation)
+                                && ((r.Source = EF.Parameter(rankSource) && (not (EF.Constant(hasPlayoffs)) || r.Season = EF.Parameter(season)))
+                                    || (EF.Constant(hasPlayoffs) && r.Season = EF.Parameter(season) && (r.Source = "kalshi" || (EF.Constant(sport) = "nhl" && (r.Source = PlayoffRatingPolicy.playoffStatusSource || r.Source = PlayoffRatingPolicy.moneyPuckQualificationSource)) || (EF.Constant(sport) = "cfb" && r.Source = PlayoffRatingPolicy.collegeNoMarketSource)))))
                 .OrderByDescending(fun r -> r.FetchedAt)
                 .ToListAsync(ct)
         let! standings =
             db.TeamStandings
-                .Where(fun s -> s.Sport = sport && teams.Contains(s.TeamAbbreviation) && (not hasPlayoffs || s.Season = season))
+                .Where(fun s -> s.Sport = EF.Parameter(sport) && EF.Parameter(teams).Contains(s.TeamAbbreviation) && (not (EF.Constant(hasPlayoffs)) || s.Season = EF.Parameter(season)))
                 .OrderByDescending(fun s -> s.FetchedAt)
                 .ToListAsync(ct)
 

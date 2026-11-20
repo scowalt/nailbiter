@@ -233,7 +233,7 @@ type NflBackfillService
             try
                 let! existingCount =
                     db.OddsSnapshots
-                        .Where(fun (o: OddsSnapshot) -> o.GameId = gameId && o.Source = "kalshi_backfill")
+                        .Where(fun (o: OddsSnapshot) -> o.GameId = EF.Parameter(gameId) && o.Source = "kalshi_backfill")
                         .CountAsync(ct)
 
                 if existingCount > 0 then

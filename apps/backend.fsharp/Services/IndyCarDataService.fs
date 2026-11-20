@@ -130,7 +130,7 @@ type IndyCarDataService
 
                                 let! existingRaceByEventId =
                                     db.IndyCarRaces.FirstOrDefaultAsync(
-                                        (fun r -> r.EspnEventId = eventId),
+                                        (fun r -> r.EspnEventId = EF.Parameter(eventId)),
                                         ct
                                     )
 
@@ -140,8 +140,8 @@ type IndyCarDataService
                                     let! existingRaceByNumber =
                                         db.IndyCarRaces.FirstOrDefaultAsync(
                                             (fun r ->
-                                                r.Year = year
-                                                && r.RaceNumber = raceNumber),
+                                                r.Year = EF.Parameter(year)
+                                                && r.RaceNumber = EF.Parameter(raceNumber)),
                                             ct
                                         )
 
@@ -199,7 +199,7 @@ type IndyCarDataService
                     let! staleRaces =
                         db.IndyCarRaces
                             .Where(fun r ->
-                                r.Year = year
+                                r.Year = EF.Parameter(year)
                                 && r.Status = "scheduled"
                                 && r.ScheduledStart < DateTime.UtcNow)
                             .OrderBy(fun r -> r.RaceNumber)
@@ -270,7 +270,7 @@ type IndyCarDataService
 
             let! completedRace =
                 db.IndyCarRaces
-                    .Where(fun r -> r.Year = year && r.Status = "final")
+                    .Where(fun r -> r.Year = EF.Parameter(year) && r.Status = "final")
                     .OrderByDescending(fun r -> r.RaceNumber)
                     .FirstOrDefaultAsync(ct)
 
@@ -286,7 +286,7 @@ type IndyCarDataService
 
                 let! upcomingRace =
                     db.IndyCarRaces
-                        .Where(fun r -> r.Year = year && r.ScheduledStart >= cutoff)
+                        .Where(fun r -> r.Year = EF.Parameter(year) && r.ScheduledStart >= EF.Parameter(cutoff))
                         .OrderBy(fun r -> r.ScheduledStart)
                         .FirstOrDefaultAsync(ct)
 
@@ -295,7 +295,7 @@ type IndyCarDataService
                 if isNull race then
                     let! anyRace =
                         db.IndyCarRaces
-                            .Where(fun r -> r.Year = year)
+                            .Where(fun r -> r.Year = EF.Parameter(year))
                             .OrderByDescending(fun r -> r.RaceNumber)
                             .FirstOrDefaultAsync(ct)
 
@@ -331,7 +331,7 @@ type IndyCarDataService
 
                         let! existingDrivers =
                             db.IndyCarDrivers
-                                .Where(fun d -> d.Season = year)
+                                .Where(fun d -> d.Season = EF.Parameter(year))
                                 .ToDictionaryAsync((fun d -> d.EspnAthleteId), ct)
 
                         let mutable count = 0
@@ -532,13 +532,13 @@ type IndyCarDataService
 
             let! completedRaceIds =
                 db.IndyCarRaces
-                    .Where(fun r -> r.Year = year && r.Status = "final")
+                    .Where(fun r -> r.Year = EF.Parameter(year) && r.Status = "final")
                     .Select(fun r -> r.Id)
                     .ToListAsync(ct)
 
             let! racesWithResults =
                 db.IndyCarRaceResults
-                    .Where(fun r -> completedRaceIds.Contains(r.RaceId))
+                    .Where(fun r -> EF.Parameter(completedRaceIds).Contains(r.RaceId))
                     .Select(fun r -> r.RaceId)
                     .Distinct()
                     .ToListAsync(ct)
@@ -546,8 +546,8 @@ type IndyCarDataService
             let! racesNeedingResults =
                 db.IndyCarRaces
                     .Where(fun r ->
-                        completedRaceIds.Contains(r.Id)
-                        && not (racesWithResults.Contains(r.Id)))
+                        EF.Parameter(completedRaceIds).Contains(r.Id)
+                        && not (EF.Parameter(racesWithResults).Contains(r.Id)))
                     .OrderBy(fun r -> r.RaceNumber)
                     .ToListAsync(ct)
 
@@ -683,9 +683,9 @@ type IndyCarDataService
             let! races =
                 db.IndyCarRaces
                     .Where(fun r ->
-                        r.Year = year
+                        r.Year = EF.Parameter(year)
                         && (r.Status = "scheduled" || r.Status = "in_progress")
-                        && r.ScheduledStart <= cutoff)
+                        && r.ScheduledStart <= EF.Parameter(cutoff))
                     .OrderBy(fun r -> r.RaceNumber)
                     .ToListAsync(ct)
 

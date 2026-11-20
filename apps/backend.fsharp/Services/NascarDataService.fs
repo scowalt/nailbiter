@@ -128,7 +128,7 @@ type NascarDataService
 
                                 let! existingRace =
                                     db.NascarRaces.FirstOrDefaultAsync(
-                                        (fun r -> r.Id = eventId),
+                                        (fun r -> r.Id = EF.Parameter(eventId)),
                                         ct
                                     )
 
@@ -172,7 +172,7 @@ type NascarDataService
                     let! staleRaces =
                         db.NascarRaces
                             .Where(fun r ->
-                                r.Year = year
+                                r.Year = EF.Parameter(year)
                                 && r.Status = "scheduled"
                                 && r.ScheduledStart < DateTime.UtcNow)
                             .OrderBy(fun r -> r.RaceNumber)
@@ -241,7 +241,7 @@ type NascarDataService
 
             let! latestFinal =
                 db.NascarRaces
-                    .Where(fun r -> r.Year = year && r.Status = "final")
+                    .Where(fun r -> r.Year = EF.Parameter(year) && r.Status = "final")
                     .OrderByDescending(fun r -> r.RaceNumber)
                     .FirstOrDefaultAsync(ct)
 
@@ -251,9 +251,9 @@ type NascarDataService
                 if isNull latestFinal then
                     db.NascarRaces
                         .Where(fun r ->
-                            r.Year = year
+                            r.Year = EF.Parameter(year)
                             && (r.Status = "scheduled" || r.Status = "in_progress")
-                            && r.ScheduledStart <= horizon)
+                            && r.ScheduledStart <= EF.Parameter(horizon))
                         .OrderBy(fun r -> r.RaceNumber)
                         .FirstOrDefaultAsync(ct)
                 else
@@ -264,7 +264,7 @@ type NascarDataService
             else
                 let! roster =
                     db.NascarDrivers
-                        .Where(fun d -> d.Season = year)
+                        .Where(fun d -> d.Season = EF.Parameter(year))
                         .ToDictionaryAsync((fun d -> d.EspnAthleteId), (fun d -> d.CarNumber), ct)
 
                 let! entrants =
@@ -345,7 +345,7 @@ type NascarDataService
 
                 let! stored =
                     db.NascarDrivers
-                        .Where(fun d -> d.Season = race.Year && ids.Contains(d.EspnAthleteId))
+                        .Where(fun d -> d.Season = race.Year && EF.Parameter(ids).Contains(d.EspnAthleteId))
                         .ToDictionaryAsync((fun d -> d.EspnAthleteId), ct)
 
                 for c in entrants do
@@ -408,13 +408,13 @@ type NascarDataService
 
             let! completedRaceIds =
                 db.NascarRaces
-                    .Where(fun r -> r.Year = year && r.Status = "final")
+                    .Where(fun r -> r.Year = EF.Parameter(year) && r.Status = "final")
                     .Select(fun r -> r.Id)
                     .ToListAsync(ct)
 
             let! racesWithResults =
                 db.NascarRaceResults
-                    .Where(fun r -> completedRaceIds.Contains(r.RaceId))
+                    .Where(fun r -> EF.Parameter(completedRaceIds).Contains(r.RaceId))
                     .Select(fun r -> r.RaceId)
                     .Distinct()
                     .ToListAsync(ct)
@@ -422,8 +422,8 @@ type NascarDataService
             let! racesNeedingResults =
                 db.NascarRaces
                     .Where(fun r ->
-                        completedRaceIds.Contains(r.Id)
-                        && not (racesWithResults.Contains(r.Id)))
+                        EF.Parameter(completedRaceIds).Contains(r.Id)
+                        && not (EF.Parameter(racesWithResults).Contains(r.Id)))
                     .OrderBy(fun r -> r.RaceNumber)
                     .ToListAsync(ct)
 
@@ -556,9 +556,9 @@ type NascarDataService
             let! races =
                 db.NascarRaces
                     .Where(fun r ->
-                        r.Year = year
+                        r.Year = EF.Parameter(year)
                         && (r.Status = "scheduled" || r.Status = "in_progress")
-                        && r.ScheduledStart <= cutoff)
+                        && r.ScheduledStart <= EF.Parameter(cutoff))
                     .OrderBy(fun r -> r.RaceNumber)
                     .ToListAsync(ct)
 
@@ -584,7 +584,7 @@ type NascarDataService
 
                             let! driverLookup =
                                 db.NascarDrivers
-                                    .Where(fun d -> d.Season = year)
+                                    .Where(fun d -> d.Season = EF.Parameter(year))
                                     .ToDictionaryAsync((fun d -> d.EspnAthleteId), ct)
 
                             for coreComp in coreCompetitors.Items do

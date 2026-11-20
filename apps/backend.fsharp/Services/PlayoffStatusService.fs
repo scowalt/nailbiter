@@ -638,9 +638,9 @@ type PlayoffStatusService
                             let! existing =
                                 db.TeamRatings.FirstOrDefaultAsync(
                                     (fun r ->
-                                        r.Sport = sport
-                                        && r.TeamAbbreviation = abbr
-                                        && r.Season = season
+                                        r.Sport = EF.Parameter(sport)
+                                        && r.TeamAbbreviation = EF.Parameter(abbr)
+                                        && r.Season = EF.Parameter(season)
                                         && r.Source = "playoffstatus"),
                                     ct
                                 )
