@@ -87,6 +87,8 @@ State lives in the Cloudflare R2 bucket `opentofu-state` under the key `nailbite
 
 `imports.tf` records how the live resources were adopted into this state on 2026-11-19. Applying it again is a no-op.
 
+`tailscale_tailnet_key.server` is the single-use key that cloud-init used to join the server to the tailnet. It expires after an hour, and `hcloud_server.main` ignores changes to `user_data`, so the server never reads it again. `recreate_if_invalid = "never"` keeps the expired key in state, so a plan shows no changes instead of minting a new, unused pre-authorized key on every apply. To rebuild the server, mint a fresh key in the same apply: `./tofu apply -replace=tailscale_tailnet_key.server -replace=hcloud_server.main`.
+
 ### Manual Setup (Alternative)
 
 If you prefer to set up credentials manually:
