@@ -270,7 +270,7 @@
     {
       "ecosystem": "npm",
       "name": "@cloudflare/workerd-linux-64",
-      "version": "1.20260926.1",
+      "version": "1.20261110.1",
       "declared_license": "Apache-2.0",
       "notices": []
     },
@@ -296,13 +296,6 @@
     {
       "ecosystem": "npm",
       "name": "@esbuild/linux-x64",
-      "version": "0.28.1",
-      "declared_license": "MIT",
-      "notices": []
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@esbuild/linux-x64",
       "version": "0.28.2",
       "declared_license": "MIT",
       "notices": []
@@ -319,51 +312,26 @@
     {
       "ecosystem": "npm",
       "name": "@img/sharp-libvips-linux-x64",
-      "version": "1.3.3",
-      "declared_license": "LGPL-3.0-or-later",
-      "notices": []
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@img/sharp-libvips-linuxmusl-x64",
-      "version": "1.3.3",
+      "version": "1.3.4",
       "declared_license": "LGPL-3.0-or-later",
       "notices": []
     },
     {
       "ecosystem": "npm",
       "name": "@img/sharp-linux-x64",
-      "version": "0.35.4",
+      "version": "0.35.5",
       "declared_license": "Apache-2.0",
       "notices": [
-        "LICENSES/npm/@img__sharp-linux-x64@0.35.4/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@img/sharp-linuxmusl-x64",
-      "version": "0.35.4",
-      "declared_license": "Apache-2.0",
-      "notices": [
-        "LICENSES/npm/@img__sharp-linuxmusl-x64@0.35.4/LICENSE"
+        "LICENSES/npm/@img__sharp-linux-x64@0.35.5/LICENSE"
       ]
     },
     {
       "ecosystem": "npm",
       "name": "@jridgewell/resolve-uri",
-      "version": "3.1.2",
+      "version": "3.1.3",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/@jridgewell__resolve-uri@3.1.2/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@jridgewell/sourcemap-codec",
-      "version": "1.5.5",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/@jridgewell__sourcemap-codec@1.5.5/LICENSE"
+        "LICENSES/npm/@jridgewell__resolve-uri@3.1.3/LICENSE"
       ]
     },
     {
@@ -483,10 +451,10 @@
     {
       "ecosystem": "npm",
       "name": "@rolldown/pluginutils",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/@rolldown__pluginutils@1.1.0/LICENSE"
+        "LICENSES/npm/@rolldown__pluginutils@1.1.1/LICENSE"
       ]
     },
     {
@@ -564,19 +532,19 @@
     {
       "ecosystem": "npm",
       "name": "@sindresorhus/is",
-      "version": "7.1.1",
+      "version": "7.2.0",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/@sindresorhus__is@7.1.1/license"
+        "LICENSES/npm/@sindresorhus__is@7.2.0/license"
       ]
     },
     {
       "ecosystem": "npm",
       "name": "@speed-highlight/core",
-      "version": "1.2.12",
+      "version": "1.2.24",
       "declared_license": "CC0-1.0",
       "notices": [
-        "LICENSES/npm/@speed-highlight__core@1.2.12/LICENSE"
+        "LICENSES/npm/@speed-highlight__core@1.2.24/LICENSE"
       ]
     },
     {
@@ -618,10 +586,10 @@
     {
       "ecosystem": "npm",
       "name": "@types/estree",
-      "version": "1.0.8",
+      "version": "1.0.10",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/@types__estree@1.0.8/LICENSE"
+        "LICENSES/npm/@types__estree@1.0.10/LICENSE"
       ]
     },
     {
@@ -631,15 +599,6 @@
       "declared_license": "MIT",
       "notices": [
         "LICENSES/npm/@types__estree-jsx@1.0.5/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "@types/hast",
-      "version": "3.0.4",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/@types__hast@3.0.4/LICENSE"
       ]
     },
     {
@@ -708,10 +667,10 @@
     {
       "ecosystem": "npm",
       "name": "@ungap/structured-clone",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "declared_license": "ISC",
       "notices": [
-        "LICENSES/npm/@ungap__structured-clone@1.3.0/LICENSE"
+        "LICENSES/npm/@ungap__structured-clone@1.4.0/LICENSE"
       ]
     },
     {
@@ -1182,10 +1141,10 @@
     {
       "ecosystem": "npm",
       "name": "ci-info",
-      "version": "4.4.0",
+      "version": "4.5.0",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/ci-info@4.4.0/LICENSE"
+        "LICENSES/npm/ci-info@4.5.0/LICENSE"
       ]
     },
     {
@@ -1387,10 +1346,10 @@
     {
       "ecosystem": "npm",
       "name": "css-tree",
-      "version": "3.1.0",
+      "version": "3.2.1",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/css-tree@3.1.0/LICENSE"
+        "LICENSES/npm/css-tree@3.2.1/LICENSE"
       ]
     },
     {
@@ -1730,15 +1689,6 @@
       "declared_license": "MIT",
       "notices": [
         "LICENSES/npm/es-object-atoms@1.1.1/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "esbuild",
-      "version": "0.28.1",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/esbuild@0.28.1/LICENSE.md"
       ]
     },
     {
@@ -2548,10 +2498,10 @@
     {
       "ecosystem": "npm",
       "name": "mdn-data",
-      "version": "2.12.2",
+      "version": "2.27.1",
       "declared_license": "CC0-1.0",
       "notices": [
-        "LICENSES/npm/mdn-data@2.12.2/LICENSE"
+        "LICENSES/npm/mdn-data@2.27.1/LICENSE"
       ]
     },
     {
@@ -2620,10 +2570,10 @@
     {
       "ecosystem": "npm",
       "name": "micromark-util-types",
-      "version": "2.0.2",
+      "version": "2.0.3",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/micromark-util-types@2.0.2/license"
+        "LICENSES/npm/micromark-util-types@2.0.3/license"
       ]
     },
     {
@@ -2656,7 +2606,7 @@
     {
       "ecosystem": "npm",
       "name": "miniflare",
-      "version": "5.20260926.0-alpha",
+      "version": "5.20261110.2-beta",
       "declared_license": "MIT",
       "notices": []
     },
@@ -2789,10 +2739,10 @@
     {
       "ecosystem": "npm",
       "name": "node-mock-http",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/node-mock-http@1.0.4/LICENSE"
+        "LICENSES/npm/node-mock-http@1.0.5/LICENSE"
       ]
     },
     {
@@ -3055,19 +3005,10 @@
     {
       "ecosystem": "npm",
       "name": "picomatch",
-      "version": "2.3.1",
+      "version": "2.3.2",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/picomatch@2.3.1/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "picomatch",
-      "version": "4.0.4",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/picomatch@4.0.4/LICENSE"
+        "LICENSES/npm/picomatch@2.3.2/LICENSE"
       ]
     },
     {
@@ -3210,10 +3151,10 @@
     {
       "ecosystem": "npm",
       "name": "property-information",
-      "version": "7.1.0",
+      "version": "7.2.0",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/property-information@7.1.0/license"
+        "LICENSES/npm/property-information@7.2.0/license"
       ]
     },
     {
@@ -3314,10 +3255,10 @@
     {
       "ecosystem": "npm",
       "name": "readdirp",
-      "version": "5.0.0",
+      "version": "5.1.1",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/readdirp@5.0.0/LICENSE"
+        "LICENSES/npm/readdirp@5.1.1/LICENSE"
       ]
     },
     {
@@ -3458,10 +3399,10 @@
     {
       "ecosystem": "npm",
       "name": "semver",
-      "version": "7.8.5",
+      "version": "7.8.6",
       "declared_license": "ISC",
       "notices": [
-        "LICENSES/npm/semver@7.8.5/LICENSE"
+        "LICENSES/npm/semver@7.8.6/LICENSE"
       ]
     },
     {
@@ -3494,10 +3435,10 @@
     {
       "ecosystem": "npm",
       "name": "sharp",
-      "version": "0.35.4",
+      "version": "0.35.5",
       "declared_license": "Apache-2.0",
       "notices": [
-        "LICENSES/npm/sharp@0.35.4/LICENSE"
+        "LICENSES/npm/sharp@0.35.5/LICENSE"
       ]
     },
     {
@@ -3615,15 +3556,6 @@
       "declared_license": "BSD-3-Clause",
       "notices": [
         "LICENSES/npm/source-map@0.6.1/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "source-map-js",
-      "version": "1.2.1",
-      "declared_license": "BSD-3-Clause",
-      "notices": [
-        "LICENSES/npm/source-map-js@1.2.1/LICENSE"
       ]
     },
     {
@@ -3909,15 +3841,6 @@
     {
       "ecosystem": "npm",
       "name": "ufo",
-      "version": "1.6.3",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/ufo@1.6.3/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "ufo",
       "version": "1.6.4",
       "declared_license": "MIT",
       "notices": [
@@ -3949,15 +3872,6 @@
       "declared_license": "MIT",
       "notices": [
         "LICENSES/npm/uncrypto@0.1.3/LICENSE"
-      ]
-    },
-    {
-      "ecosystem": "npm",
-      "name": "undici",
-      "version": "7.29.0",
-      "declared_license": "MIT",
-      "notices": [
-        "LICENSES/npm/undici@7.29.0/LICENSE"
       ]
     },
     {
@@ -4053,19 +3967,19 @@
     {
       "ecosystem": "npm",
       "name": "unist-util-visit",
-      "version": "5.1.0",
+      "version": "5.2.0",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/unist-util-visit@5.1.0/license"
+        "LICENSES/npm/unist-util-visit@5.2.0/license"
       ]
     },
     {
       "ecosystem": "npm",
       "name": "unist-util-visit-parents",
-      "version": "6.0.2",
+      "version": "6.1.0",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/unist-util-visit-parents@6.0.2/license"
+        "LICENSES/npm/unist-util-visit-parents@6.1.0/license"
       ]
     },
     {
@@ -4152,10 +4066,10 @@
     {
       "ecosystem": "npm",
       "name": "vfile-message",
-      "version": "4.0.3",
+      "version": "4.0.4",
       "declared_license": "MIT",
       "notices": [
-        "LICENSES/npm/vfile-message@4.0.3/license"
+        "LICENSES/npm/vfile-message@4.0.4/license"
       ]
     },
     {
@@ -4179,14 +4093,14 @@
     {
       "ecosystem": "npm",
       "name": "workerd",
-      "version": "1.20260926.1",
+      "version": "1.20261110.1",
       "declared_license": "Apache-2.0",
       "notices": []
     },
     {
       "ecosystem": "npm",
       "name": "wrangler",
-      "version": "4.142.0",
+      "version": "4.161.0",
       "declared_license": "MIT OR Apache-2.0",
       "notices": []
     },
