@@ -36,6 +36,19 @@ A live configuration applied before its PR merges is temporary.
 Merge that PR before another deployment, or the deployment can restore the old connection string.
 Do not print the connection string from a running container because it can contain credentials.
 
+## Memory budget
+
+The backend uses workstation garbage collection (`ServerGarbageCollection` is `false` in `apps/backend/backend.csproj`).
+Server garbage collection keeps a heap per core and collects late, which suits a large server but not a 2 GiB VPS shared with PostgreSQL.
+The backend container has `mem_limit: 1g`, so the .NET runtime sizes its heap against 1 GiB instead of the whole VPS.
+The deployment recreates the backend, so these settings apply on the next deployment.
+
+The `timescaledb` command in `docker-compose.yml` sets `shared_buffers=256MB` and `maintenance_work_mem=64MB`.
+The TimescaleDB image tunes these values on first start as if PostgreSQL owned the whole VPS.
+The deployment does not recreate the database container, so these flags apply only when an operator recreates it.
+Recreating it also changes the database image to the version that `docker-compose.yml` names.
+Compare that version with the running container and the installed extension before you recreate the database.
+
 ## Test and monitor
 
 The database integration test reads the actual Compose configuration and opens an isolated PostgreSQL instance.

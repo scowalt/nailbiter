@@ -1,9 +1,6 @@
 namespace Backend.Rendering
 
 open System
-open System.Collections.Concurrent
-open System.Collections.Generic
-open System.Runtime.CompilerServices
 open System.Threading
 open System.Threading.Channels
 open backend.GraphQL.Types
@@ -14,17 +11,15 @@ type ISseBroadcaster =
     abstract member Unsubscribe: topic: string -> subscription: ChannelReader<GameUpdate> -> unit
 
 type SseBroadcaster() =
-    let subscriptions = ConcurrentDictionary<string, ConcurrentBag<Channel<GameUpdate>>>()
-
-    let getOrCreateTopic (topic: string) =
-        subscriptions.GetOrAdd(topic, fun _ -> ConcurrentBag<Channel<GameUpdate>>())
+    let gate = obj ()
+    let mutable subscriptions: Map<string, Channel<GameUpdate> list> = Map.empty
 
     let publishToTopic (topic: string) (update: GameUpdate) =
-        match subscriptions.TryGetValue(topic) with
-        | true, channels ->
+        match Volatile.Read(&subscriptions).TryFind topic with
+        | Some channels ->
             for ch in channels do
                 ch.Writer.TryWrite(update) |> ignore
-        | _ -> ()
+        | None -> ()
 
     interface ISseBroadcaster with
         member _.PublishAsync(update: GameUpdate) (_ct: CancellationToken) =
@@ -36,16 +31,16 @@ type SseBroadcaster() =
         member _.Subscribe(topic: string) =
             let ch = Channel.CreateBounded<GameUpdate>(
                 BoundedChannelOptions(50, FullMode = BoundedChannelFullMode.DropOldest))
-            let bag = getOrCreateTopic topic
-            bag.Add(ch)
+            lock gate (fun () ->
+                let channels = subscriptions.TryFind topic |> Option.defaultValue []
+                Volatile.Write(&subscriptions, subscriptions.Add(topic, ch :: channels)))
             ch.Reader
 
         member _.Unsubscribe(topic: string) (subscription: ChannelReader<GameUpdate>) =
-            match subscriptions.TryGetValue(topic) with
-            | true, channels ->
-                let remaining = ConcurrentBag<Channel<GameUpdate>>()
-                for ch in channels do
-                    if not (Object.ReferenceEquals(ch.Reader, subscription)) then
-                        remaining.Add(ch)
-                subscriptions.TryUpdate(topic, remaining, channels) |> ignore
-            | _ -> ()
+            lock gate (fun () ->
+                match subscriptions.TryFind topic with
+                | Some channels ->
+                    let remaining = channels |> List.filter (fun ch -> not (Object.ReferenceEquals(ch.Reader, subscription)))
+                    let next = if List.isEmpty remaining then subscriptions.Remove topic else subscriptions.Add(topic, remaining)
+                    Volatile.Write(&subscriptions, next)
+                | None -> ())
