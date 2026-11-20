@@ -119,7 +119,7 @@ resource "cloudflare_zone_setting" "http3" {
 resource "cloudflare_zone_setting" "zero_rtt" {
   zone_id    = data.cloudflare_zone.main.zone_id
   setting_id = "0rtt"
-  value      = "on"
+  value      = "off"
 }
 
 resource "cloudflare_zone_setting" "opportunistic_encryption" {
@@ -131,6 +131,7 @@ resource "cloudflare_zone_setting" "opportunistic_encryption" {
 
 resource "cloudflare_zone_dnssec" "main" {
   zone_id = data.cloudflare_zone.main.zone_id
+  status  = "disabled"
 }
 
 
