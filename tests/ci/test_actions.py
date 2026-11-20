@@ -205,6 +205,8 @@ if args[:2] == ["image", "inspect"]:
     print(os.environ["FIXTURE_DIGEST"] if "RepoDigests" in args[3] else "sha256:" + "c" * 64)
 if args[0] == "inspect":
     print(os.environ.get("FIXTURE_RUNNING", "true") + " sha256:" + "c" * 64)
+if args[0] == "images":
+    print(os.environ.get("FIXTURE_IMAGES", ""), end="")
 sys.exit(1 if "FAIL" in sql else 0)
 ''')
         self.executable('curl', '#!/bin/sh\nexit "${FIXTURE_HEALTH_FAIL:-0}"\n')
@@ -268,6 +270,22 @@ sys.exit(1 if "FAIL" in sql else 0)
             self.assertNotEqual(self.run_script('deploy-backend.sh', SHA, DIGEST, env=failure).returncode, 0)
         self.assertTrue(any('up' in command['args'] for command in self.commands()))
         self.assertFalse(any('prune' in command['args'] for command in self.commands()))
+
+    def test_keeps_running_backend_image_and_two_newest_others(self):
+        (self.migrations / '021_success.sql').write_text('SELECT modern')
+        images = {day: 'sha256:' + letter * 64 for day, letter in [(1, 'c'), (2, 'a'), (3, 'b'), (4, 'd'), (5, 'e')]}
+        listing = ''.join(f'2026-11-0{day} 00:00:00 +0000 UTC\t{image}\n' for day, image in images.items())
+        result = self.run_script('deploy-backend.sh', SHA, DIGEST, env={'FIXTURE_IMAGES': listing})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        removed = [command['args'][2:] for command in self.commands() if command['args'][:2] == ['image', 'rm']]
+        self.assertEqual(removed, [[images[3], images[2]]])
+
+    def test_image_cleanup_tolerates_only_the_running_backend_image(self):
+        (self.migrations / '021_success.sql').write_text('SELECT modern')
+        listing = '2026-11-01 00:00:00 +0000 UTC\tsha256:' + 'c' * 64 + '\n'
+        result = self.run_script('deploy-backend.sh', SHA, DIGEST, env={'FIXTURE_IMAGES': listing})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any(command['args'][:2] == ['image', 'rm'] for command in self.commands()))
 
     def test_wrong_revision_and_mutable_or_missing_images_prevent_all_mutation(self):
         for sha, image in [('b' * 40, DIGEST), ('main', DIGEST), (SHA + ';exit 0', DIGEST), (SHA, IMAGE + ':latest'), (SHA, LEGACY_DIGEST), (SHA, DIGEST.replace('ghcr.io', 'ghcrXio')), (SHA, DIGEST + ';exit 0'), (SHA, 'other/image@sha256:' + 'b' * 64)]:
