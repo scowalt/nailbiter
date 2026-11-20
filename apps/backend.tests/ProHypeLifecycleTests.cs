@@ -115,7 +115,76 @@ public sealed class ProHypeLifecycleTests : IAsyncLifetime
     private async Task<ProHypeResolution> Resolve(CancellationToken ct = default)
     {
         using var scope = app.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().ResolveAsync(game.Id, ct);
+        var lifecycle = scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>();
+        var resolution = await lifecycle.ResolveAsync(game.Id, ct);
+        await lifecycle.PruneEvidenceAsync();
+        return resolution;
+    }
+
+    private async Task<int> Prune()
+    {
+        using var scope = app.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().PruneEvidenceAsync();
+    }
+
+    private async Task<long[]> EvidenceRevisions()
+    {
+        using var scope = app.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<ExcitementDbContext>().ProHypeEvidenceChanges
+            .Select(c => c.Revision).OrderBy(r => r).ToArrayAsync();
+    }
+
+    [Fact]
+    public async Task Pruning_removes_evidence_every_snapshot_has_already_read_and_keeps_the_saved_score()
+    {
+        await Seed("nfl");
+        var original = await Resolve();
+        Assert.NotNull(original.Total);
+        for (var i = 0; i < 5; i++)
+        {
+            clock.Advance(TimeSpan.FromMinutes(2));
+            await RefreshInputs();
+        }
+        var unread = await EvidenceRevisions();
+        Assert.NotEmpty(unread);
+        Assert.Equal(0, await Prune());
+        Assert.Equal(unread, await EvidenceRevisions());
+
+        var refreshed = await Resolve();
+        Assert.Empty(await EvidenceRevisions());
+        Assert.Equal(original.Total, refreshed.Total);
+        clock.Advance(TimeSpan.FromDays(3));
+        await app.DisposeAsync();
+        app = CreateHost();
+        Assert.Equal(original.Total, (await Resolve()).Total);
+    }
+
+    [Fact]
+    public async Task Pruning_keeps_a_never_resolved_games_history_so_a_reverted_start_still_counts()
+    {
+        await Seed("nfl");
+        await Change(async db => (await db.Games.SingleAsync()).Status = "in_progress");
+        await Change(async db => (await db.Games.SingleAsync()).Status = "scheduled");
+        clock.Advance(TimeSpan.FromMinutes(2));
+        await RefreshInputs();
+        await Prune();
+        Assert.Null((await Resolve()).Total);
+    }
+
+    [Fact]
+    public async Task Pruning_waits_out_an_in_flight_resolution_instead_of_deleting_evidence_it_has_not_saved()
+    {
+        await Seed("nfl");
+        var recorded = await EvidenceRevisions();
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ExcitementDbContext>();
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            await db.LockProHypeFenceAsync(ProHypeFenceAccess.ReadEvidence, CancellationToken.None);
+            Assert.Equal(0, await Prune());
+            Assert.Equal(recorded, await EvidenceRevisions());
+        }
+        Assert.InRange(await Prune(), 1, recorded.Length);
     }
 
     [Theory]
