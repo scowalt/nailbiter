@@ -64,7 +64,7 @@ class MarketingDevHostsTest(unittest.TestCase):
     @contextmanager
     def launch(self, command, **env):
         port = free_port()
-        args, child_env = self.astro(command, '--port', str(port), '--host', '127.0.0.1', **env)
+        args, child_env = self.astro(command, '--ignore-lock', '--port', str(port), '--host', '127.0.0.1', **env)
         with tempfile.TemporaryFile() as log:
             server = subprocess.Popen(args, cwd=self.site, env=child_env, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             try:

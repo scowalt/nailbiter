@@ -9,7 +9,7 @@
     "deploy": "bun run build && wrangler deploy"
   },
   "dependencies": {
-    "astro": "^6.0.0"
+    "astro": "^7.4.11"
   },
   "devDependencies": {
     "wrangler": "4"
