@@ -19,6 +19,13 @@ public sealed class ProHypeCaptureBackgroundService(IServiceScopeFactory scopes,
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception ex) { logger.LogError(ex, "Pro hype capture failed"); }
+            try
+            {
+                await using var scope = scopes.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<IProHypeLifecycle>().PruneEvidenceAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+            catch (Exception ex) { logger.LogError(ex, "Pro hype evidence pruning failed"); }
             try { await Task.Delay(TimeSpan.FromSeconds(30), clock, stoppingToken); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
         }

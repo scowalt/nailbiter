@@ -40,6 +40,7 @@ public sealed class PlayoffAndProHypeReportingTests
     private const string ProCompetitionFailure = "Pro context request failed for {Sport}/{Season}; previous timestamps preserved";
     private const string ProCompetitionLoopFailure = "Pro competition refresh failed";
     private const string ProHypeFailure = "Pro hype capture failed";
+    private const string ProHypePruneFailure = "Pro hype evidence pruning failed";
     private const string LockTimeout = ";Options=-c lock_timeout=500";
     private static readonly TimeSpan HangDeadline = TimeSpan.FromSeconds(60);
     private static readonly Answer Hang = new Hanging();
@@ -353,6 +354,20 @@ public sealed class PlayoffAndProHypeReportingTests
         await AdvanceUntilAsync(clock, lifecycle.Captured(2));
     }
 
+    [Fact]
+    public async Task Pro_hype_evidence_pruning_failure_is_sent_once_at_error_and_the_loop_keeps_capturing()
+    {
+        var lifecycle = new SyntheticLifecycle(_ => Task.CompletedTask, _ => throw new InvalidOperationException("synthetic pruning failure"));
+        var clock = new FakeTimeProvider();
+        await using var app = ProHypeApp(lifecycle, clock);
+
+        await lifecycle.Captured(1).WaitAsync(HangDeadline);
+        await app.WaitForLogAsync(typeof(ProHypeCaptureBackgroundService), ProHypePruneFailure);
+        AssertSentOnceAtError((await app.SentEventsAsync()).Where(e => e.Template == ProHypePruneFailure).ToArray(),
+            typeof(ProHypeCaptureBackgroundService), ProHypePruneFailure, typeof(InvalidOperationException));
+        await AdvanceUntilAsync(clock, lifecycle.Captured(2));
+    }
+
     private static string PostseasonTitled(string sport) =>
         $"<html><head><title>{PlayoffStatusNow.Year} {sport.ToUpperInvariant()} Post Season Probabilities</title></head><body></body></html>";
 
@@ -457,7 +472,7 @@ public sealed class PlayoffAndProHypeReportingTests
 
     private sealed record LoggedEntry(string Category, LogLevel Level, string? Template, string Message, Exception? Exception);
 
-    private sealed class SyntheticLifecycle(Func<CancellationToken, Task> capture) : IProHypeLifecycle
+    private sealed class SyntheticLifecycle(Func<CancellationToken, Task> capture, Func<CancellationToken, Task<int>>? prune = null) : IProHypeLifecycle
     {
         private readonly ConcurrentDictionary<int, TaskCompletionSource> captures = new();
         private int count;
@@ -473,6 +488,8 @@ public sealed class PlayoffAndProHypeReportingTests
                 captures.GetOrAdd(i, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult();
             return capture(ct);
         }
+
+        public Task<int> PruneEvidenceAsync(CancellationToken ct = default) => prune?.Invoke(ct) ?? Task.FromResult(0);
     }
 
     private sealed class Database : IAsyncDisposable

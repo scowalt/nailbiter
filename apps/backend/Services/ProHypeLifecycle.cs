@@ -24,6 +24,7 @@ public interface IProHypeLifecycle
         return resolutions;
     }
     Task CaptureAsync(CancellationToken ct = default);
+    Task<int> PruneEvidenceAsync(CancellationToken ct = default);
 }
 
 public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> databaseOptions, HypeScoreService scorer, TimeProvider clock,
@@ -32,6 +33,8 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
     private const int RegularSeasonFormulaVersion = 6;
     private const int NflRegularSeasonFormulaVersion = 6;
     private const int SeedingFreeCompetitionFormulaVersion = 2;
+    private const int PruneBatch = 2000;
+    private const int PruneBatchesPerCall = 10;
     private readonly IModel model = Mapping(databaseOptions);
 
     private static IModel Mapping(DbContextOptions<ExcitementDbContext> databaseOptions)
@@ -157,6 +160,48 @@ public sealed class ProHypeLifecycle(DbContextOptions<ExcitementDbContext> datab
                 AND n.revision > (SELECT min(s) FROM unnest(@since) AS u(s))
                 AND EXISTS (SELECT 1 FROM unnest(@since, @all_kinds) AS g(since, all_kinds)
                     WHERE n.revision > g.since AND (g.all_kinds OR n.kind = 'games'))))
+        """;
+
+    public async Task<int> PruneEvidenceAsync(CancellationToken ct = default)
+    {
+        var pruned = 0;
+        for (var batch = 0; batch < PruneBatchesPerCall; batch++)
+        {
+            var deleted = await PruneEvidenceBatchAsync(ct);
+            pruned += deleted;
+            if (deleted < PruneBatch) break;
+        }
+        return pruned;
+    }
+
+    private async Task<int> PruneEvidenceBatchAsync(CancellationToken ct)
+    {
+        await using var db = new ExcitementDbContext(databaseOptions);
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                "SET LOCAL lock_timeout = '1s'; SELECT id FROM pro_hype_revision WHERE id = 1 FOR UPDATE", ct);
+        }
+        catch (PostgresException e) when (e.SqlState == PostgresErrorCodes.LockNotAvailable) { return 0; }
+        var deleted = await db.Database.ExecuteSqlRawAsync(PruneEvidenceSql, [new NpgsqlParameter<int>("batch", PruneBatch)], ct);
+        await transaction.CommitAsync(ct);
+        return deleted;
+    }
+
+    private const string PruneEvidenceSql = """
+        DELETE FROM pro_hype_evidence_changes WHERE revision = ANY (ARRAY(
+            SELECT c.revision FROM pro_hype_evidence_changes AS c
+            WHERE CASE WHEN c.kind = 'games' THEN
+                    num_nonnulls(c.before_subject, c.after_subject) > 0
+                    AND NOT EXISTS (SELECT 1 FROM unnest(ARRAY[c.before_subject, c.after_subject]) AS u(subject)
+                        WHERE u.subject IS NOT NULL AND NOT EXISTS (SELECT 1 FROM pro_hype_snapshots AS s
+                            WHERE s.game_id = substr(u.subject, 6) AND c.revision <= s.evidence_revision))
+                ELSE c.revision <= coalesce(
+                    (SELECT min(evidence_revision) FROM pro_hype_snapshots WHERE snapshot_json IS NOT NULL),
+                    (SELECT revision FROM pro_hype_revision WHERE id = 1))
+            END
+            ORDER BY c.revision LIMIT @batch))
         """;
 
     private (ProHypeResolution Resolution, (double? Total, HypeComponents? Components)? Start) Decide(Game game, ProHypeSnapshot state,
