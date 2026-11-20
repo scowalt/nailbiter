@@ -109,14 +109,19 @@ type EspnOddsService
                 | _ -> $"Week {wn}"
 
     member this.FetchScoreboardAsync(sport: string, ?date: string, ?ct: CancellationToken) : Task<EspnScoreboardResponse> =
-        this.FetchScoreboardCoreAsync(sport, PlayoffSeriesCatalogue.Supports(sport.ToLower()), date, defaultArg ct CancellationToken.None)
+        task {
+            let! struct (scoreboard, document) =
+                this.FetchScoreboardCoreAsync(sport, PlayoffSeriesCatalogue.Supports(sport.ToLower()), date, defaultArg ct CancellationToken.None)
+            use _ = document
+            return if isNull document then scoreboard else { scoreboard with RawJson = scoreboard.RawJson.Clone() }
+        }
 
-    member private _.FetchScoreboardCoreAsync(sport: string, supportsSeries: bool, date: string option, ct: CancellationToken) : Task<EspnScoreboardResponse> =
+    member private _.FetchScoreboardCoreAsync(sport: string, supportsSeries: bool, date: string option, ct: CancellationToken) : Task<struct (EspnScoreboardResponse * JsonDocument)> =
         task {
             match sportEndpoints.TryGetValue(sport.ToLower()) with
             | false, _ ->
                 logger.LogWarning("Unknown sport: {Sport}", sport)
-                return Unchecked.defaultof<EspnScoreboardResponse>
+                return struct (Unchecked.defaultof<EspnScoreboardResponse>, null)
             | true, struct (path, _) ->
 
             let mutable url = EspnSiteApi.url $"/apis/site/v2/sports/{path}/scoreboard"
@@ -127,21 +132,22 @@ type EspnOddsService
 
             let readScoreboard () =
                 task {
-                    let! body = httpClient.GetStringAsync(url, ct)
-                    return struct (body, JsonDocument.Parse(body))
+                    use! body = httpClient.GetStreamAsync(url, ct)
+                    return! JsonDocument.ParseAsync(body, cancellationToken = ct)
                 }
 
+            let mutable owned = null
             try
-                let! struct (response, parsed) =
+                let! document =
                     task {
                         try return! readScoreboard ()
                         with :? JsonException as ex ->
                             logger.LogWarning(ex, "Refetching malformed ESPN scoreboard for {Sport} on {Date}", sport, (defaultArg date "today"))
                             return! readScoreboard ()
                     }
-                use document = parsed
+                owned <- document
                 let scoreboard =
-                    try JsonSerializer.Deserialize<EspnScoreboardResponse>(response)
+                    try JsonSerializer.Deserialize<EspnScoreboardResponse>(document.RootElement)
                     with :? JsonException when supportsSeries ->
                         let root = document.RootElement
                         let mutable eventsField = Unchecked.defaultof<JsonElement>
@@ -162,21 +168,24 @@ type EspnOddsService
                           Week = readField "week" (fun json -> JsonSerializer.Deserialize<EspnWeek>(json: string))
                           Season = readField "season" (fun json -> JsonSerializer.Deserialize<EspnSeason>(json: string))
                           Leagues = readField "leagues" (fun json -> JsonSerializer.Deserialize<ResizeArray<EspnLeague>>(json: string))
-                          RawJson = root.Clone() }
+                          RawJson = root }
                 if isNull (box scoreboard) || isNull scoreboard.Events then
                     raise (JsonException("ESPN scoreboard has no events array"))
-                return { scoreboard with RawJson = document.RootElement.Clone() }
+                return struct ({ scoreboard with RawJson = document.RootElement }, document)
             with
-            | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
-            | :? HttpRequestException as ex when not (ProviderFailure.Is ex) ->
-                logger.LogWarning(ex, "Failed to fetch ESPN scoreboard for {Sport} on {Date}", sport, (defaultArg date "today"))
-                return Unchecked.defaultof<EspnScoreboardResponse>
-            | :? JsonException as ex ->
-                logger.LogWarning(ex, "Failed to fetch ESPN scoreboard for {Sport} on {Date}", sport, (defaultArg date "today"))
-                return Unchecked.defaultof<EspnScoreboardResponse>
+            | :? OperationCanceledException when ct.IsCancellationRequested ->
+                if not (isNull owned) then owned.Dispose()
+                return raise (OperationCanceledException(ct))
             | ex ->
-                logger.LogError(ex, "Failed to fetch ESPN scoreboard for {Sport} on {Date}", sport, (defaultArg date "today"))
-                return Unchecked.defaultof<EspnScoreboardResponse>
+                if not (isNull owned) then owned.Dispose()
+                match ex with
+                | :? HttpRequestException when not (ProviderFailure.Is ex) ->
+                    logger.LogWarning(ex, "Failed to fetch ESPN scoreboard for {Sport} on {Date}", sport, (defaultArg date "today"))
+                | :? JsonException ->
+                    logger.LogWarning(ex, "Failed to fetch ESPN scoreboard for {Sport} on {Date}", sport, (defaultArg date "today"))
+                | _ ->
+                    logger.LogError(ex, "Failed to fetch ESPN scoreboard for {Sport} on {Date}", sport, (defaultArg date "today"))
+                return struct (Unchecked.defaultof<EspnScoreboardResponse>, null)
         }
 
     member this.ScrapeAndStoreOddsAsync(sport: string, ?ct: CancellationToken) : Task<ResizeArray<OddsSnapshot>> =
@@ -203,7 +212,8 @@ type EspnOddsService
     member private this.ScrapeAndStoreOddsForDateAsync(sport: string, supportsSeries: bool, date: string option, ct: CancellationToken) : Task<ResizeArray<OddsSnapshot>> =
         task {
             let seriesObservedAt = timeProvider.GetUtcNow().UtcDateTime
-            let! scoreboard = this.FetchScoreboardCoreAsync(sport, supportsSeries, date, ct)
+            let! struct (scoreboard, document) = this.FetchScoreboardCoreAsync(sport, supportsSeries, date, ct)
+            use _ = document
 
             if isNull (box scoreboard) then
                 return ResizeArray<OddsSnapshot>()

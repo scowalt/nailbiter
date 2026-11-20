@@ -2,6 +2,7 @@ namespace backend.Services.OpenF1
 
 open System
 open System.Net.Http
+open System.Net.Http.Json
 open System.Text.Json
 open System.Threading.Tasks
 open Backend.FSharp
@@ -18,8 +19,7 @@ type OpenF1Service(httpClient: HttpClient, logger: ILogger<OpenF1Service>) =
                 logger.LogDebug("Fetching OpenF1: {Url}", url)
                 let! response = httpClient.GetAsync(url)
                 response.EnsureSuccessStatusCode() |> ignore
-                let! json = response.Content.ReadAsStringAsync()
-                return JsonSerializer.Deserialize<'T>(json, HttpHelpers.jsonOptions)
+                return! response.Content.ReadFromJsonAsync<'T>(HttpHelpers.jsonOptions)
             with
             | :? OperationCanceledException -> logger.LogDebug("Operation cancelled: OpenF1 data fetch"); return Unchecked.defaultof<'T>
             | ex ->

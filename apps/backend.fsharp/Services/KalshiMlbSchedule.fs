@@ -45,8 +45,7 @@ module internal KalshiMlbSchedule =
             && knownRules originalStart home away
         | _ -> false
 
-    let confirmsStart body eventTicker (currentStart: DateTime) (home: KalshiMarket) (away: KalshiMarket) =
-        let response = JsonSerializer.Deserialize<KalshiMlbMilestonesResponse>(body: string)
+    let confirmsStart (response: KalshiMlbMilestonesResponse) eventTicker (currentStart: DateTime) (home: KalshiMarket) (away: KalshiMarket) =
         if isNull (box response) || not (String.IsNullOrEmpty(response.Cursor)) || isNull response.Milestones then false
         else
             match response.Milestones with

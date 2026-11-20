@@ -4,6 +4,7 @@ open System
 open System.Diagnostics
 open System.Linq
 open System.Net.Http
+open System.Net.Http.Json
 open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
@@ -78,8 +79,7 @@ type NflBackfillService
                 $"https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/events/{eventId}/competitions/{eventId}/odds"
 
             try
-                let! response = httpClient.GetStringAsync(url, ct)
-                let oddsResponse = JsonSerializer.Deserialize<EspnCoreOddsResponse>(response)
+                let! oddsResponse = httpClient.GetFromJsonAsync<EspnCoreOddsResponse>(url, JsonSerializerOptions.Default, ct)
 
                 if isNull (box oddsResponse) || isNull oddsResponse.Items || oddsResponse.Items.Count = 0 then
                     return ValueNone
@@ -555,8 +555,7 @@ type NflBackfillService
                 EspnSiteApi.url $"/apis/site/v2/sports/football/nfl/scoreboard?seasontype={seasonType}&week={weekNumber}&dates={seasonYear}"
 
             try
-                let! response = httpClient.GetStringAsync(url, ct)
-                return JsonSerializer.Deserialize<EspnScoreboardResponse>(response)
+                return! httpClient.GetFromJsonAsync<EspnScoreboardResponse>(url, JsonSerializerOptions.Default, ct)
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | :? HttpRequestException as ex when not (ProviderFailure.Is ex) ->

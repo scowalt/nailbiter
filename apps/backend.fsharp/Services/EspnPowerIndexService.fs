@@ -82,10 +82,10 @@ type EspnPowerIndexService [<ActivatorUtilitiesConstructor>]
                 let mutable keepGoing = true
                 while keepGoing && page <= totalPages do
                     let url = $"{baseUrl}/{path}/powerindex?region=us&lang=en&season={season}&page={page}&limit=50"
-                    let! response = httpClient.GetStringAsync(url, ct)
+                    let! response = httpClient.GetByteArrayAsync(url, ct)
                     let data =
                         try
-                            use document = JsonDocument.Parse(response)
+                            use document = JsonDocument.Parse(ReadOnlyMemory<byte>(response))
                             let mutable sourceSeason = Unchecked.defaultof<JsonElement>
                             let mutable year = Unchecked.defaultof<JsonElement>
                             let mutable value = 0
@@ -99,7 +99,7 @@ type EspnPowerIndexService [<ActivatorUtilitiesConstructor>]
                                         && document.RootElement.TryGetProperty("currentValues", &currentValues) && currentValues.ValueKind = JsonValueKind.Object
                                         && currentValues.TryGetProperty("season", &dataYear) && dataYear.ValueKind = JsonValueKind.Number
                                         && dataYear.TryGetInt32(&returnedSeason) && returnedSeason = season
-                            JsonSerializer.Deserialize<EspnPowerIndexResponse>(response)
+                            JsonSerializer.Deserialize<EspnPowerIndexResponse>(document.RootElement)
                         with :? JsonException as unreadable ->
                             logger.LogWarning(unreadable, "Rejected unreadable ESPN {Sport} power index page {Page}", sport, page)
                             verified <- false

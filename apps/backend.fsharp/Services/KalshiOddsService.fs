@@ -3,6 +3,7 @@ namespace backend.Services.Kalshi
 open System
 open System.Collections.Generic
 open System.Net.Http
+open System.Net.Http.Json
 open System.Text.Json
 open System.Text.RegularExpressions
 open System.Threading
@@ -246,8 +247,8 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                                        (timeProvider.GetUtcNow().UtcDateTime) hm.Market am.Market ->
                 try
                     let url = $"{baseUrl}/milestones?limit=2&related_event_ticker={Uri.EscapeDataString(hm.EventTicker)}"
-                    let! body = httpClient.GetStringAsync(url, ct)
-                    if KalshiMlbSchedule.confirmsStart body hm.EventTicker (gameDate.ToUniversalTime()) hm.Market am.Market then
+                    let! milestones = httpClient.GetFromJsonAsync<KalshiMlbMilestonesResponse>(url, JsonSerializerOptions.Default, ct)
+                    if KalshiMlbSchedule.confirmsStart milestones hm.EventTicker (gameDate.ToUniversalTime()) hm.Market am.Market then
                         logger.LogInformation("Verified same-day MLB schedule change for {Away} @ {Home}: {EventTicker} now starts at {Start}",
                                               awayTeamAbbr, homeTeamAbbr, hm.EventTicker, gameDate)
                         return this.BuildOddsFromMarkets(homeTeamAbbr, awayTeamAbbr, kalshiHome, kalshiAway, hm.Market, am.Market)
@@ -387,8 +388,7 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                             else
                                 $"{baseUrl}/markets?series_ticker={seriesTicker}&limit=200&cursor={cursor}"
 
-                        let! response = httpClient.GetStringAsync(url, ct)
-                        let result = JsonSerializer.Deserialize<KalshiMarketsResponse>(response)
+                        let! result = httpClient.GetFromJsonAsync<KalshiMarketsResponse>(url, JsonSerializerOptions.Default, ct)
 
                         if isNull (box result) || isNull result.Markets || result.Markets.Count = 0 then
                             hasMore <- false
@@ -498,8 +498,7 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                                 else
                                     $"{baseUrl}/markets?series_ticker={seriesTicker}&limit=200&cursor={cursor}"
 
-                            let! response = httpClient.GetStringAsync(url, ct)
-                            let result = JsonSerializer.Deserialize<KalshiMarketsResponse>(response)
+                            let! result = httpClient.GetFromJsonAsync<KalshiMarketsResponse>(url, JsonSerializerOptions.Default, ct)
 
                             if isNull (box result) || isNull result.Markets || result.Markets.Count = 0 then
                                 hasMore <- false
@@ -542,8 +541,7 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
             if accessRefused then return None else
             try
                 let url = $"{baseUrl}/markets/{ticker}"
-                let! response = httpClient.GetStringAsync(url, ct)
-                let wrapper = JsonSerializer.Deserialize<KalshiSingleMarketResponse>(response)
+                let! wrapper = httpClient.GetFromJsonAsync<KalshiSingleMarketResponse>(url, JsonSerializerOptions.Default, ct)
 
                 if isNull (box wrapper) || isNull (box wrapper.Market) then
                     return None
@@ -695,10 +693,11 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
             while not complete do
                 ct.ThrowIfCancellationRequested()
                 let suffix = if cursor = "" then "" else $"&cursor={Uri.EscapeDataString(cursor)}"
-                let! body = httpClient.GetStringAsync($"{baseUrl}/markets?series_ticker={series}&status=open&limit=200{suffix}", ct)
-                let response =
-                    try JsonSerializer.Deserialize<KalshiMarketsResponse>(body)
-                    with :? JsonException -> Unchecked.defaultof<KalshiMarketsResponse>
+                let! response =
+                    task {
+                        try return! httpClient.GetFromJsonAsync<KalshiMarketsResponse>($"{baseUrl}/markets?series_ticker={series}&status=open&limit=200{suffix}", JsonSerializerOptions.Default, ct)
+                        with :? JsonException -> return Unchecked.defaultof<KalshiMarketsResponse>
+                    }
                 if isNull (box response) || isNull response.Markets then
                     markets.Clear()
                     complete <- true
@@ -999,10 +998,7 @@ type KalshiOddsService [<Microsoft.Extensions.DependencyInjection.ActivatorUtili
                     let homeUrl =
                         $"{baseUrl}/series/{seriesTicker}/markets/{homeTicker}/candlesticks?start_ts={startTs}&end_ts={endTs}&period_interval={periodInterval}"
 
-                    let! homeResponse = httpClient.GetStringAsync(homeUrl, ct)
-
-                    let homeData =
-                        JsonSerializer.Deserialize<KalshiCandlesticksResponse>(homeResponse)
+                    let! homeData = httpClient.GetFromJsonAsync<KalshiCandlesticksResponse>(homeUrl, JsonSerializerOptions.Default, ct)
 
                     if
                         isNull (box homeData)

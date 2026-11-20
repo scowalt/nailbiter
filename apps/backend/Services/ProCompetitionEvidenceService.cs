@@ -549,12 +549,7 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
         async Task<JsonElement> Fetch(string url)
         {
             if (cache.TryGetValue(url, out var value)) return value;
-            var body = await http.GetStringAsync(url, ct);
-            try
-            {
-                using var document = JsonDocument.Parse(body);
-                return cache[url] = document.RootElement.Clone();
-            }
+            try { return cache[url] = await http.GetFromJsonAsync<JsonElement>(url, JsonSerializerOptions.Default, ct); }
             catch (JsonException) { return cache[url] = default; }
         }
         foreach (var group in games.Where(g => g.SeasonYear.HasValue).GroupBy(g => (g.Sport, Season: g.SeasonYear!.Value, Phase: g.SeasonType)))

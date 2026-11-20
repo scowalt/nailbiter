@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <Compile Include="EspnHttpRequestTests.fs" />
+    <Compile Include="ProviderBodyReadTests.fs" />
     <Compile Include="F1DataServiceTests.fs" />
     <Compile Include="IndyCarDataServiceTests.fs" />
     <Compile Include="OddsConverterTests.fs" />

@@ -2,6 +2,7 @@ namespace backend.Services.Nascar
 
 open System
 open System.Net.Http
+open System.Net.Http.Json
 open System.Text.Json
 open System.Text.Json.Serialization
 open System.Threading
@@ -31,8 +32,7 @@ type NascarLiveFeedService(httpClient: System.Net.Http.HttpClient, logger: ILogg
 
         task {
             try
-                let! json = httpClient.GetStringAsync(feedUrl, ct)
-                return JsonSerializer.Deserialize<NascarLiveFeed>(json)
+                return! httpClient.GetFromJsonAsync<NascarLiveFeed>(feedUrl, JsonSerializerOptions.Default, ct)
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex when ex :? HttpRequestException || ex :? JsonException || ProviderFailure.Is ex ->
