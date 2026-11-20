@@ -14,7 +14,7 @@ resource "tailscale_tailnet_key" "server" {
   tags          = ["tag:server"]
   description   = "nailbiter-app server provisioning key"
 
-  recreate_if_invalid = "always"
+  recreate_if_invalid = "never"
 }
 
 
