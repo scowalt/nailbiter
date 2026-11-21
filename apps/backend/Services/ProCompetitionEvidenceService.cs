@@ -545,65 +545,68 @@ public sealed class ProCompetitionEvidenceService(HttpClient http, ExcitementDbC
         var horizon = now.AddDays(7);
         var games = await db.Games.Where(g => g.Status == "scheduled" && !g.IsHistoricalImport && g.ScheduledStart > now && g.ScheduledStart < horizon &&
             (g.Sport == "nfl" || g.Sport == "nba" || g.Sport == "nhl" || g.Sport == "mlb")).ToListAsync(ct);
-        var cache = new Dictionary<string, JsonElement>();
-        async Task<JsonElement> Fetch(string url)
+        foreach (var sport in games.Where(g => g.SeasonYear.HasValue).GroupBy(g => g.Sport))
         {
-            if (cache.TryGetValue(url, out var value)) return value;
-            try { return cache[url] = await http.GetFromJsonAsync<JsonElement>(url, JsonSerializerOptions.Default, ct); }
-            catch (JsonException) { return cache[url] = default; }
-        }
-        foreach (var group in games.Where(g => g.SeasonYear.HasValue).GroupBy(g => (g.Sport, Season: g.SeasonYear!.Value, Phase: g.SeasonType)))
-        {
-            try
+            var cache = new Dictionary<string, JsonElement>();
+            async Task<JsonElement> Fetch(string url)
             {
-                var baseUrl = EspnSiteApi.url("/apis/site/v2/sports/" + PathFor(group.Key.Sport));
-                var schedules = new List<Schedule>();
-                var league = default(JsonElement);
-                if (group.Key.Phase != 1)
+                if (cache.TryGetValue(url, out var value)) return value;
+                try { return cache[url] = await http.GetFromJsonAsync<JsonElement>(url, JsonSerializerOptions.Default, ct); }
+                catch (JsonException) { return cache[url] = default; }
+            }
+            foreach (var group in sport.GroupBy(g => (Sport: sport.Key, Season: g.SeasonYear!.Value, Phase: g.SeasonType)))
+            {
+                try
                 {
-                    var teamsDoc = await Fetch($"{baseUrl}/teams?limit=1000&season={group.Key.Season}");
-                    league = One(Items(One(Items(teamsDoc, "sports")), "leagues"));
-                }
-                if (Number(Get(league, "season"), "year") == group.Key.Season)
-                {
-                    foreach (var entry in Items(league, "teams"))
+                    var baseUrl = EspnSiteApi.url("/apis/site/v2/sports/" + PathFor(group.Key.Sport));
+                    var schedules = new List<Schedule>();
+                    var league = default(JsonElement);
+                    if (group.Key.Phase != 1)
                     {
-                        var team = Get(entry, "team");
-                        var id = Text(team, "id"); var abbr = Text(team, "abbreviation");
-                        if (id is null || abbr is null) continue;
-                        var phase = group.Key.Phase ?? 2;
-                        var response = await Fetch($"{baseUrl}/teams/{id}/schedule?season={group.Key.Season}&seasontype={phase}");
-                        var parsed = ParseSchedule(response, group.Key.Sport, group.Key.Season, phase, abbr, clock.GetUtcNow().UtcDateTime);
-                        if (parsed is not null) schedules.Add(parsed);
+                        var teamsDoc = await Fetch($"{baseUrl}/teams?limit=1000&season={group.Key.Season}");
+                        league = One(Items(One(Items(teamsDoc, "sports")), "leagues"));
                     }
+                    if (Number(Get(league, "season"), "year") == group.Key.Season)
+                    {
+                        foreach (var entry in Items(league, "teams"))
+                        {
+                            var team = Get(entry, "team");
+                            var id = Text(team, "id"); var abbr = Text(team, "abbreviation");
+                            if (id is null || abbr is null) continue;
+                            var phase = group.Key.Phase ?? 2;
+                            var response = await Fetch($"{baseUrl}/teams/{id}/schedule?season={group.Key.Season}&seasontype={phase}");
+                            var parsed = ParseSchedule(response, group.Key.Sport, group.Key.Season, phase, abbr, clock.GetUtcNow().UtcDateTime);
+                            if (parsed is not null) schedules.Add(parsed);
+                        }
+                    }
+                    var contexts = new List<(Game Game, ProGameEvidence Evidence)>();
+                    foreach (var game in group)
+                    {
+                        var easternDate = TimeZoneInfo.ConvertTimeFromUtc(game.ScheduledStart, TimeZoneInfo.FindSystemTimeZoneById("America/New_York"));
+                        var url = $"{baseUrl}/scoreboard?dates={easternDate:yyyyMMdd}&limit=1000";
+                        var board = await Fetch(url);
+                        var e = One(Items(board, "events").Where(x => Text(x, "id") == game.Id));
+                        var evidence = ParseEvent(game, e, schedules, now, url + "; ESPN season team schedules");
+                        if (game.Sport == "nfl" && evidence.Phase == 2)
+                            evidence.NflPlayoffLeverage = ProGameEvidence.Parse(game.ProEvidenceJson)?.NflPlayoffLeverage;
+                        contexts.Add((game, evidence));
+                    }
+                    if (group.Key.Sport == "nfl" && nflLeverage is not null)
+                    {
+                        var forecasts = await nflLeverage.CollectAsync(contexts.Where(x => x.Evidence.VerifiedUnstarted && x.Evidence.Phase == 2)
+                            .Select(x => x.Game).ToArray(), schedules, ct);
+                        foreach (var (game, evidence) in contexts)
+                            if (forecasts.TryGetValue(game.Id, out var forecast) && forecast is not null) evidence.NflPlayoffLeverage = forecast;
+                    }
+                    foreach (var (game, evidence) in contexts) game.ProEvidenceJson = JsonSerializer.Serialize(evidence);
                 }
-                var contexts = new List<(Game Game, ProGameEvidence Evidence)>();
-                foreach (var game in group)
+                catch (Exception) when (ct.IsCancellationRequested) { throw; }
+                catch (Exception ex)
                 {
-                    var easternDate = TimeZoneInfo.ConvertTimeFromUtc(game.ScheduledStart, TimeZoneInfo.FindSystemTimeZoneById("America/New_York"));
-                    var url = $"{baseUrl}/scoreboard?dates={easternDate:yyyyMMdd}&limit=1000";
-                    var board = await Fetch(url);
-                    var e = One(Items(board, "events").Where(x => Text(x, "id") == game.Id));
-                    var evidence = ParseEvent(game, e, schedules, now, url + "; ESPN season team schedules");
-                    if (game.Sport == "nfl" && evidence.Phase == 2)
-                        evidence.NflPlayoffLeverage = ProGameEvidence.Parse(game.ProEvidenceJson)?.NflPlayoffLeverage;
-                    contexts.Add((game, evidence));
+                    logger.Log(FailureLevel(ex), ex, "Pro context request failed for {Sport}/{Season}; previous timestamps preserved", group.Key.Sport, group.Key.Season);
                 }
-                if (group.Key.Sport == "nfl" && nflLeverage is not null)
-                {
-                    var forecasts = await nflLeverage.CollectAsync(contexts.Where(x => x.Evidence.VerifiedUnstarted && x.Evidence.Phase == 2)
-                        .Select(x => x.Game).ToArray(), schedules, ct);
-                    foreach (var (game, evidence) in contexts)
-                        if (forecasts.TryGetValue(game.Id, out var forecast) && forecast is not null) evidence.NflPlayoffLeverage = forecast;
-                }
-                foreach (var (game, evidence) in contexts) game.ProEvidenceJson = JsonSerializer.Serialize(evidence);
+                await db.SaveChangesAsync(ct);
             }
-            catch (Exception) when (ct.IsCancellationRequested) { throw; }
-            catch (Exception ex)
-            {
-                logger.Log(FailureLevel(ex), ex, "Pro context request failed for {Sport}/{Season}; previous timestamps preserved", group.Key.Sport, group.Key.Season);
-            }
-            await db.SaveChangesAsync(ct);
         }
     }
 }
