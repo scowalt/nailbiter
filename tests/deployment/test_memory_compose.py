@@ -40,6 +40,9 @@ class MemoryBudgetTests(unittest.TestCase):
     def test_backend_container_has_a_memory_limit(self):
         self.assertEqual(self.services()["backend"].get("mem_limit"), "1073741824")
 
+    def test_backend_limits_glibc_malloc_arenas(self):
+        self.assertEqual(self.services()["backend"]["environment"].get("MALLOC_ARENA_MAX"), "2")
+
     def test_database_memory_settings_fit_the_shared_vps(self):
         command = self.services()["timescaledb"]["command"]
         settings = dict(command[i + 1].split("=", 1) for i, flag in enumerate(command) if flag == "-c")

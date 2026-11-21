@@ -41,6 +41,9 @@ Do not print the connection string from a running container because it can conta
 The backend uses workstation garbage collection (`ServerGarbageCollection` is `false` in `apps/backend/backend.csproj`).
 Server garbage collection keeps a heap per core and collects late, which suits a large server but not a 2 GiB VPS shared with PostgreSQL.
 The backend container has `mem_limit: 1g`, so the .NET runtime sizes its heap against 1 GiB instead of the whole VPS.
+The backend also sets `MALLOC_ARENA_MAX=2`.
+By default, glibc gives native allocations up to eight memory arenas per core.
+On the 2-vCPU VPS the backend filled all 16, and together they held 78 MB of resident memory.
 The deployment recreates the backend, so these settings apply on the next deployment.
 
 The `timescaledb` command in `docker-compose.yml` sets `shared_buffers=256MB` and `maintenance_work_mem=64MB`.

@@ -43,6 +43,7 @@ services:
     environment:
       ConnectionStrings__DefaultConnection: "Host=timescaledb;Database=excitement_score;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres};Maximum Pool Size=15;Options=-c statement_timeout=30000"
       EnableScraper: "true"
+      MALLOC_ARENA_MAX: "2"
       ASPNETCORE_ENVIRONMENT: "Production"
       PlayoffRatings__MoneyPuckRefreshEnabled: "${MONEYPUCK_REFRESH_ENABLED:-true}"
       PlayoffRatings__MoneyPuckSelectionEnabled: "${MONEYPUCK_SELECTION_ENABLED:-true}"
