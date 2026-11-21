@@ -3,6 +3,7 @@ namespace backend.Services.Kalshi
 open System
 open System.Net.Http
 open System.Collections.Generic
+open System.Net.Http.Json
 open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
@@ -66,8 +67,7 @@ type KalshiF1OddsService(httpClient: System.Net.Http.HttpClient, logger: ILogger
                     $"{baseUrl}/markets?series_ticker={seriesTicker}&status=open&limit=200"
 
                 try
-                    let! response = httpClient.GetStringAsync(url, ct)
-                    let result = JsonSerializer.Deserialize<KalshiMarketsResponse>(response)
+                    let! result = httpClient.GetFromJsonAsync<KalshiMarketsResponse>(url, JsonSerializerOptions.Default, ct)
 
                     let markets =
                         if isNull (box result) || isNull result.Markets then

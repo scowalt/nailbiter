@@ -2,6 +2,7 @@ namespace backend.Services.EspnNascar
 
 open System
 open System.Net.Http
+open System.Net.Http.Json
 open System.Text.Json
 open System.Threading
 open Backend.FSharp
@@ -31,8 +32,7 @@ type EspnNascarService
                 logger.LogDebug("Fetching ESPN NASCAR scoreboard: {Url}", url)
                 let! response = httpClient.GetAsync(url, ct)
                 response.EnsureSuccessStatusCode() |> ignore
-                let! json = response.Content.ReadAsStringAsync(ct)
-                return JsonSerializer.Deserialize<EspnNascarScoreboardResponse>(json, HttpHelpers.jsonOptions)
+                return! response.Content.ReadFromJsonAsync<EspnNascarScoreboardResponse>(HttpHelpers.jsonOptions, ct)
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | :? HttpRequestException as ex when not (ProviderFailure.Is ex) ->
@@ -66,8 +66,7 @@ type EspnNascarService
                 logger.LogDebug("Fetching ESPN core NASCAR competitors: {Url}", url)
                 let! response = httpClient.GetAsync(url, ct)
                 response.EnsureSuccessStatusCode() |> ignore
-                let! json = response.Content.ReadAsStringAsync(ct)
-                return JsonSerializer.Deserialize<EspnCoreCompetitorsResponse>(json, HttpHelpers.jsonOptions)
+                return! response.Content.ReadFromJsonAsync<EspnCoreCompetitorsResponse>(HttpHelpers.jsonOptions, ct)
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | ex when ex :? HttpRequestException || ex :? JsonException || ProviderFailure.Is ex ->

@@ -17,11 +17,8 @@ public sealed class CollegeKalshiClient(HttpClient http, ILogger<CollegeKalshiCl
 
     private async Task<JsonElement> Get(string url, CancellationToken ct)
     {
-        string body;
-        try { body = await http.GetStringAsync(url, ct); }
+        try { return await http.GetFromJsonAsync<JsonElement>(url, JsonSerializerOptions.Default, ct); }
         catch (KalshiAccessRefusedException) { accessRefused = true; throw; }
-        using var json = JsonDocument.Parse(body);
-        return json.RootElement.Clone();
     }
 
     public async Task<List<JsonElement>> ListingsAsync(DateTime since, bool includeArchive, CancellationToken ct)

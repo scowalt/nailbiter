@@ -2,6 +2,7 @@ namespace backend.Services.Espn
 
 open System
 open System.Net.Http
+open System.Net.Http.Json
 open System.Text.Json
 open backend.Data
 open backend.Models
@@ -119,8 +120,7 @@ type EspnStandingsService
         task {
             try
                 let url = $"{standingsBaseUrl}/{path}/standings?season={season}"
-                let! response = httpClient.GetStringAsync(url, ct)
-                let data = JsonSerializer.Deserialize<EspnStandingsResponse>(response)
+                let! data = httpClient.GetFromJsonAsync<EspnStandingsResponse>(url, JsonSerializerOptions.Default, ct)
 
                 if isNull (box data) || isNull (box data.Children) then
                     logger.LogWarning("No standings data returned for {Sport}", sport)

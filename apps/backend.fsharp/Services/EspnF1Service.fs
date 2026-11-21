@@ -2,6 +2,7 @@ namespace backend.Services.EspnF1
 
 open System
 open System.Net.Http
+open System.Net.Http.Json
 open System.Text.Json
 open System.Threading
 open Backend.FSharp
@@ -32,8 +33,7 @@ type EspnF1Service
                 logger.LogDebug("Fetching ESPN F1 scoreboard: {Url}", url)
                 let! response = httpClient.GetAsync(url, ct)
                 response.EnsureSuccessStatusCode() |> ignore
-                let! json = response.Content.ReadAsStringAsync(ct)
-                return JsonSerializer.Deserialize<EspnNascarScoreboardResponse>(json, HttpHelpers.jsonOptions)
+                return! response.Content.ReadFromJsonAsync<EspnNascarScoreboardResponse>(HttpHelpers.jsonOptions, ct)
             with
             | :? OperationCanceledException when ct.IsCancellationRequested -> return raise (OperationCanceledException(ct))
             | :? HttpRequestException as ex when not (ProviderFailure.Is ex) ->
@@ -67,8 +67,8 @@ type EspnF1Service
             try
                 let! eventResponse = httpClient.GetAsync(eventUrl, ct)
                 eventResponse.EnsureSuccessStatusCode() |> ignore
-                let! eventJson = eventResponse.Content.ReadAsStringAsync(ct)
-                use eventDoc = JsonDocument.Parse(eventJson)
+                use! eventStream = eventResponse.Content.ReadAsStreamAsync(ct)
+                use! eventDoc = JsonDocument.ParseAsync(eventStream, cancellationToken = ct)
                 let comps = eventDoc.RootElement.GetProperty("competitions")
                 let mutable lastRef = ""
                 for comp in comps.EnumerateArray() do
@@ -94,8 +94,8 @@ type EspnF1Service
                 logger.LogDebug("Fetching ESPN core F1 competitor list: {Url}", listUrl)
                 let! listResponse = httpClient.GetAsync(listUrl, ct)
                 listResponse.EnsureSuccessStatusCode() |> ignore
-                let! listJson = listResponse.Content.ReadAsStringAsync(ct)
-                use listDoc = JsonDocument.Parse(listJson)
+                use! listStream = listResponse.Content.ReadAsStreamAsync(ct)
+                use! listDoc = JsonDocument.ParseAsync(listStream, cancellationToken = ct)
                 let items = listDoc.RootElement.GetProperty("items")
 
                 let competitors = ResizeArray<EspnCoreCompetitorItem>()
@@ -108,8 +108,7 @@ type EspnF1Service
                             try
                                 let! compResponse = httpClient.GetAsync(resolvedUrl, ct)
                                 compResponse.EnsureSuccessStatusCode() |> ignore
-                                let! compJson = compResponse.Content.ReadAsStringAsync(ct)
-                                let comp = JsonSerializer.Deserialize<EspnCoreCompetitorItem>(compJson, HttpHelpers.jsonOptions)
+                                let! comp = compResponse.Content.ReadFromJsonAsync<EspnCoreCompetitorItem>(HttpHelpers.jsonOptions, ct)
                                 if not (isNull (box comp)) then
                                     competitors.Add(comp)
                             with

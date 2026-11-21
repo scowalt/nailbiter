@@ -34,8 +34,7 @@ public sealed class CollegeEspnClient(HttpClient http, TimeProvider time, IMemor
     private async Task<JsonElement> Get(string url, CancellationToken ct)
     {
         if (cache.TryGetValue<JsonElement>(url, out var cached)) return cached;
-        using var json = JsonDocument.Parse(await http.GetStringAsync(url, ct));
-        var result = json.RootElement.Clone();
+        var result = await http.GetFromJsonAsync<JsonElement>(url, JsonSerializerOptions.Default, ct);
         if (url.Contains("/events?dates=", StringComparison.Ordinal)) cache.Set(url, result, TimeSpan.FromMinutes(15));
         else if (url.Contains("/summary?", StringComparison.Ordinal)
                  && !result.At("header", "competitions").Items().Any(c => c.At("status", "type", "state").Text() == "in"))

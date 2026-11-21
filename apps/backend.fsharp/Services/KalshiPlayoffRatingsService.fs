@@ -4,6 +4,7 @@ open System
 open System.Collections.Generic
 open System.Linq
 open System.Net.Http
+open System.Net.Http.Json
 open System.Text.Json
 open System.Text.RegularExpressions
 open System.Threading
@@ -179,9 +180,8 @@ type KalshiPlayoffRatingsService
             ct.ThrowIfCancellationRequested()
             if pages >= 3 then invalidOp "Kalshi playoff archive exceeded the three-page bound"
             let suffix = if cursor = "" then "" else "&cursor=" + Uri.EscapeDataString(cursor)
-            let! json = httpClient.GetStringAsync(
-                $"{baseUrl}/historical/markets?event_ticker={Uri.EscapeDataString(eventTicker)}&limit=1000{suffix}", ct)
-            let response = JsonSerializer.Deserialize<KalshiMarketsResponse>(json)
+            let! response = httpClient.GetFromJsonAsync<KalshiMarketsResponse>(
+                $"{baseUrl}/historical/markets?event_ticker={Uri.EscapeDataString(eventTicker)}&limit=1000{suffix}", JsonSerializerOptions.Default, ct)
             if isNull (box response) || isNull response.Markets || isNull response.Cursor then
                 invalidOp "Kalshi playoff archive omitted markets or pagination metadata"
             if response.Markets |> Seq.exists (fun market -> isNull (box market) || not (PlayoffMarkets.belongsTo eventTicker market)) then
@@ -223,8 +223,7 @@ type KalshiPlayoffRatingsService
         | Some league ->
             let eventTicker = PlayoffMarkets.eventTicker sport season league
             try
-                let! json = httpClient.GetStringAsync($"{baseUrl}/events/{eventTicker}?with_nested_markets=true", ct)
-                let response = JsonSerializer.Deserialize<KalshiEventResponse>(json)
+                let! response = httpClient.GetFromJsonAsync<KalshiEventResponse>($"{baseUrl}/events/{eventTicker}?with_nested_markets=true", JsonSerializerOptions.Default, ct)
                 let event = if isNull (box response) then Unchecked.defaultof<KalshiEvent> else response.Event
                 let markets =
                     if not (isNull (box event)) && not (isNull event.Markets) then event.Markets
